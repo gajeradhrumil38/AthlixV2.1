@@ -26,6 +26,13 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const RedirectToStatic = ({ path }: { path: string }) => {
+  React.useEffect(() => {
+    window.location.href = path;
+  }, [path]);
+  return null;
+};
+
 export default function App() {
   return (
     <AuthProvider>
@@ -33,6 +40,8 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/privacy" element={<RedirectToStatic path="/privacy.html" />} />
+            <Route path="/terms" element={<RedirectToStatic path="/terms.html" />} />
             <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route index element={<Home />} />
               <Route path="calendar" element={<Calendar />} />
