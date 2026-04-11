@@ -13,6 +13,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { ALL_WIDGETS } from '../config/widgets'
 import { useDashboardLayout, LayoutItem } from '../hooks/useDashboardLayout'
 import { useNavigate } from 'react-router-dom'
+import { FitnessGlyph, widgetToGlyph } from '../components/FitnessIcons'
 
 // ── Single sortable widget row ──
 const SortableWidget: React.FC<{
@@ -77,7 +78,10 @@ const SortableWidget: React.FC<{
         className="w-8 h-8 rounded-lg flex items-center justify-center text-[14px] flex-shrink-0"
         style={{ background: 'var(--bg-elevated)' }}
       >
-        {widget.icon}
+        <FitnessGlyph
+          name={widgetToGlyph[widget.icon] || 'spark'}
+          size={16}
+        />
       </div>
 
       {/* Info */}

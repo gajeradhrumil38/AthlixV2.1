@@ -1,29 +1,19 @@
 import React, { useState, useMemo } from 'react'
 import Body, { ExtendedBodyPart, Slug } from 'react-muscle-highlighter'
+import { getMuscleSlugLabel, MUSCLE_SLUG_LABELS, type MuscleSlug } from '../../lib/exerciseMuscles'
 
 export interface MuscleData {
-  [group: string]: { sessions: number; sets: number }
+  [group: string]: { sessions: number; sets: number; load: number; relativeLoad: number }
 }
 
 interface MuscleMapProps {
   muscleData: MuscleData
   view: 'front' | 'back'
   onViewChange: (v: 'front' | 'back') => void
+  title?: string
 }
 
-// Map Supabase muscle_groups values → package slugs
-const MUSCLE_SLUG_MAP: Record<string, Slug[]> = {
-  'Chest':     ['chest'],
-  'Back':      ['upper-back', 'lower-back', 'trapezius'],
-  'Shoulders': ['deltoids'],
-  'Biceps':    ['biceps'],
-  'Triceps':   ['triceps'],
-  'Legs':      ['quadriceps', 'hamstring', 'gluteal', 'calves', 'adductors'],
-  'Core':      ['abs', 'obliques'],
-  'Cardio':    ['quadriceps', 'calves', 'hamstring'],
-  'Full Body': ['chest', 'upper-back', 'deltoids', 'biceps',
-                'triceps', 'abs', 'quadriceps', 'hamstring'],
-}
+const VALID_SLUGS = new Set<Slug>(Object.keys(MUSCLE_SLUG_LABELS) as MuscleSlug[])
 
 // Intensity scale 1-4 maps to these Athlix accent colors
 const INTENSITY_COLORS = [
@@ -33,11 +23,19 @@ const INTENSITY_COLORS = [
   '#00D4FF',   // 4+ sessions — full accent glow
 ]
 
-const sessionsToIntensity = (sessions: number): number =>
-  Math.min(Math.max(sessions, 0), 4)
+type MuscleEntry = MuscleData[string]
+
+const loadToIntensity = (load: number, maxLoad: number): number => {
+  if (load <= 0 || maxLoad <= 0) return 0
+  const ratio = load / maxLoad
+  if (ratio >= 0.75) return 4
+  if (ratio >= 0.45) return 3
+  if (ratio >= 0.18) return 2
+  return 1
+}
 
 export const MuscleMap: React.FC<MuscleMapProps> = ({
-  muscleData, view, onViewChange
+  muscleData, view, onViewChange, title
 }) => {
   const [tooltip, setTooltip] = useState<{
     slug: string; x: number; y: number
@@ -46,86 +44,69 @@ export const MuscleMap: React.FC<MuscleMapProps> = ({
   // Convert Supabase data to bodyData array for the package
   const bodyData = useMemo((): ExtendedBodyPart[] => {
     const parts: ExtendedBodyPart[] = []
-    const seen = new Set<string>()
+    const muscleEntries = Object.values(muscleData) as MuscleEntry[]
+    const maxLoad = Math.max(...muscleEntries.map((entry) => entry.relativeLoad || entry.load || 0), 0)
 
-    Object.entries(muscleData).forEach(([group, data]: [string, { sessions: number; sets: number }]) => {
-      const slugs = MUSCLE_SLUG_MAP[group] || []
-      const intensity = sessionsToIntensity(data.sessions)
+    ;(Object.entries(muscleData) as Array<[string, MuscleEntry]>).forEach(([slug, data]) => {
+      if (!VALID_SLUGS.has(slug as Slug)) return
+      const intensity = loadToIntensity(data.relativeLoad || data.load, maxLoad)
       if (intensity === 0) return
 
-      slugs.forEach(slug => {
-        if (!seen.has(slug)) {
-          seen.add(slug)
-          parts.push({ slug, intensity })
-        } else {
-          // Already added — bump intensity if higher
-          const existing = parts.find(p => p.slug === slug)
-          if (existing && intensity > (existing.intensity || 0)) {
-            existing.intensity = intensity
-          }
-        }
-      })
+      parts.push({ slug: slug as Slug, intensity })
     })
     return parts
   }, [muscleData])
-
-  // Reverse lookup: slug → original muscle group name + data
-  const slugToGroup = useMemo(() => {
-    const map: Record<string, string> = {}
-    Object.entries(MUSCLE_SLUG_MAP).forEach(([group, slugs]) => {
-      slugs.forEach(s => { map[s] = group })
-    })
-    return map
-  }, [])
 
   const handlePress = (
     part: ExtendedBodyPart,
     e?: React.MouseEvent
   ) => {
     const slug = part.slug || ''
-    const group = slugToGroup[slug] || slug
     const rect = (e?.currentTarget as HTMLElement)
       ?.closest('.muscle-map-wrap')
       ?.getBoundingClientRect()
     setTooltip({
-      slug: group,
+      slug,
       x: e ? e.clientX - (rect?.left || 0) : 100,
       y: e ? e.clientY - (rect?.top || 0) : 100,
     })
     setTimeout(() => setTooltip(null), 2200)
   }
 
-  const trainedGroups = Object.entries(muscleData)
-    .filter(([, d]: [string, { sessions: number; sets: number }]) => d.sessions > 0)
-    .sort((a: [string, { sessions: number; sets: number }], b: [string, { sessions: number; sets: number }]) => b[1].sessions - a[1].sessions)
+  const trainedGroups = (Object.entries(muscleData) as Array<[string, MuscleEntry]>)
+    .filter(([, d]) => (d.relativeLoad || d.load) > 0)
+    .sort((a, b) => (b[1].relativeLoad || b[1].load) - (a[1].relativeLoad || a[1].load))
 
   return (
-    <div style={{ background: 'var(--bg-surface)', borderRadius: 14,
-      border: '0.5px solid var(--border)', padding: '10px 8px', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: 'linear-gradient(160deg, rgba(14,24,36,0.95) 0%, rgba(10,18,28,0.98) 65%, rgba(8,12,18,1) 100%)', borderRadius: 14,
+      border: '0.5px solid var(--border)', padding: '10px 8px', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 30% 0%, rgba(0,212,255,0.12), transparent 55%)', pointerEvents: 'none' }} />
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between',
-        alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 9, letterSpacing: '1.5px',
-          color: 'var(--text-muted)', fontWeight: 700 }}>
-          TRAINED THIS WEEK
+        alignItems: 'center', marginBottom: 8, position: 'relative', zIndex: 2 }}>
+        <span style={{ fontSize: 9, letterSpacing: '1.2px',
+          color: 'rgba(255,255,255,0.8)', fontWeight: 700, textTransform: 'uppercase' }}>
+          {title || 'Muscle Map'}
         </span>
         {/* Front / Back toggle */}
         <div style={{ display: 'flex', gap: 4,
-          background: 'var(--bg-elevated)', padding: 3,
-          borderRadius: 8, border: '0.5px solid var(--border)' }}>
+          background: 'rgba(12,20,30,0.7)', padding: 3,
+          borderRadius: 999, border: '0.5px solid var(--border)' }}>
           {(['front', 'back'] as const).map(v => (
             <button key={v} onClick={() => onViewChange(v)}
               style={{
-                padding: '3px 10px', borderRadius: 6,
+                padding: '3px 10px', borderRadius: 999,
                 fontSize: 9, fontWeight: 700, border: 'none',
                 cursor: 'pointer',
                 background: view === v
                   ? 'rgba(0,212,255,0.18)' : 'transparent',
                 color: view === v
-                  ? 'var(--accent)' : 'var(--text-muted)',
+                  ? 'var(--accent)' : '#cdd6e1',
                 outline: view === v
                   ? '0.5px solid rgba(0,212,255,0.4)' : 'none',
+                boxShadow: view === v ? '0 0 10px rgba(0,212,255,0.25)' : 'none',
               }}>
               {v.charAt(0).toUpperCase() + v.slice(1)}
             </button>
@@ -136,12 +117,12 @@ export const MuscleMap: React.FC<MuscleMapProps> = ({
       {/* Body component */}
       <div className="muscle-map-wrap"
         style={{ position: 'relative', display: 'flex', flex: 1,
-          justifyContent: 'center', alignItems: 'center' }}>
+          justifyContent: 'center', alignItems: 'center', zIndex: 1 }}>
         <Body
           data={bodyData}
           side={view}
           gender="male"
-          scale={0.9}
+          scale={0.92}
           colors={INTENSITY_COLORS}
           defaultFill="#1A2538"
           border="#1E2F42"
@@ -154,10 +135,11 @@ export const MuscleMap: React.FC<MuscleMapProps> = ({
 
         {/* Tooltip */}
         {tooltip && (() => {
-          const group = tooltip.slug
-          const d = muscleData[group]
+          const muscleSlug = tooltip.slug
+          const d = muscleData[muscleSlug]
+          const maxLoad = Math.max(...(Object.values(muscleData) as MuscleEntry[]).map((entry) => entry.relativeLoad || entry.load || 0), 0)
           const color = INTENSITY_COLORS[
-            Math.min((d?.sessions || 1), 4) - 1
+            Math.max(loadToIntensity(d?.relativeLoad || d?.load || 0, maxLoad), 1) - 1
           ] || '#00D4FF'
           return (
             <div style={{
@@ -174,17 +156,19 @@ export const MuscleMap: React.FC<MuscleMapProps> = ({
               boxShadow: '0 8px 24px rgba(0,0,0,.8)',
             }}>
               <div style={{ fontSize: 11, fontWeight: 700,
-                color, marginBottom: 4 }}>{group}</div>
+                color, marginBottom: 4 }}>{getMuscleSlugLabel(muscleSlug)}</div>
               {d && d.sessions > 0 ? (
                 <>
                   <div style={{ fontSize: 9, color: '#3A5060' }}>
                     {d.sessions} session{d.sessions > 1 ? 's' : ''}
-                    · {d.sets} sets this week
+                    · {Math.round(d.sets)} sets
+                    · {Math.round(d.load)} load
+                    {d.relativeLoad > 0 ? ` · ${d.relativeLoad.toFixed(1)}x BW` : ''}
                   </div>
                   <div style={{ height: 3, background: '#1E2F42',
                     borderRadius: 2, marginTop: 6, overflow: 'hidden' }}>
                     <div style={{
-                      width: `${Math.min(100, d.sessions * 25)}%`,
+                      width: `${Math.min(100, maxLoad > 0 ? (((d.relativeLoad || d.load) / maxLoad) * 100) : 0)}%`,
                       height: '100%', background: color, borderRadius: 2
                     }}/>
                   </div>
@@ -201,23 +185,29 @@ export const MuscleMap: React.FC<MuscleMapProps> = ({
 
       {/* Dynamic legend — only trained groups */}
       <div style={{ display: 'flex', flexWrap: 'wrap',
-        gap: 6, marginTop: 8 }}>
+        gap: 6, marginTop: 8, position: 'relative', zIndex: 2 }}>
         {trainedGroups.length === 0 ? (
-          <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: 9, color: '#cdd6e1' }}>
             Log a workout to light up your muscles
           </span>
         ) : (
-          trainedGroups.map(([group, d]: [string, { sessions: number; sets: number }]) => (
+          trainedGroups.map(([group, d]) => (
             <div key={group}
               style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <div style={{
                 width: 7, height: 7, borderRadius: 2,
                 background: INTENSITY_COLORS[
-                  Math.min(d.sessions, 4) - 1
+                  Math.max(
+                    loadToIntensity(
+                      d.relativeLoad || d.load,
+                      Math.max(...(Object.values(muscleData) as MuscleEntry[]).map((entry) => entry.relativeLoad || entry.load || 0), 0),
+                    ),
+                    1,
+                  ) - 1
                 ],
               }}/>
               <span style={{ fontSize: 9, color: '#8892A4' }}>
-                {group} ×{d.sessions}
+                {getMuscleSlugLabel(group)} {(d.relativeLoad || d.load).toFixed(1)}
               </span>
             </div>
           ))

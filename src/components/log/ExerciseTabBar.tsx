@@ -8,6 +8,7 @@ interface ExerciseTabBarProps {
   activeIndex: number;
   onTabClick: (index: number) => void;
   onAddExercise: () => void;
+  showAddButton?: boolean;
 }
 
 export const ExerciseTabBar: React.FC<ExerciseTabBarProps> = ({
@@ -15,6 +16,7 @@ export const ExerciseTabBar: React.FC<ExerciseTabBarProps> = ({
   activeIndex,
   onTabClick,
   onAddExercise,
+  showAddButton = true,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -74,12 +76,14 @@ export const ExerciseTabBar: React.FC<ExerciseTabBarProps> = ({
         })}
       </div>
 
-      <button 
-        onClick={onAddExercise}
-        className="w-7 h-7 rounded-full bg-[#1A2538] border border-[#1E2F42] text-[#00D4FF] flex items-center justify-center ml-2 active:scale-90 transition-transform"
-      >
-        <Plus className="w-4 h-4" />
-      </button>
+      {showAddButton && (
+        <button 
+          onClick={onAddExercise}
+          className="w-7 h-7 rounded-full bg-[#1A2538] border border-[#1E2F42] text-[#00D4FF] flex items-center justify-center ml-2 active:scale-90 transition-transform"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+      )}
     </div>
   );
 };

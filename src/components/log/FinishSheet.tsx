@@ -1,25 +1,48 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { X, Check, Trophy, Clock, Weight, Activity } from 'lucide-react';
 import { WorkoutState } from '../../pages/Log';
 
 interface FinishSheetProps {
   workout: WorkoutState;
+  weightUnit?: 'kg' | 'lbs';
   onConfirm: (title: string, notes: string) => void;
   onCancel: () => void;
+  saving?: boolean;
 }
 
-export const FinishSheet: React.FC<FinishSheetProps> = ({ workout, onConfirm, onCancel }) => {
+export const FinishSheet: React.FC<FinishSheetProps> = ({
+  workout,
+  weightUnit = 'kg',
+  onConfirm,
+  onCancel,
+  saving = false,
+}) => {
   const [title, setTitle] = useState(workout.title);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(workout.notes || '');
 
   const totalSets = (workout.exercises || []).reduce((acc, ex) => acc + (ex.sets || []).filter(s => s.done).length, 0);
   const totalVolume = (workout.exercises || []).reduce((acc, ex) => 
     acc + (ex.sets || []).filter(s => s.done).reduce((v, s) => v + (Number(s.weight || 0) * Number(s.reps || 0)), 0), 0);
+  const prCount = useMemo(
+    () =>
+      (workout.exercises || []).reduce(
+        (count, ex) => count + (ex.sets || []).filter((s) => s.done && Boolean(s.isPR)).length,
+        0,
+      ),
+    [workout.exercises],
+  );
+
+  useEffect(() => {
+    setTitle(workout.title);
+    setNotes(workout.notes || '');
+  }, [workout.notes, workout.title]);
 
   const formatTime = (secs: number) => {
+    const h = Math.floor(secs / 3600);
     const m = Math.floor(secs / 60);
     const s = secs % 60;
+    if (h > 0) return `${h}:${(m % 60).toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
@@ -53,7 +76,7 @@ export const FinishSheet: React.FC<FinishSheetProps> = ({ workout, onConfirm, on
             </div>
             <div className="p-4 bg-[#141C28] border border-[#1E2F42] rounded-2xl">
               <Weight className="w-4 h-4 text-[#00D4FF] mb-2" />
-              <div className="text-[20px] font-extrabold text-[#E2E8F0] tabular-nums">{totalVolume.toLocaleString()}kg</div>
+              <div className="text-[20px] font-extrabold text-[#E2E8F0] tabular-nums">{totalVolume.toLocaleString()}{weightUnit}</div>
               <div className="text-[9px] text-[#8892A4] uppercase tracking-wider">Total Volume</div>
             </div>
             <div className="p-4 bg-[#141C28] border border-[#1E2F42] rounded-2xl">
@@ -63,7 +86,7 @@ export const FinishSheet: React.FC<FinishSheetProps> = ({ workout, onConfirm, on
             </div>
             <div className="p-4 bg-[#141C28] border border-[#1E2F42] rounded-2xl">
               <Trophy className="w-4 h-4 text-[#EF9F27] mb-2" />
-              <div className="text-[20px] font-extrabold text-[#E2E8F0] tabular-nums">3</div>
+              <div className="text-[20px] font-extrabold text-[#E2E8F0] tabular-nums">{prCount}</div>
               <div className="text-[9px] text-[#8892A4] uppercase tracking-wider">New PRs</div>
             </div>
           </div>
@@ -108,10 +131,11 @@ export const FinishSheet: React.FC<FinishSheetProps> = ({ workout, onConfirm, on
         {/* Action Button */}
         <div className="p-6 border-t border-[#1E2F42] bg-[#0D1117]">
           <button 
-            onClick={() => onConfirm(title, notes)}
-            className="w-full py-4 bg-[#00D4FF] text-black rounded-xl font-bold text-[16px] flex items-center justify-center gap-2 active:scale-95 transition-transform"
+            disabled={saving}
+            onClick={() => onConfirm(title.trim() || workout.title, notes)}
+            className="w-full py-4 bg-[#00D4FF] text-black rounded-xl font-bold text-[16px] flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Save Workout <Check className="w-5 h-5" />
+            {saving ? 'Saving...' : 'Save Workout'} <Check className="w-5 h-5" />
           </button>
         </div>
       </motion.div>

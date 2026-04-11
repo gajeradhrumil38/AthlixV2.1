@@ -7,6 +7,7 @@ interface WeightRepsModalProps {
   setNumber: number;
   field: 'weight' | 'reps';
   initialValue: number;
+  weightUnit?: 'kg' | 'lbs';
   onConfirm: (value: number) => void;
   onClose: () => void;
 }
@@ -16,18 +17,21 @@ export const WeightRepsModal: React.FC<WeightRepsModalProps> = ({
   setNumber,
   field,
   initialValue,
+  weightUnit = 'kg',
   onConfirm,
   onClose,
 }) => {
   const [value, setValue] = useState(initialValue);
 
   const isWeight = field === 'weight';
-  const unit = isWeight ? 'kg' : '';
+  const unit = isWeight ? weightUnit : '';
   
-  const stepSmall = isWeight ? 2.5 : 1;
-  const stepBig = isWeight ? 5 : 5;
+  const stepSmall = isWeight ? (weightUnit === 'kg' ? 2.5 : 5) : 1;
+  const stepBig = isWeight ? (weightUnit === 'kg' ? 5 : 10) : 5;
 
-  const weightChips = [20, 40, 60, 80, 100, 120, 140];
+  const weightChips = weightUnit === 'kg'
+    ? [20, 40, 60, 80, 100, 120, 140]
+    : [45, 65, 95, 115, 135, 155, 185];
   const repChips = [5, 6, 8, 10, 12, 15, 20];
   const chips = isWeight ? weightChips : repChips;
 
@@ -40,11 +44,13 @@ export const WeightRepsModal: React.FC<WeightRepsModalProps> = ({
 
   // Plate Calculator logic
   const getPlates = (totalWeight: number) => {
-    const barWeight = 20;
+    const barWeight = weightUnit === 'kg' ? 20 : 45;
     let remaining = (totalWeight - barWeight) / 2;
     if (remaining <= 0) return null;
 
-    const standardPlates = [25, 20, 15, 10, 5, 2.5, 1.25];
+    const standardPlates = weightUnit === 'kg'
+      ? [25, 20, 15, 10, 5, 2.5, 1.25]
+      : [45, 35, 25, 10, 5, 2.5];
     const breakdown: number[] = [];
 
     standardPlates.forEach(plate => {
@@ -145,15 +151,19 @@ export const WeightRepsModal: React.FC<WeightRepsModalProps> = ({
             <div className="text-[9px] font-bold text-[#3A5060] uppercase tracking-wider mb-3">Plate Breakdown (Per Side)</div>
             {plates ? (
               <div className="flex flex-wrap justify-center gap-2">
-                <div className="text-[10px] text-[#8892A4] w-full mb-1">20kg Bar +</div>
+                <div className="text-[10px] text-[#8892A4] w-full mb-1">
+                  {weightUnit === 'kg' ? '20kg Bar +' : '45lb Bar +'}
+                </div>
                 {plates.map((p, i) => (
                   <div key={i} className="px-2 py-1 bg-[#1A2538] border border-[#00D4FF]/20 rounded-md text-[10px] font-bold text-[#00D4FF]">
-                    {p}kg
+                    {p}{weightUnit}
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-[10px] text-[#3A5060]">Empty Bar (20kg)</div>
+              <div className="text-[10px] text-[#3A5060]">
+                Empty Bar ({weightUnit === 'kg' ? '20kg' : '45lb'})
+              </div>
             )}
           </div>
         )}

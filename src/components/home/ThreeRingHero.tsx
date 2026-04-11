@@ -49,7 +49,7 @@ const Ring: React.FC<RingProps> = ({ value, color, label, subLabel, delay = 0 })
         </div>
       </div>
       <span className="text-[11px] font-bold text-white tracking-wide">{label}</span>
-      <span className="text-[9px] text-[var(--text-muted)] uppercase tracking-wider mt-0.5">{subLabel}</span>
+      <span className="text-[9px] text-[#cdd6e1] uppercase tracking-wider mt-0.5">{subLabel}</span>
     </div>
   );
 };

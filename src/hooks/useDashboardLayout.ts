@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { DEFAULT_LAYOUT } from '../config/widgets'
+import { getDashboardLayout, saveDashboardLayout } from '../lib/supabaseData'
 
 export interface LayoutItem {
   id: string
@@ -16,21 +16,23 @@ export const useDashboardLayout = () => {
   const [isDirty, setIsDirty] = useState(false)
 
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      setLayout(DEFAULT_LAYOUT)
+      setLoading(false)
+      setIsDirty(false)
+      return
+    }
+    setLoading(true)
     fetchLayout()
   }, [user])
 
   const fetchLayout = async () => {
-    const { data } = await supabase
-      .from('user_dashboard_layout')
-      .select('layout')
-      .eq('user_id', user!.id)
-      .single()
+    const savedLayout = await getDashboardLayout(user!.id)
 
-    if (data?.layout && Array.isArray(data.layout)) {
+    if (savedLayout && Array.isArray(savedLayout)) {
       // Merge with DEFAULT_LAYOUT to handle new widgets
       // added after user saved their layout
-      const saved = data.layout as LayoutItem[]
+      const saved = savedLayout as LayoutItem[]
       const savedIds = saved.map(s => s.id)
       const newWidgets = DEFAULT_LAYOUT.filter(
         d => !savedIds.includes(d.id)
@@ -61,13 +63,7 @@ export const useDashboardLayout = () => {
 
   const saveLayout = useCallback(async () => {
     if (!user) return
-    await supabase
-      .from('user_dashboard_layout')
-      .upsert({
-        user_id: user.id,
-        layout: layout,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' })
+    await saveDashboardLayout(user.id, layout as typeof DEFAULT_LAYOUT)
     setIsDirty(false)
   }, [user, layout])
 

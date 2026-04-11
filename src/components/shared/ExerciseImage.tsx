@@ -1,4 +1,9 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import {
+  OPENTRAINING_ASSETS_BY_ID,
+  OPENTRAINING_ID_BY_NAME,
+  normalizeExerciseName,
+} from '../../data/opentrainingCatalog'
 
 interface ExerciseImageProps {
   exerciseId: string
@@ -30,9 +35,36 @@ export const ExerciseImage: React.FC<ExerciseImageProps> = ({
   const [frameIndex, setFrameIndex] = useState<0 | 1>(0)
 
   const BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/'
-  const imgUrl = `${BASE}${exerciseId}/${frameIndex}.jpg`
+  const openTrainingId =
+    (exerciseId && OPENTRAINING_ASSETS_BY_ID[exerciseId] ? exerciseId : null) ||
+    OPENTRAINING_ID_BY_NAME[normalizeExerciseName(exerciseName)] ||
+    null
+  const openTrainingAsset = openTrainingId ? OPENTRAINING_ASSETS_BY_ID[openTrainingId] : null
+  const openTrainingImage = openTrainingAsset
+    ? openTrainingAsset.images[Math.min(frameIndex, openTrainingAsset.images.length - 1)]
+    : null
+  const rasterUrl = openTrainingImage
+    ? `/assets/opentraining/${openTrainingImage}`
+    : exerciseId
+      ? `${BASE}${exerciseId}/${frameIndex}.jpg`
+      : ''
+  const svgVariant = openTrainingImage
+    ? openTrainingImage.replace(/\.(png|gif|jpg|jpeg)$/i, '.svg')
+    : ''
+  const svgUrl = svgVariant
+    ? `/assets/opentraining/${svgVariant}`
+    : ''
+  const remoteUrl = !openTrainingAsset && exerciseId
+    ? `${BASE}${exerciseId}/${frameIndex}.jpg`
+    : ''
+  const imgUrl = svgUrl || remoteUrl
   const color = MUSCLE_COLORS[muscleGroup] || MUSCLE_COLORS.Other
   const { container, fontSize } = SIZE_MAP[size]
+
+  useEffect(() => {
+    setLoaded(false)
+    setError(false)
+  }, [exerciseId, exerciseName, frameIndex, svgUrl, remoteUrl])
 
   const handleTap = () => {
     if (showToggle) {
@@ -56,7 +88,7 @@ export const ExerciseImage: React.FC<ExerciseImageProps> = ({
       }}
     >
       {/* Colored letter fallback — shows while loading or on error */}
-      {(!loaded || error || !exerciseId) && (
+      {(!loaded || error || !imgUrl) && (
         <div style={{
           position: 'absolute', inset: 0,
           display: 'flex', alignItems: 'center',
@@ -70,7 +102,7 @@ export const ExerciseImage: React.FC<ExerciseImageProps> = ({
       )}
 
       {/* Actual image */}
-      {!error && exerciseId && (
+      {!error && imgUrl && (
         <img
           src={imgUrl}
           alt={exerciseName}
@@ -89,7 +121,7 @@ export const ExerciseImage: React.FC<ExerciseImageProps> = ({
       )}
 
       {/* Tap hint for toggle */}
-      {showToggle && loaded && !error && exerciseId && (
+      {showToggle && loaded && !error && imgUrl && (
         <div style={{
           position: 'absolute', bottom: 2, right: 2,
           fontSize: 7, color: 'white',

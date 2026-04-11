@@ -9,6 +9,12 @@ CREATE TABLE public.profiles (
   full_name TEXT,
   unit_preference TEXT DEFAULT 'kg' CHECK (unit_preference IN ('kg', 'lbs')),
   theme_preference TEXT DEFAULT 'dark' CHECK (theme_preference IN ('dark', 'darker')),
+  start_workout_enabled BOOLEAN DEFAULT false NOT NULL,
+  show_start_sheet BOOLEAN DEFAULT false NOT NULL,
+  body_weight DOUBLE PRECISION,
+  body_weight_unit TEXT DEFAULT 'kg' CHECK (body_weight_unit IN ('kg', 'lbs')),
+  height_feet INTEGER,
+  height_inches INTEGER,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -29,6 +35,7 @@ CREATE TABLE public.exercises (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   workout_id UUID REFERENCES public.workouts ON DELETE CASCADE NOT NULL,
   name TEXT NOT NULL,
+  muscle_group TEXT,
   sets INTEGER NOT NULL,
   reps INTEGER NOT NULL,
   weight FLOAT NOT NULL,
@@ -50,6 +57,7 @@ CREATE TABLE public.template_exercises (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   template_id UUID REFERENCES public.templates ON DELETE CASCADE NOT NULL,
   name TEXT NOT NULL,
+  muscle_group TEXT,
   default_sets INTEGER NOT NULL,
   default_reps INTEGER NOT NULL,
   default_weight FLOAT NOT NULL,
@@ -150,11 +158,35 @@ CREATE TABLE public.rest_timer_preferences (
   default_duration_seconds INTEGER DEFAULT 90
 );
 
+-- Heart Rate Sessions
+CREATE TABLE public.heart_rate_sessions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+  device_name TEXT NOT NULL DEFAULT 'Heart Rate Device',
+  connected_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  disconnected_at TIMESTAMP WITH TIME ZONE,
+  last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Heart Rate Samples
+CREATE TABLE public.heart_rate_samples (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+  session_id UUID REFERENCES public.heart_rate_sessions ON DELETE CASCADE NOT NULL,
+  ts BIGINT NOT NULL,
+  bpm INTEGER NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- Enable RLS
 ALTER TABLE public.body_weight_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.personal_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.exercise_library ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rest_timer_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.heart_rate_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.heart_rate_samples ENABLE ROW LEVEL SECURITY;
 
 -- Policies for body_weight_logs
 CREATE POLICY "Users can view their own body weight logs" ON public.body_weight_logs FOR SELECT USING (auth.uid() = user_id);
@@ -178,6 +210,18 @@ CREATE POLICY "Users can delete their own custom exercises" ON public.exercise_l
 CREATE POLICY "Users can view their own rest timer preferences" ON public.rest_timer_preferences FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own rest timer preferences" ON public.rest_timer_preferences FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update their own rest timer preferences" ON public.rest_timer_preferences FOR UPDATE USING (auth.uid() = user_id);
+
+-- Policies for heart_rate_sessions
+CREATE POLICY "Users can view their own heart rate sessions" ON public.heart_rate_sessions FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own heart rate sessions" ON public.heart_rate_sessions FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own heart rate sessions" ON public.heart_rate_sessions FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own heart rate sessions" ON public.heart_rate_sessions FOR DELETE USING (auth.uid() = user_id);
+
+-- Policies for heart_rate_samples
+CREATE POLICY "Users can view their own heart rate samples" ON public.heart_rate_samples FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own heart rate samples" ON public.heart_rate_samples FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own heart rate samples" ON public.heart_rate_samples FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own heart rate samples" ON public.heart_rate_samples FOR DELETE USING (auth.uid() = user_id);
 
 -- Insert default exercises
 INSERT INTO public.exercise_library (name, muscle_group, is_custom) VALUES
@@ -216,3 +260,499 @@ ALTER TABLE public.user_dashboard_layout ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view their own dashboard layout" ON public.user_dashboard_layout FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own dashboard layout" ON public.user_dashboard_layout FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update their own dashboard layout" ON public.user_dashboard_layout FOR UPDATE USING (auth.uid() = user_id);
+
+-- Integrity constraints and indexes
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'profiles') THEN
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS start_workout_enabled BOOLEAN DEFAULT false NOT NULL;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS show_start_sheet BOOLEAN DEFAULT false NOT NULL;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS body_weight DOUBLE PRECISION;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS body_weight_unit TEXT DEFAULT 'kg';
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS height_feet INTEGER;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS height_inches INTEGER;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'exercises') THEN
+    ALTER TABLE public.exercises ADD COLUMN IF NOT EXISTS muscle_group TEXT;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'template_exercises') THEN
+    ALTER TABLE public.template_exercises ADD COLUMN IF NOT EXISTS muscle_group TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'workouts_duration_minutes_check'
+  ) THEN
+    ALTER TABLE public.workouts
+      ADD CONSTRAINT workouts_duration_minutes_check
+      CHECK (duration_minutes IS NULL OR duration_minutes >= 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'exercises_sets_positive_check'
+  ) THEN
+    ALTER TABLE public.exercises
+      ADD CONSTRAINT exercises_sets_positive_check
+      CHECK (sets > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'exercises_reps_positive_check'
+  ) THEN
+    ALTER TABLE public.exercises
+      ADD CONSTRAINT exercises_reps_positive_check
+      CHECK (reps > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'exercises_weight_non_negative_check'
+  ) THEN
+    ALTER TABLE public.exercises
+      ADD CONSTRAINT exercises_weight_non_negative_check
+      CHECK (weight >= 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'template_exercises_default_sets_positive_check'
+  ) THEN
+    ALTER TABLE public.template_exercises
+      ADD CONSTRAINT template_exercises_default_sets_positive_check
+      CHECK (default_sets > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'template_exercises_default_reps_positive_check'
+  ) THEN
+    ALTER TABLE public.template_exercises
+      ADD CONSTRAINT template_exercises_default_reps_positive_check
+      CHECK (default_reps > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'template_exercises_default_weight_non_negative_check'
+  ) THEN
+    ALTER TABLE public.template_exercises
+      ADD CONSTRAINT template_exercises_default_weight_non_negative_check
+      CHECK (default_weight >= 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'body_weight_logs_weight_positive_check'
+  ) THEN
+    ALTER TABLE public.body_weight_logs
+      ADD CONSTRAINT body_weight_logs_weight_positive_check
+      CHECK (weight > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'personal_records_best_weight_non_negative_check'
+  ) THEN
+    ALTER TABLE public.personal_records
+      ADD CONSTRAINT personal_records_best_weight_non_negative_check
+      CHECK (best_weight >= 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'personal_records_best_reps_positive_check'
+  ) THEN
+    ALTER TABLE public.personal_records
+      ADD CONSTRAINT personal_records_best_reps_positive_check
+      CHECK (best_reps > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'rest_timer_preferences_default_duration_positive_check'
+  ) THEN
+    ALTER TABLE public.rest_timer_preferences
+      ADD CONSTRAINT rest_timer_preferences_default_duration_positive_check
+      CHECK (default_duration_seconds > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'body_weight_logs_user_date_key'
+  ) THEN
+    ALTER TABLE public.body_weight_logs
+      ADD CONSTRAINT body_weight_logs_user_date_key
+      UNIQUE (user_id, date);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'template_exercises_template_order_key'
+  ) THEN
+    ALTER TABLE public.template_exercises
+      ADD CONSTRAINT template_exercises_template_order_key
+      UNIQUE (template_id, order_index);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'exercises_workout_order_key'
+  ) THEN
+    ALTER TABLE public.exercises
+      ADD CONSTRAINT exercises_workout_order_key
+      UNIQUE (workout_id, order_index);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'personal_records_user_exercise_name_key'
+  ) THEN
+    ALTER TABLE public.personal_records
+      ADD CONSTRAINT personal_records_user_exercise_name_key
+      UNIQUE (user_id, exercise_name);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'heart_rate_samples_bpm_positive_check'
+  ) THEN
+    ALTER TABLE public.heart_rate_samples
+      ADD CONSTRAINT heart_rate_samples_bpm_positive_check
+      CHECK (bpm > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'heart_rate_samples_ts_positive_check'
+  ) THEN
+    ALTER TABLE public.heart_rate_samples
+      ADD CONSTRAINT heart_rate_samples_ts_positive_check
+      CHECK (ts > 0);
+  END IF;
+END
+$$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS exercise_library_default_name_key
+  ON public.exercise_library (lower(name))
+  WHERE is_custom = false;
+
+CREATE UNIQUE INDEX IF NOT EXISTS exercise_library_custom_user_name_key
+  ON public.exercise_library (user_id, lower(name))
+  WHERE is_custom = true;
+
+CREATE INDEX IF NOT EXISTS workouts_user_date_idx
+  ON public.workouts (user_id, date DESC);
+
+CREATE INDEX IF NOT EXISTS exercises_workout_order_idx
+  ON public.exercises (workout_id, order_index);
+
+CREATE INDEX IF NOT EXISTS body_weight_logs_user_date_idx
+  ON public.body_weight_logs (user_id, date DESC);
+
+CREATE INDEX IF NOT EXISTS personal_records_user_exercise_idx
+  ON public.personal_records (user_id, exercise_name);
+
+CREATE INDEX IF NOT EXISTS exercise_library_muscle_group_name_idx
+  ON public.exercise_library (muscle_group, name);
+
+CREATE INDEX IF NOT EXISTS heart_rate_sessions_user_connected_idx
+  ON public.heart_rate_sessions (user_id, connected_at DESC);
+
+CREATE INDEX IF NOT EXISTS heart_rate_samples_user_ts_idx
+  ON public.heart_rate_samples (user_id, ts DESC);
+
+CREATE INDEX IF NOT EXISTS heart_rate_samples_session_ts_idx
+  ON public.heart_rate_samples (session_id, ts);
+
+-- Backend RPC helpers
+CREATE OR REPLACE FUNCTION public.save_workout_with_sets(
+  p_title TEXT,
+  p_workout_date DATE,
+  p_duration_minutes INTEGER,
+  p_notes TEXT,
+  p_exercises JSONB
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID := auth.uid();
+  v_workout_id UUID;
+  v_muscle_groups TEXT[];
+  v_exercise JSONB;
+  v_set JSONB;
+  v_order_index INTEGER := 0;
+  v_exercise_name TEXT;
+  v_exercise_muscle_group TEXT;
+  v_exercise_db_id TEXT;
+  v_reps INTEGER;
+  v_weight DOUBLE PRECISION;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required';
+  END IF;
+
+  IF p_title IS NULL OR btrim(p_title) = '' THEN
+    RAISE EXCEPTION 'Workout title is required';
+  END IF;
+
+  IF p_exercises IS NULL OR jsonb_typeof(p_exercises) <> 'array' OR jsonb_array_length(p_exercises) = 0 THEN
+    RAISE EXCEPTION 'At least one exercise is required';
+  END IF;
+
+  SELECT COALESCE(array_agg(DISTINCT muscle_group), ARRAY[]::TEXT[])
+  INTO v_muscle_groups
+  FROM (
+    SELECT NULLIF(btrim(item->>'muscle_group'), '') AS muscle_group
+    FROM jsonb_array_elements(p_exercises) AS item
+  ) grouped
+  WHERE muscle_group IS NOT NULL;
+
+  INSERT INTO public.workouts (
+    user_id,
+    title,
+    date,
+    duration_minutes,
+    notes,
+    muscle_groups
+  )
+  VALUES (
+    v_user_id,
+    btrim(p_title),
+    p_workout_date,
+    GREATEST(COALESCE(p_duration_minutes, 0), 0),
+    NULLIF(btrim(COALESCE(p_notes, '')), ''),
+    v_muscle_groups
+  )
+  RETURNING id INTO v_workout_id;
+
+  FOR v_exercise IN
+    SELECT value
+    FROM jsonb_array_elements(p_exercises)
+  LOOP
+    v_exercise_name := NULLIF(btrim(v_exercise->>'name'), '');
+    v_exercise_muscle_group := NULLIF(btrim(v_exercise->>'muscle_group'), '');
+    v_exercise_db_id := NULLIF(v_exercise->>'exercise_db_id', '');
+
+    IF v_exercise_name IS NULL THEN
+      RAISE EXCEPTION 'Exercise name is required';
+    END IF;
+
+    FOR v_set IN
+      SELECT value
+      FROM jsonb_array_elements(COALESCE(v_exercise->'completed_sets', '[]'::jsonb))
+    LOOP
+      v_reps := GREATEST(COALESCE((v_set->>'reps')::INTEGER, 0), 0);
+      v_weight := GREATEST(COALESCE((v_set->>'weight')::DOUBLE PRECISION, 0), 0);
+
+      IF v_reps <= 0 THEN
+        CONTINUE;
+      END IF;
+
+      INSERT INTO public.exercises (
+        workout_id,
+        name,
+        muscle_group,
+        sets,
+        reps,
+        weight,
+        unit,
+        order_index,
+        exercise_db_id
+      )
+      VALUES (
+        v_workout_id,
+        v_exercise_name,
+        v_exercise_muscle_group,
+        1,
+        v_reps,
+        v_weight,
+        COALESCE(NULLIF(v_set->>'unit', ''), 'kg'),
+        v_order_index,
+        v_exercise_db_id
+      );
+
+      INSERT INTO public.personal_records (
+        user_id,
+        exercise_name,
+        best_weight,
+        best_reps,
+        achieved_date,
+        exercise_db_id
+      )
+      VALUES (
+        v_user_id,
+        v_exercise_name,
+        v_weight,
+        v_reps,
+        p_workout_date,
+        v_exercise_db_id
+      )
+      ON CONFLICT (user_id, exercise_name) DO UPDATE
+      SET best_weight = EXCLUDED.best_weight,
+          best_reps = EXCLUDED.best_reps,
+          achieved_date = EXCLUDED.achieved_date,
+          exercise_db_id = COALESCE(EXCLUDED.exercise_db_id, public.personal_records.exercise_db_id)
+      WHERE EXCLUDED.best_weight > public.personal_records.best_weight
+         OR (
+           EXCLUDED.best_weight = public.personal_records.best_weight
+           AND EXCLUDED.best_reps > public.personal_records.best_reps
+         );
+
+      v_order_index := v_order_index + 1;
+    END LOOP;
+  END LOOP;
+
+  RETURN v_workout_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.save_template_with_exercises(
+  p_template_id UUID,
+  p_title TEXT,
+  p_exercises JSONB
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID := auth.uid();
+  v_template_id UUID;
+  v_exercise JSONB;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required';
+  END IF;
+
+  IF p_title IS NULL OR btrim(p_title) = '' THEN
+    RAISE EXCEPTION 'Template title is required';
+  END IF;
+
+  IF p_exercises IS NULL OR jsonb_typeof(p_exercises) <> 'array' OR jsonb_array_length(p_exercises) = 0 THEN
+    RAISE EXCEPTION 'At least one exercise is required';
+  END IF;
+
+  IF p_template_id IS NULL THEN
+    INSERT INTO public.templates (user_id, title)
+    VALUES (v_user_id, btrim(p_title))
+    RETURNING id INTO v_template_id;
+  ELSE
+    UPDATE public.templates
+    SET title = btrim(p_title)
+    WHERE id = p_template_id
+      AND user_id = v_user_id
+    RETURNING id INTO v_template_id;
+
+    IF v_template_id IS NULL THEN
+      RAISE EXCEPTION 'Template not found';
+    END IF;
+
+    DELETE FROM public.template_exercises
+    WHERE template_id = v_template_id;
+  END IF;
+
+  FOR v_exercise IN
+    SELECT value
+    FROM jsonb_array_elements(p_exercises)
+  LOOP
+    INSERT INTO public.template_exercises (
+      template_id,
+      name,
+      muscle_group,
+      default_sets,
+      default_reps,
+      default_weight,
+      order_index,
+      exercise_db_id
+    )
+    VALUES (
+      v_template_id,
+      btrim(v_exercise->>'name'),
+      NULLIF(btrim(v_exercise->>'muscle_group'), ''),
+      GREATEST(COALESCE((v_exercise->>'default_sets')::INTEGER, 0), 1),
+      GREATEST(COALESCE((v_exercise->>'default_reps')::INTEGER, 0), 1),
+      GREATEST(COALESCE((v_exercise->>'default_weight')::DOUBLE PRECISION, 0), 0),
+      COALESCE((v_exercise->>'order_index')::INTEGER, 0),
+      NULLIF(v_exercise->>'exercise_db_id', '')
+    );
+  END LOOP;
+
+  RETURN v_template_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.log_body_weight(
+  p_date DATE,
+  p_weight DOUBLE PRECISION,
+  p_unit TEXT DEFAULT 'kg',
+  p_notes TEXT DEFAULT NULL
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID := auth.uid();
+  v_log_id UUID;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required';
+  END IF;
+
+  IF p_weight IS NULL OR p_weight <= 0 THEN
+    RAISE EXCEPTION 'Weight must be greater than zero';
+  END IF;
+
+  INSERT INTO public.body_weight_logs (
+    user_id,
+    date,
+    weight,
+    unit,
+    notes
+  )
+  VALUES (
+    v_user_id,
+    p_date,
+    p_weight,
+    COALESCE(NULLIF(p_unit, ''), 'kg'),
+    NULLIF(btrim(COALESCE(p_notes, '')), '')
+  )
+  ON CONFLICT (user_id, date) DO UPDATE
+  SET weight = EXCLUDED.weight,
+      unit = EXCLUDED.unit,
+      notes = EXCLUDED.notes
+  RETURNING id INTO v_log_id;
+
+  RETURN v_log_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.save_workout_with_sets(TEXT, DATE, INTEGER, TEXT, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.save_template_with_exercises(UUID, TEXT, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.log_body_weight(DATE, DOUBLE PRECISION, TEXT, TEXT) TO authenticated;

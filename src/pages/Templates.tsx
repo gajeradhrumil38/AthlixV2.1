@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { Plus, Trash2, Save, Edit2, X } from 'lucide-react';
 import { ExercisePicker } from '../components/log/ExercisePicker';
 import { ExerciseImage } from '../components/shared/ExerciseImage';
+import { deleteTemplate, getTemplates, saveTemplate } from '../lib/supabaseData';
 
 interface TemplateExercise {
   id: string;
   name: string;
+  muscle_group?: string;
   default_sets: number;
   default_reps: number;
   default_weight: number;
@@ -37,14 +38,14 @@ export const Templates: React.FC = () => {
   }, [user]);
 
   const fetchTemplates = async () => {
+    if (!user) {
+      setTemplates([]);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const { data, error } = await supabase
-        .from('templates')
-        .select('*, template_exercises(*)')
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
+      const data = await getTemplates(user.id);
       setTemplates(data || []);
     } catch (error) {
       console.error('Error fetching templates:', error);
@@ -74,8 +75,8 @@ export const Templates: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this template?')) return;
     
     try {
-      const { error } = await supabase.from('templates').delete().eq('id', id);
-      if (error) throw error;
+      if (!user) throw new Error('Sign in to delete templates');
+      await deleteTemplate(user.id, id);
       toast.success('Template deleted');
       fetchTemplates();
     } catch (error: any) {
@@ -84,6 +85,11 @@ export const Templates: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (!user) {
+      toast.error('Sign in to save templates');
+      return;
+    }
+
     if (!title) {
       toast.error('Please enter a template title');
       return;
@@ -99,45 +105,19 @@ export const Templates: React.FC = () => {
 
     setLoading(true);
     try {
-      let templateId = editTemplateId;
-
-      if (editTemplateId) {
-        // Update existing
-        const { error: updateError } = await supabase
-          .from('templates')
-          .update({ title })
-          .eq('id', editTemplateId);
-        if (updateError) throw updateError;
-
-        // Delete old exercises
-        await supabase.from('template_exercises').delete().eq('template_id', editTemplateId);
-      } else {
-        // Create new
-        const { data: newTemplate, error: createError } = await supabase
-          .from('templates')
-          .insert({ user_id: user?.id, title })
-          .select()
-          .single();
-        if (createError) throw createError;
-        templateId = newTemplate.id;
-      }
-
-      // Insert new exercises
-      const exercisesToInsert = exercises.map((ex, index) => ({
-        template_id: templateId,
-        name: ex.name,
-        default_sets: ex.default_sets,
-        default_reps: ex.default_reps,
-        default_weight: ex.default_weight,
-        exercise_db_id: ex.exercise_db_id,
-        order_index: index
-      }));
-
-      const { error: exercisesError } = await supabase
-        .from('template_exercises')
-        .insert(exercisesToInsert);
-
-      if (exercisesError) throw exercisesError;
+      await saveTemplate(user.id, {
+        templateId: editTemplateId,
+        title,
+        exercises: exercises.map((ex, index) => ({
+          name: ex.name,
+          muscle_group: ex.muscle_group || null,
+          default_sets: Number(ex.default_sets),
+          default_reps: Number(ex.default_reps),
+          default_weight: Number(ex.default_weight),
+          exercise_db_id: ex.exercise_db_id || null,
+          order_index: index,
+        })),
+      });
 
       toast.success(editTemplateId ? 'Template updated!' : 'Template created!');
       resetForm();
@@ -159,6 +139,7 @@ export const Templates: React.FC = () => {
       {
         id: crypto.randomUUID(),
         name: exercise.name,
+        muscle_group: exercise.muscleGroup,
         default_sets: 3,
         default_reps: 10,
         default_weight: 0,

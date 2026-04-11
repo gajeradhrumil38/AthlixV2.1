@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
 import { ChevronDown, ChevronUp, Trash2, Calendar as CalendarIcon, Clock, Dumbbell } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion, useAnimation } from 'framer-motion';
 import { useDrag } from '@use-gesture/react';
 import { ExerciseImage } from '../components/shared/ExerciseImage';
+import { deleteWorkout, getWorkouts } from '../lib/supabaseData';
+import { parseDateAtStartOfDay } from '../lib/dates';
 
 const TimelineItem = ({ workout, isExpanded, setExpandedId, handleDelete, calculateVolume }: any) => {
   const controls = useAnimation();
-  const [isDeleting, setIsDeleting] = useState(false);
+  const requestDelete = () => {
+    return window.confirm(`Delete "${workout.title}"? This cannot be undone.`);
+  };
 
   const bind = useDrag(({ down, movement: [mx], direction: [xDir], velocity: [vx] }) => {
     if (isExpanded) return; // Don't allow swipe when expanded
@@ -18,8 +21,11 @@ const TimelineItem = ({ workout, isExpanded, setExpandedId, handleDelete, calcul
     const trigger = vx > 0.5 || mx < -100; // Fast swipe or drag past 100px
 
     if (!down && trigger && xDir < 0) {
-      // Trigger delete
-      setIsDeleting(true);
+      if (!requestDelete()) {
+        controls.start({ x: 0, transition: { type: 'spring', stiffness: 300, damping: 30 } });
+        return;
+      }
+
       controls.start({ x: -window.innerWidth, opacity: 0, transition: { duration: 0.2 } }).then(() => {
         handleDelete(workout.id);
       });
@@ -59,7 +65,12 @@ const TimelineItem = ({ workout, isExpanded, setExpandedId, handleDelete, calcul
           <div>
             <div className="flex items-center space-x-2 text-xs text-gray-400 mb-1">
               <CalendarIcon className="w-3 h-3" />
-              <span>{format(new Date(workout.date), 'MMM d, yyyy')}</span>
+              <span>
+                {(() => {
+                  const parsedDate = parseDateAtStartOfDay(workout.date);
+                  return parsedDate ? format(parsedDate, 'MMM d, yyyy') : '--';
+                })()}
+              </span>
             </div>
             <h3 className="text-lg font-bold text-white">{workout.title}</h3>
             <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
@@ -71,7 +82,12 @@ const TimelineItem = ({ workout, isExpanded, setExpandedId, handleDelete, calcul
           <div className="flex items-center space-x-2">
             {/* Show delete button on desktop, hide on mobile where swipe is used */}
             <button 
-              onClick={(e) => { e.stopPropagation(); handleDelete(workout.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (requestDelete()) {
+                  handleDelete(workout.id);
+                }
+              }}
               className="hidden md:block p-2 text-gray-500 hover:text-red-400 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
@@ -133,15 +149,14 @@ export const Timeline: React.FC = () => {
   }, [user]);
 
   const fetchWorkouts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('workouts')
-        .select('*, exercises(*)')
-        .eq('user_id', user?.id)
-        .order('date', { ascending: false })
-        .order('created_at', { ascending: false });
+    if (!user) {
+      setWorkouts([]);
+      setLoading(false);
+      return;
+    }
 
-      if (error) throw error;
+    try {
+      const data = await getWorkouts(user.id, { includeExercises: true });
       setWorkouts(data || []);
     } catch (error) {
       console.error('Error fetching workouts:', error);
@@ -151,14 +166,11 @@ export const Timeline: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    // Optional: remove confirm if swipe is intentional enough
-    // if (!window.confirm('Are you sure you want to delete this workout?')) return;
-    
     try {
-      const { error } = await supabase.from('workouts').delete().eq('id', id);
-      if (error) throw error;
+      if (!user) throw new Error('Sign in to delete workouts');
+      await deleteWorkout(user.id, id);
       toast.success('Workout deleted');
-      setWorkouts(workouts.filter(w => w.id !== id));
+      setWorkouts((currentWorkouts) => currentWorkouts.filter((workout) => workout.id !== id));
     } catch (error: any) {
       toast.error('Failed to delete workout');
     }

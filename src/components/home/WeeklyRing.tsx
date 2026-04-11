@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { AlertTriangle } from 'lucide-react';
 
 interface WeeklyRingProps {
   trainedDays: number;
@@ -16,7 +17,7 @@ export const WeeklyRing: React.FC<WeeklyRingProps> = ({ trainedDays, goalDays, d
       <div className="flex justify-between items-end mb-2">
         <div className="flex items-baseline gap-1">
           <span className="text-2xl font-bold text-[var(--text-primary)] leading-none">{trainedDays}</span>
-          <span className="text-xs text-[var(--text-muted)]">/ {goalDays} days</span>
+          <span className="text-xs text-[#cdd6e1]">/ {goalDays} days</span>
         </div>
         <span className="text-xs font-medium text-[var(--accent)]">{Math.round(progress)}%</span>
       </div>
@@ -69,7 +70,7 @@ export const WeeklyRing: React.FC<WeeklyRingProps> = ({ trainedDays, goalDays, d
                   transition={{ duration: 0.5, delay: i * 0.1 }}
                 />
               </div>
-              <span className="text-[10px] text-[var(--text-muted)] font-medium">{day.label}</span>
+              <span className="text-[10px] text-[#cdd6e1] font-medium">{day.label}</span>
             </div>
           );
         })}
@@ -77,7 +78,7 @@ export const WeeklyRing: React.FC<WeeklyRingProps> = ({ trainedDays, goalDays, d
 
       {balanceWarning && (
         <div className="mt-3 w-full bg-[#1a1200] border border-[var(--pr-gold)]/30 rounded-md px-2 py-1 text-center">
-          <span className="text-[9px] text-[var(--pr-gold)]">⚠ {balanceWarning}</span>
+          <span className="text-[9px] text-[var(--pr-gold)] inline-flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {balanceWarning}</span>
         </div>
       )}
     </div>

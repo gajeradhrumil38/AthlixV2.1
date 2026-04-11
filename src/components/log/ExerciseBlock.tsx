@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MoreVertical, Plus, Trophy } from 'lucide-react';
+import { MoreVertical, Plus, Trophy, Sparkles } from 'lucide-react';
 import { ExerciseEntry, Set } from '../../pages/Log';
 import { SetRow } from './SetRow';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { getLastExerciseSession } from '../../lib/supabaseData';
+import { parseDateAtStartOfDay } from '../../lib/dates';
 
 interface ExerciseBlockProps {
   exercise: ExerciseEntry;
@@ -22,13 +23,7 @@ export const ExerciseBlock: React.FC<ExerciseBlockProps> = ({ exercise, onUpdate
   useEffect(() => {
     const fetchLastSession = async () => {
       if (!user) return;
-      const { data } = await supabase
-        .from('exercises')
-        .select('*, workouts(date)')
-        .eq('name', exercise.name)
-        .order('id', { ascending: false }) // In a real app, we'd order by workout date
-        .limit(1)
-        .single();
+      const data = await getLastExerciseSession(user.id, exercise.name);
       
       if (data) setLastSession(data);
     };
@@ -62,7 +57,12 @@ export const ExerciseBlock: React.FC<ExerciseBlockProps> = ({ exercise, onUpdate
       }
       
       // Start rest timer
-      const restPrefs = JSON.parse(localStorage.getItem('athlix_rest_prefs') || '{}');
+      let restPrefs: Record<string, number> = {};
+      try {
+        restPrefs = JSON.parse(localStorage.getItem('athlix_rest_prefs') || '{}');
+      } catch {
+        restPrefs = {};
+      }
       const duration = restPrefs[exercise.name] || 90;
       onStartRest(duration, exercise.name);
     }
@@ -105,10 +105,13 @@ export const ExerciseBlock: React.FC<ExerciseBlockProps> = ({ exercise, onUpdate
       <div className="px-4 py-2 bg-[#1A2538]/50 flex items-center justify-between">
         {lastSession ? (
           <span className="text-[10px] text-[#8892A4]">
-            Last: {new Date(lastSession.workouts?.date).toLocaleDateString()} · {lastSession.reps} reps @ {lastSession.weight}kg
+            Last: {(() => {
+              const parsedDate = parseDateAtStartOfDay(lastSession.workouts?.date);
+              return parsedDate ? parsedDate.toLocaleDateString() : '--';
+            })()} · {lastSession.reps} reps @ {lastSession.weight}kg
           </span>
         ) : (
-          <span className="text-[10px] text-[#00D4FF]">First time — set your benchmark 🎯</span>
+          <span className="text-[10px] text-[#00D4FF] inline-flex items-center gap-1"><Sparkles className="w-3 h-3" /> First time - set your benchmark</span>
         )}
       </div>
 

@@ -6,6 +6,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { HeartRateProvider } from './contexts/HeartRateContext';
 import { RestTimerProvider } from './contexts/RestTimerContext';
 import { Layout } from './components/Layout';
 import { Auth } from './pages/Auth';
@@ -36,25 +37,27 @@ const RedirectToStatic = ({ path }: { path: string }) => {
 export default function App() {
   return (
     <AuthProvider>
-      <RestTimerProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/privacy" element={<RedirectToStatic path="/privacy.html" />} />
-            <Route path="/terms" element={<RedirectToStatic path="/terms.html" />} />
-            <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-              <Route index element={<Home />} />
-              <Route path="calendar" element={<Calendar />} />
-              <Route path="log" element={<Log />} />
-              <Route path="templates" element={<Templates />} />
-              <Route path="timeline" element={<Timeline />} />
-              <Route path="progress" element={<Progress />} />
-              <Route path="settings" element={<Settings />} />
-              <Route path="settings/layout" element={<DashboardLayoutEditor />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </RestTimerProvider>
+      <HeartRateProvider>
+        <RestTimerProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/privacy" element={<RedirectToStatic path="/privacy.html" />} />
+              <Route path="/terms" element={<RedirectToStatic path="/terms.html" />} />
+              <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                <Route index element={<Home />} />
+                <Route path="calendar" element={<Calendar />} />
+                <Route path="log" element={<Log />} />
+                <Route path="templates" element={<Templates />} />
+                <Route path="timeline" element={<Timeline />} />
+                <Route path="progress" element={<Progress />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="settings/layout" element={<DashboardLayoutEditor />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </RestTimerProvider>
+      </HeartRateProvider>
     </AuthProvider>
   );
 }

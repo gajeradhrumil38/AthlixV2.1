@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Activity } from 'lucide-react';
+import { signInLocal, signUpLocal } from '../lib/supabaseData';
 
 export const Auth: React.FC = () => {
   const { user } = useAuth();
@@ -22,23 +22,10 @@ export const Auth: React.FC = () => {
     
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: email.split('@')[0],
-            }
-          }
-        });
-        if (error) throw error;
-        toast.success('Check your email for the login link!');
+        await signUpLocal(email, password, email.split('@')[0]);
+        toast.success('Account created.');
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
+        await signInLocal(email, password);
         toast.success('Welcome back!');
       }
     } catch (error: any) {
@@ -102,6 +89,10 @@ export const Auth: React.FC = () => {
                 {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
               </button>
             </div>
+
+            <p className="text-xs text-center text-gray-500">
+              Accounts sync through Supabase. Sign in on any device with the same credentials.
+            </p>
           </form>
 
           <div className="mt-6">
@@ -118,6 +109,7 @@ export const Auth: React.FC = () => {
 
             <div className="mt-6">
               <button
+                type="button"
                 onClick={() => setIsSignUp(!isSignUp)}
                 className="w-full flex justify-center py-3 px-4 border border-white/10 rounded-xl shadow-sm text-sm font-medium text-white bg-transparent hover:bg-white/5 focus:outline-none transition-colors"
               >

@@ -6,6 +6,7 @@ import { Set } from '../../pages/Log';
 interface SetRowProps {
   index: number;
   set: Set;
+  weightUnit?: 'kg' | 'lbs';
   isActive: boolean;
   onUpdate: (field: 'weight' | 'reps', value: number) => void;
   onMarkDone: () => void;
@@ -15,11 +16,14 @@ interface SetRowProps {
 export const SetRow: React.FC<SetRowProps> = ({
   index,
   set,
+  weightUnit = 'kg',
   isActive,
   onUpdate,
   onMarkDone,
   onOpenModal,
 }) => {
+  const weightStep = weightUnit === 'kg' ? 2.5 : 5;
+
   const handleAdjust = (field: 'weight' | 'reps', amount: number) => {
     const current = Number(set[field] || 0);
     onUpdate(field, Math.max(0, current + amount));
@@ -58,7 +62,7 @@ export const SetRow: React.FC<SetRowProps> = ({
       <div className={`h-11 rounded-lg flex flex-col items-center justify-center overflow-hidden transition-all ${set.done ? 'bg-[#141C28]/50' : isActive ? 'bg-[#141C28]' : 'bg-[#141C28]/30 border border-[#1E2F42]'}`}>
         <div className="flex items-center justify-between w-full px-1">
           <button 
-            onClick={() => handleAdjust('weight', -2.5)}
+            onClick={() => handleAdjust('weight', -weightStep)}
             className={`p-1 active:scale-90 transition-transform ${isActive || set.done ? 'text-[#00D4FF]' : 'text-[#3A5060]'}`}
           >
             <Minus className="w-3 h-3" />
@@ -70,13 +74,13 @@ export const SetRow: React.FC<SetRowProps> = ({
             {set.weight || 0}
           </button>
           <button 
-            onClick={() => handleAdjust('weight', 2.5)}
+            onClick={() => handleAdjust('weight', weightStep)}
             className={`p-1 active:scale-90 transition-transform ${isActive || set.done ? 'text-[#00D4FF]' : 'text-[#3A5060]'}`}
           >
             <Plus className="w-3 h-3" />
           </button>
         </div>
-        <span className="text-[7px] font-bold text-[#3A5060] uppercase tracking-widest -mt-1">kg</span>
+        <span className="text-[7px] font-bold text-[#3A5060] uppercase tracking-widest -mt-1">{weightUnit}</span>
       </div>
 
       {/* Reps Cell */}

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ClipboardList, ArrowRight, Plus } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { ExerciseEntry } from '../../pages/Log';
+import { FitnessBadge } from '../FitnessIcons';
+import { buildExercisesFromWorkout, getTemplates, getWorkouts } from '../../lib/supabaseData';
+import { parseDateAtStartOfDay } from '../../lib/dates';
 
 interface QuickStartSheetProps {
   onStartEmpty: () => void;
@@ -13,38 +15,66 @@ interface QuickStartSheetProps {
 export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({ onStartEmpty, onStartTemplate }) => {
   const { user } = useAuth();
   const [recentWorkouts, setRecentWorkouts] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchRecent = async () => {
-      if (!user) return;
-      const { data } = await supabase
-        .from('workouts')
-        .select('*, exercises(*)')
-        .eq('user_id', user.id)
-        .order('date', { ascending: false })
-        .limit(5);
-      
-      if (data) setRecentWorkouts(data);
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      const [workoutData, templateData] = await Promise.all([
+        getWorkouts(user.id, {
+          includeExercises: true,
+          limit: 5,
+        }),
+        getTemplates(user.id),
+      ]);
+
+      if (workoutData) setRecentWorkouts(workoutData);
+      if (templateData) setTemplates(templateData);
       setLoading(false);
     };
     fetchRecent();
   }, [user]);
 
-  const handleLoadRecent = (workout: any) => {
-    const exercises: ExerciseEntry[] = workout.exercises.map((ex: any) => ({
-      id: Math.random().toString(36).substr(2, 9),
+  const handleLoadRecent = async (workout: any) => {
+    if (!user) return;
+
+    const sourceExercises = await buildExercisesFromWorkout(user.id, workout.id);
+    const exercises: ExerciseEntry[] = sourceExercises.map((ex) => ({
+      id: crypto.randomUUID(),
       name: ex.name,
-      muscleGroup: '', // We'd ideally fetch this or have it denormalized
-      exercise_db_id: ex.exercise_db_id,
-      sets: Array.from({ length: ex.sets || 3 }).map(() => ({
-        id: Math.random().toString(36).substr(2, 9),
-        weight: ex.weight,
-        reps: ex.reps,
-        done: false
-      }))
+      muscleGroup: ex.muscleGroup,
+      exercise_db_id: ex.exercise_db_id || undefined,
+      sets: ex.sets.map((set) => ({
+        id: crypto.randomUUID(),
+        weight: set.weight,
+        reps: set.reps,
+        done: false,
+      })),
     }));
+
     onStartTemplate(exercises, workout.title);
+  };
+
+  const handleLoadTemplate = (template: any) => {
+    const exercises: ExerciseEntry[] = template.template_exercises.map((ex: any) => ({
+      id: crypto.randomUUID(),
+      name: ex.name,
+      muscleGroup: ex.muscle_group || ex.muscleGroup || 'Core',
+      exercise_db_id: ex.exercise_db_id || undefined,
+      sets: Array.from({ length: ex.default_sets || 3 }).map(() => ({
+        id: crypto.randomUUID(),
+        weight: ex.default_weight || 0,
+        reps: ex.default_reps || 0,
+        done: false,
+      })),
+    }));
+
+    onStartTemplate(exercises, template.title);
   };
 
   return (
@@ -68,17 +98,27 @@ export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({ onStartEmpty, 
         <div className="flex gap-2 mb-8">
           <button 
             onClick={onStartEmpty}
-            className="flex-1 px-4 py-3 bg-[#00D4FF]/10 border border-[#00D4FF]/20 rounded-xl text-left"
+            className="flex-1 px-4 py-3 bg-[#00D4FF]/10 border border-[#00D4FF]/25 rounded-2xl text-left shadow-[0_0_30px_rgba(0,212,255,0.08)]"
           >
-            <span className="block text-[12px] font-bold text-[#00D4FF]">💪 Push Day</span>
-            <span className="text-[9px] text-[#00D4FF]/60 uppercase tracking-wider">Suggested</span>
+            <div className="flex items-center gap-3">
+              <FitnessBadge name="push" color="#00D4FF" size={38} />
+              <div>
+                <span className="block text-[12px] font-bold text-[#00D4FF]">Push Day</span>
+                <span className="text-[9px] text-[#00D4FF]/60 uppercase tracking-wider">Suggested</span>
+              </div>
+            </div>
           </button>
           <button 
             onClick={onStartEmpty}
-            className="flex-1 px-4 py-3 bg-[#1A2538] border border-[#1E2F42] rounded-xl text-left"
+            className="flex-1 px-4 py-3 bg-[#1A2538] border border-[#1E2F42] rounded-2xl text-left"
           >
-            <span className="block text-[12px] font-bold text-[#E2E8F0]">🦵 Leg Day</span>
-            <span className="text-[9px] text-[#8892A4] uppercase tracking-wider">Next in split</span>
+            <div className="flex items-center gap-3">
+              <FitnessBadge name="legs" color="#A78BFA" size={38} />
+              <div>
+                <span className="block text-[12px] font-bold text-[#E2E8F0]">Leg Day</span>
+                <span className="text-[9px] text-[#8892A4] uppercase tracking-wider">Next in split</span>
+              </div>
+            </div>
           </button>
         </div>
 
@@ -93,7 +133,12 @@ export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({ onStartEmpty, 
                 className="flex-shrink-0 w-[140px] p-3 bg-[#1A2538] border border-[#1E2F42] rounded-xl text-left"
               >
                 <div className="text-[12px] font-bold text-[#E2E8F0] truncate mb-1">{w.title}</div>
-                <div className="text-[9px] text-[#8892A4] mb-2">{new Date(w.date).toLocaleDateString()}</div>
+                <div className="text-[9px] text-[#8892A4] mb-2">
+                  {(() => {
+                    const parsedDate = parseDateAtStartOfDay(w.date);
+                    return parsedDate ? parsedDate.toLocaleDateString() : '--';
+                  })()}
+                </div>
                 <div className="text-[9px] font-bold text-[#00D4FF] uppercase tracking-wider">{w.exercises?.length || 0} Exercises</div>
               </button>
             ))}
@@ -110,9 +155,31 @@ export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({ onStartEmpty, 
           Start Empty Workout <ArrowRight className="w-4 h-4" />
         </button>
 
-        <button className="w-full py-2 text-[12px] font-bold text-[#8892A4] flex items-center justify-center gap-2">
-          <ClipboardList className="w-4 h-4" /> Load Template
-        </button>
+        {templates.length > 0 ? (
+          <div className="space-y-2">
+            <div className="w-full py-2 text-[12px] font-bold text-[#8892A4] flex items-center justify-center gap-2">
+              <ClipboardList className="w-4 h-4" /> Load Template
+            </div>
+            <div className="flex gap-2 overflow-x-auto no-scrollbar">
+              {templates.map((template) => (
+                <button
+                  key={template.id}
+                  onClick={() => handleLoadTemplate(template)}
+                  className="flex-shrink-0 px-4 py-2 rounded-xl bg-[#1A2538] border border-[#1E2F42] text-left"
+                >
+                  <div className="text-[11px] font-bold text-[#E2E8F0]">{template.title}</div>
+                  <div className="text-[9px] text-[#8892A4]">
+                    {template.template_exercises?.length || 0} exercises
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <button className="w-full py-2 text-[12px] font-bold text-[#8892A4] flex items-center justify-center gap-2 opacity-50" disabled>
+            <ClipboardList className="w-4 h-4" /> No Templates Yet
+          </button>
+        )}
       </motion.div>
     </div>
   );

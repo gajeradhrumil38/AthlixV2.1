@@ -1,11 +1,16 @@
-import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, Plus, ChevronRight, History, Dumbbell, LayoutGrid } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { Search, X, Plus, History, LayoutGrid } from 'lucide-react';
+import { MUSCLE_COLORS } from '../FitnessIcons';
+import { useAuth } from '../../contexts/AuthContext';
+import { getExerciseLibraryByGroup, getRecentExerciseOptions, searchExerciseLibrary } from '../../lib/supabaseData';
+import { ExerciseImage } from '../shared/ExerciseImage';
 
 interface Exercise {
   id: string;
   name: string;
   muscleGroup: string;
+  exercise_db_id?: string;
   lastSession?: {
     weight: number;
     reps: number;
@@ -20,43 +25,84 @@ interface ExercisePickerProps {
 }
 
 const MUSCLE_GROUPS = [
-  { name: 'Chest', icon: '🎯', color: '#C45A7A' },
-  { name: 'Back', icon: '🦅', color: '#5A7AC4' },
-  { name: 'Shoulders', icon: '🛡️', color: '#C49A5A' },
-  { name: 'Biceps', icon: '💪', color: '#7AC45A' },
-  { name: 'Triceps', icon: '⚡', color: '#5AC49A' },
-  { name: 'Legs', icon: '🦵', color: '#9A5AC4' },
-  { name: 'Abs', icon: '🍫', color: '#C4C45A' },
-  { name: 'Cardio', icon: '🏃', color: '#5AC4C4' },
-];
-
-const ALL_EXERCISES: Exercise[] = [
-  { id: '1', name: 'Bench Press', muscleGroup: 'Chest', lastSession: { weight: 80, reps: 8, date: '2 days ago' } },
-  { id: '2', name: 'Incline Dumbbell Press', muscleGroup: 'Chest', lastSession: { weight: 30, reps: 10, date: '2 days ago' } },
-  { id: '3', name: 'Pull Ups', muscleGroup: 'Back', lastSession: { weight: 0, reps: 12, date: '3 days ago' } },
-  { id: '4', name: 'Deadlift', muscleGroup: 'Back', lastSession: { weight: 140, reps: 5, date: '1 week ago' } },
-  { id: '5', name: 'Overhead Press', muscleGroup: 'Shoulders', lastSession: { weight: 50, reps: 8, date: '4 days ago' } },
-  { id: '6', name: 'Lateral Raises', muscleGroup: 'Shoulders', lastSession: { weight: 12, reps: 15, date: '4 days ago' } },
-  { id: '7', name: 'Barbell Squat', muscleGroup: 'Legs', lastSession: { weight: 100, reps: 8, date: '5 days ago' } },
-  { id: '8', name: 'Leg Press', muscleGroup: 'Legs', lastSession: { weight: 200, reps: 12, date: '5 days ago' } },
-  { id: '9', name: 'Bicep Curls', muscleGroup: 'Biceps', lastSession: { weight: 15, reps: 12, date: '2 days ago' } },
-  { id: '10', name: 'Tricep Pushdowns', muscleGroup: 'Triceps', lastSession: { weight: 25, reps: 15, date: '2 days ago' } },
+  { name: 'Chest', color: MUSCLE_COLORS.Chest, previewExerciseId: 'ot_benchpress' },
+  { name: 'Back', color: MUSCLE_COLORS.Back, previewExerciseId: 'ot_tbarrow' },
+  { name: 'Shoulders', color: MUSCLE_COLORS.Shoulders, previewExerciseId: 'ot_arnoldpress' },
+  { name: 'Biceps', color: MUSCLE_COLORS.Biceps, previewExerciseId: 'ot_bicepscurl' },
+  { name: 'Triceps', color: MUSCLE_COLORS.Triceps, previewExerciseId: 'ot_tricepskickback' },
+  { name: 'Legs', color: MUSCLE_COLORS.Legs, previewExerciseId: 'ot_legpressx' },
+  { name: 'Core', color: MUSCLE_COLORS.Core, previewExerciseId: 'ot_crunches' },
+  { name: 'Cardio', color: MUSCLE_COLORS.Cardio, previewExerciseId: '' },
 ];
 
 export const ExercisePicker: React.FC<ExercisePickerProps> = ({ onSelect, onClose, recentExercises }) => {
+  const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'recent' | 'muscle' | 'search'>('recent');
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
+  const [libraryExercises, setLibraryExercises] = useState<Exercise[]>([]);
+  const [recentLibraryExercises, setRecentLibraryExercises] = useState<Exercise[]>([]);
 
-  const filteredExercises = useMemo(() => {
-    let list = ALL_EXERCISES;
-    if (search) {
-      list = list.filter(ex => ex.name.toLowerCase().includes(search.toLowerCase()));
-    } else if (selectedMuscle) {
-      list = list.filter(ex => ex.muscleGroup === selectedMuscle);
+  useEffect(() => {
+    const loadRecent = async () => {
+      if (!user) return;
+      const recent = await getRecentExerciseOptions(user.id);
+      setRecentLibraryExercises(
+        recent.map((exercise, index) => ({
+          id: `${exercise.name}-${index}`,
+          name: exercise.name,
+          muscleGroup: exercise.muscleGroup,
+          exercise_db_id: exercise.exercise_db_id || undefined,
+          lastSession: exercise.lastSession
+            ? {
+                weight: exercise.lastSession.weight,
+                reps: exercise.lastSession.reps,
+                date: exercise.lastSession.date,
+              }
+            : undefined,
+        })),
+      );
     }
-    return list;
-  }, [search, selectedMuscle]);
+    loadRecent();
+  }, [user]);
+
+  useEffect(() => {
+    const loadList = async () => {
+      if (!user) return;
+
+      if (search.trim()) {
+        const results = await searchExerciseLibrary(user.id, search);
+        setLibraryExercises(
+          results.map((exercise) => ({
+            id: exercise.id,
+            name: exercise.name,
+            muscleGroup: exercise.muscle_group,
+            exercise_db_id: exercise.exercise_db_id || undefined,
+          })),
+        );
+        return;
+      }
+
+      if (selectedMuscle) {
+        const results = await getExerciseLibraryByGroup(user.id, selectedMuscle);
+        setLibraryExercises(
+          results.map((exercise) => ({
+            id: exercise.id,
+            name: exercise.name,
+            muscleGroup: exercise.muscle_group,
+            exercise_db_id: exercise.exercise_db_id || undefined,
+          })),
+        );
+        return;
+      }
+
+      setLibraryExercises([]);
+    };
+
+    loadList();
+  }, [user, search, selectedMuscle]);
+
+  const filteredExercises = useMemo(() => libraryExercises, [libraryExercises]);
 
   const handleSelect = (ex: Exercise) => {
     onSelect(ex);
@@ -123,6 +169,8 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({ onSelect, onClos
           <div className="space-y-2">
             {recentExercises.length > 0 ? recentExercises.map(ex => (
               <ExerciseRow key={ex.id} ex={ex} onSelect={handleSelect} />
+            )) : recentLibraryExercises.length > 0 ? recentLibraryExercises.map(ex => (
+              <ExerciseRow key={ex.id} ex={ex} onSelect={handleSelect} />
             )) : (
               <div className="text-center py-12 text-[#3A5060] text-[12px] font-medium">No recent exercises</div>
             )}
@@ -135,9 +183,14 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({ onSelect, onClos
               <button
                 key={m.name}
                 onClick={() => setSelectedMuscle(m.name)}
-                className="h-20 bg-[#141C28] border border-[#1E2F42] rounded-2xl flex flex-col items-center justify-center gap-1 active:scale-95 transition-all"
+                className="h-24 bg-[#141C28] border border-[#1E2F42] rounded-3xl flex flex-col items-center justify-center gap-2 active:scale-95 transition-all"
               >
-                <span className="text-xl">{m.icon}</span>
+                <ExerciseImage
+                  exerciseId={m.previewExerciseId}
+                  exerciseName={m.name}
+                  muscleGroup={m.name}
+                  size="sm"
+                />
                 <span className="text-[11px] font-black text-[#E2E8F0] uppercase tracking-wider">{m.name}</span>
               </button>
             ))}
@@ -168,21 +221,17 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({ onSelect, onClos
 };
 
 const ExerciseRow: React.FC<{ ex: Exercise, onSelect: (ex: Exercise) => void }> = ({ ex, onSelect }) => {
-  const getMuscleColor = (muscle: string) => {
-    const colors: Record<string, string> = {
-      'Chest': '#C45A7A', 'Back': '#5A7AC4', 'Shoulders': '#C49A5A',
-      'Biceps': '#7AC45A', 'Triceps': '#5AC49A', 'Legs': '#9A5AC4',
-      'Abs': '#C4C45A', 'Cardio': '#5AC4C4',
-    };
-    return colors[muscle] || '#8892A4';
-  };
-
   return (
     <button 
       onClick={() => onSelect(ex)}
       className="w-full h-16 bg-[#141C28] border border-[#1E2F42] rounded-2xl p-3 flex items-center gap-3 active:scale-[0.98] transition-all text-left"
     >
-      <div className="w-1.5 h-8 rounded-full" style={{ background: getMuscleColor(ex.muscleGroup) }} />
+      <ExerciseImage
+        exerciseId={ex.exercise_db_id || ''}
+        exerciseName={ex.name}
+        muscleGroup={ex.muscleGroup}
+        size="sm"
+      />
       <div className="flex-1 flex flex-col">
         <span className="text-[13px] font-black text-[#E2E8F0] tracking-tight leading-tight">{ex.name}</span>
         <span className="text-[9px] font-bold text-[#3A5060] uppercase tracking-wider mt-0.5">{ex.muscleGroup}</span>
@@ -193,7 +242,7 @@ const ExerciseRow: React.FC<{ ex: Exercise, onSelect: (ex: Exercise) => void }> 
           <span className="text-[8px] font-bold text-[#3A5060] uppercase tracking-widest">{ex.lastSession.date}</span>
         </div>
       )}
-      <div className="w-8 h-8 rounded-full bg-[#00D4FF]/10 flex items-center justify-center text-[#00D4FF] ml-1">
+      <div className="w-9 h-9 rounded-2xl bg-[#00D4FF]/10 border border-[#00D4FF]/15 flex items-center justify-center text-[#00D4FF] ml-1 shadow-[0_0_16px_rgba(0,212,255,0.08)]">
         <Plus className="w-4 h-4" />
       </div>
     </button>

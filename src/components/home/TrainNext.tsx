@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { format, subDays } from 'date-fns'
+import { getWorkouts } from '../../lib/supabaseData'
+import { parseDateAtStartOfDay } from '../../lib/dates'
 
 interface TrainNextProps {
   muscleData: Record<string, { sessions: number; sets: number }>
@@ -41,18 +42,24 @@ export const TrainNext: React.FC<TrainNextProps> = ({
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      setLoading(false)
+      return
+    }
+    setLoading(true)
     fetchLastTrainedDays()
   }, [user])
 
+  useEffect(() => {
+    if (Object.keys(lastTrained).length === 0) return
+    computeSuggestions(lastTrained)
+  }, [lastTrained, muscleData])
+
   const fetchLastTrainedDays = async () => {
     // Fetch last 30 days of workouts to calculate days since each muscle trained
-    const { data } = await supabase
-      .from('workouts')
-      .select('date, muscle_groups')
-      .eq('user_id', user!.id)
-      .gte('date', format(subDays(new Date(), 30), 'yyyy-MM-dd'))
-      .order('date', { ascending: false })
+    const data = await getWorkouts(user!.id, {
+      startDate: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
+    })
 
     if (!data) { setLoading(false); return }
 
@@ -74,8 +81,13 @@ export const TrainNext: React.FC<TrainNextProps> = ({
         )
       )
       if (lastWorkout) {
+        const lastWorkoutDate = parseDateAtStartOfDay(lastWorkout.date)
+        if (!lastWorkoutDate) {
+          daysSince[muscle] = 99
+          return
+        }
         const diff = Math.floor(
-          (today.getTime() - new Date(lastWorkout.date).getTime())
+          (today.getTime() - lastWorkoutDate.getTime())
           / (1000 * 60 * 60 * 24)
         )
         daysSince[muscle] = diff
@@ -85,7 +97,6 @@ export const TrainNext: React.FC<TrainNextProps> = ({
     })
 
     setLastTrained(daysSince)
-    computeSuggestions(daysSince)
     setLoading(false)
   }
 

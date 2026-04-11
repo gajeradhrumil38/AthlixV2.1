@@ -13,7 +13,7 @@ export const ALL_WIDGETS: WidgetConfig[] = [
     id: 'date_navigator',
     name: 'Date Navigator',
     description: 'Week switcher + Day/Week/Month toggle',
-    icon: '🗓',
+    icon: 'date_navigator',
     defaultVisible: true,
     canHide: false,       // always visible, cant remove
     defaultOrder: 1
@@ -22,7 +22,7 @@ export const ALL_WIDGETS: WidgetConfig[] = [
     id: 'quick_stats',
     name: 'Quick Stats',
     description: 'Streak · Sessions · Volume · Progress',
-    icon: '📊',
+    icon: 'quick_stats',
     defaultVisible: true,
     canHide: true,
     defaultOrder: 2
@@ -31,7 +31,7 @@ export const ALL_WIDGETS: WidgetConfig[] = [
     id: 'weekly_goal',
     name: 'Weekly Goal',
     description: 'Weekly training progress chart',
-    icon: '🎯',
+    icon: 'weekly_goal',
     defaultVisible: true,
     canHide: true,
     defaultOrder: 3
@@ -40,7 +40,7 @@ export const ALL_WIDGETS: WidgetConfig[] = [
     id: 'muscle_map',
     name: 'Muscle Map',
     description: 'Weekly training heatmap',
-    icon: '💪',
+    icon: 'muscle_map',
     defaultVisible: true,
     canHide: true,
     defaultOrder: 4
@@ -49,7 +49,7 @@ export const ALL_WIDGETS: WidgetConfig[] = [
     id: 'train_next',
     name: 'Train Next',
     description: 'AI-based session suggestion',
-    icon: '🤖',
+    icon: 'train_next',
     defaultVisible: true,
     canHide: true,
     defaultOrder: 5
@@ -58,7 +58,7 @@ export const ALL_WIDGETS: WidgetConfig[] = [
     id: 'pr_banner',
     name: 'PR Banner',
     description: 'New personal records this week',
-    icon: '🏆',
+    icon: 'pr_banner',
     defaultVisible: true,
     canHide: true,
     defaultOrder: 6
@@ -67,7 +67,7 @@ export const ALL_WIDGETS: WidgetConfig[] = [
     id: 'today_card',
     name: "Today's Workout",
     description: 'Current session status + actions',
-    icon: '⚡',
+    icon: 'today_card',
     defaultVisible: true,
     canHide: true,
     defaultOrder: 7
@@ -76,7 +76,7 @@ export const ALL_WIDGETS: WidgetConfig[] = [
     id: 'week_strip',
     name: 'Week Strip',
     description: 'Mon–Sun day pills with workout dots',
-    icon: '📅',
+    icon: 'week_strip',
     defaultVisible: true,
     canHide: true,
     defaultOrder: 8
@@ -85,7 +85,7 @@ export const ALL_WIDGETS: WidgetConfig[] = [
     id: 'ai_summary',
     name: 'AI Weekly Summary',
     description: 'Claude-generated weekly insight',
-    icon: '✦',
+    icon: 'ai_summary',
     defaultVisible: true,
     canHide: true,
     defaultOrder: 9
@@ -94,7 +94,7 @@ export const ALL_WIDGETS: WidgetConfig[] = [
     id: 'whoop_row',
     name: 'WHOOP Data',
     description: 'Recovery · HRV · Sleep · Strain',
-    icon: '❤',
+    icon: 'whoop_row',
     defaultVisible: true,
     canHide: true,
     defaultOrder: 10

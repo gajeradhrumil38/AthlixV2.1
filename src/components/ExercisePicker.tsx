@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, Plus, ChevronRight } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { FitnessBadge, MUSCLE_COLORS, muscleToGlyph } from './FitnessIcons';
+import { addCustomExercise, getExerciseLibraryByGroup } from '../lib/supabaseData';
 
 interface ExercisePickerProps {
   isOpen: boolean;
@@ -11,14 +12,14 @@ interface ExercisePickerProps {
 }
 
 const MUSCLE_GROUPS = [
-  { id: 'Chest', icon: '🦍' },
-  { id: 'Back', icon: '🦅' },
-  { id: 'Shoulders', icon: '🏋️' },
-  { id: 'Biceps', icon: '💪' },
-  { id: 'Triceps', icon: '⚡' },
-  { id: 'Legs', icon: '🦿' },
-  { id: 'Core', icon: '🧱' },
-  { id: 'Cardio', icon: '🏃' },
+  { id: 'Chest' },
+  { id: 'Back' },
+  { id: 'Shoulders' },
+  { id: 'Biceps' },
+  { id: 'Triceps' },
+  { id: 'Legs' },
+  { id: 'Core' },
+  { id: 'Cardio' },
 ];
 
 export const ExercisePicker: React.FC<ExercisePickerProps> = ({ isOpen, onClose, onSelect }) => {
@@ -45,32 +46,23 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({ isOpen, onClose,
 
   const fetchExercises = async (group: string) => {
     setLoading(true);
-    const { data } = await supabase
-      .from('exercise_library')
-      .select('*')
-      .eq('muscle_group', group)
-      .or(`is_custom.eq.false,user_id.eq.${user?.id}`)
-      .order('name');
+    if (!user) {
+      setExercises([]);
+      setLoading(false);
+      return;
+    }
+    const data = await getExerciseLibraryByGroup(user.id, group);
     
     setExercises(data || []);
     setLoading(false);
   };
 
   const handleAddCustom = async () => {
-    if (!searchQuery || !selectedGroup) return;
+    if (!searchQuery || !selectedGroup || !user) return;
     
-    const { data, error } = await supabase
-      .from('exercise_library')
-      .insert({
-        name: searchQuery,
-        muscle_group: selectedGroup,
-        is_custom: true,
-        user_id: user?.id
-      })
-      .select()
-      .single();
+    const data = await addCustomExercise(user.id, searchQuery, selectedGroup);
 
-    if (!error && data) {
+    if (data) {
       onSelect(data.name);
       onClose();
     }
@@ -126,7 +118,11 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({ isOpen, onClose,
                       }}
                       className="bg-black border border-white/5 p-4 rounded-2xl flex flex-col items-center justify-center space-y-2 hover:border-[#00D4FF]/50 transition-colors"
                     >
-                      <span className="text-2xl">{group.icon}</span>
+                      <FitnessBadge
+                        name={muscleToGlyph(group.id)}
+                        color={MUSCLE_COLORS[group.id] || '#00D4FF'}
+                        size={42}
+                      />
                       <span className="text-white font-medium">{group.id}</span>
                     </button>
                   ))}
