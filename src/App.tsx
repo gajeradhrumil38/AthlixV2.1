@@ -38,10 +38,17 @@ export default function App() {
   const isGitHubPagesHost =
     typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
   const Router = isGitHubPagesHost ? HashRouter : BrowserRouter;
-  const staticBase =
-    (import.meta.env.BASE_URL && import.meta.env.BASE_URL !== './'
-      ? import.meta.env.BASE_URL
-      : '/') || '/';
+  const staticBase = React.useMemo(() => {
+    if (typeof window === 'undefined') return '/';
+    if (!isGitHubPagesHost) {
+      return (import.meta.env.BASE_URL && import.meta.env.BASE_URL !== './'
+        ? import.meta.env.BASE_URL
+        : '/') || '/';
+    }
+
+    const [firstSegment] = window.location.pathname.split('/').filter(Boolean);
+    return firstSegment ? `/${firstSegment}/` : '/';
+  }, [isGitHubPagesHost]);
 
   return (
     <AuthProvider>
