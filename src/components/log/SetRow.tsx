@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Minus, Plus, Check, Trophy } from 'lucide-react';
-import { Set } from '../../pages/Log';
+import { Set } from '../../legacy-pages/Log';
 
 interface SetRowProps {
   index: number;

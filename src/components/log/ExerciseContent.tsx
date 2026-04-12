@@ -1,6 +1,6 @@
 import React, { useRef, useMemo } from 'react';
 import { Plus, Sparkles, Copy } from 'lucide-react';
-import { ExerciseEntry } from '../../pages/Log';
+import { ExerciseEntry } from '../../legacy-pages/Log';
 import { SetRow } from './SetRow';
 
 interface ExerciseContentProps {

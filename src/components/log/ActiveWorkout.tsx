@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Play, Pause, ChevronLeft, ChevronRight, Clock, Activity, Trash2, Plus, X } from 'lucide-react';
-import { WorkoutState, ExerciseEntry, Set } from '../../pages/Log';
+import { WorkoutState, ExerciseEntry, Set } from '../../legacy-pages/Log';
 import { ExerciseTabBar } from './ExerciseTabBar';
 import { ExerciseContent } from './ExerciseContent';
 import { RestTimer } from './RestTimer';

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run build:legacy && next build",
+    "build:legacy": "rm -rf .legacy-build public/legacy-app && vite build --outDir .legacy-build && mkdir -p public/legacy-app && cp -R .legacy-build/. public/legacy-app/ && rm -rf .legacy-build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "next lint",

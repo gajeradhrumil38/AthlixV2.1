@@ -4,21 +4,21 @@
  */
 
 import React from 'react';
-import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { HeartRateProvider } from './contexts/HeartRateContext';
 import { RestTimerProvider } from './contexts/RestTimerContext';
 import { Layout } from './components/Layout';
-import { Auth } from './pages/Auth';
-import { Home } from './pages/Home';
-import { Calendar } from './pages/Calendar';
-import { Log } from './pages/Log';
-import { Templates } from './pages/Templates';
-import { Timeline } from './pages/Timeline';
-import { Settings } from './pages/Settings';
-import { Progress } from './pages/Progress';
+import { Auth } from './legacy-pages/Auth';
+import { Home } from './legacy-pages/Home';
+import { Calendar } from './legacy-pages/Calendar';
+import { Log } from './legacy-pages/Log';
+import { Templates } from './legacy-pages/Templates';
+import { Timeline } from './legacy-pages/Timeline';
+import { Settings } from './legacy-pages/Settings';
+import { Progress } from './legacy-pages/Progress';
 
-import { DashboardLayoutEditor } from './pages/DashboardLayoutEditor';
+import { DashboardLayoutEditor } from './legacy-pages/DashboardLayoutEditor';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -35,26 +35,13 @@ const RedirectToStatic = ({ path }: { path: string }) => {
 };
 
 export default function App() {
-  const isGitHubPagesHost =
-    typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
-  const Router = isGitHubPagesHost ? HashRouter : BrowserRouter;
-  const staticBase = React.useMemo(() => {
-    if (typeof window === 'undefined') return '/';
-    if (!isGitHubPagesHost) {
-      return (import.meta.env.BASE_URL && import.meta.env.BASE_URL !== './'
-        ? import.meta.env.BASE_URL
-        : '/') || '/';
-    }
-
-    const [firstSegment] = window.location.pathname.split('/').filter(Boolean);
-    return firstSegment ? `/${firstSegment}/` : '/';
-  }, [isGitHubPagesHost]);
+  const staticBase = '/';
 
   return (
     <AuthProvider>
       <HeartRateProvider>
         <RestTimerProvider>
-          <Router>
+          <HashRouter>
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/privacy" element={<RedirectToStatic path={`${staticBase}privacy.html`} />} />
@@ -70,7 +57,7 @@ export default function App() {
                 <Route path="settings/layout" element={<DashboardLayoutEditor />} />
               </Route>
             </Routes>
-          </Router>
+          </HashRouter>
         </RestTimerProvider>
       </HeartRateProvider>
     </AuthProvider>
