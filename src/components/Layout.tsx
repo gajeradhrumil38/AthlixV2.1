@@ -13,18 +13,30 @@ const navItems: { path: string; icon: IconName; label: string }[] = [
   { path: '/settings', icon: 'Settings', label: 'Settings' },
 ];
 
+const mobileNavItems: { path: string; icon: IconName; label: string }[] = [
+  { path: '/', icon: 'Home', label: 'Home' },
+  { path: '/progress', icon: 'Activity', label: 'Health' },
+  { path: '/calendar', icon: 'Calendar', label: 'Calendar' },
+  { path: '/settings', icon: 'More', label: 'More' },
+];
+
 export const Layout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [viewportHeight, setViewportHeight] = useState(
     typeof window === 'undefined' ? 0 : window.innerHeight,
   );
+  const [tappedTab, setTappedTab] = useState<string | null>(null);
   const isImmersiveRoute = location.pathname === '/log';
   const swipeStartRef = useRef<{ x: number; y: number; ts: number } | null>(null);
+  const tapTimerRef = useRef<number | null>(null);
 
   const currentPageLabel = useMemo(() => {
     if (location.pathname.startsWith('/settings/layout')) return 'Layout';
-    const route = navItems.find((item) => item.path === location.pathname);
+    if (location.pathname === '/') return 'Home';
+    const route = navItems.find((item) =>
+      item.path !== '/' && location.pathname.startsWith(item.path),
+    );
     return route?.label || 'Athlix';
   }, [location.pathname]);
 
@@ -46,6 +58,14 @@ export const Layout: React.FC = () => {
       window.removeEventListener('resize', updateViewportHeight);
       window.visualViewport?.removeEventListener('resize', updateViewportHeight);
       window.visualViewport?.removeEventListener('scroll', updateViewportHeight);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (tapTimerRef.current) {
+        window.clearTimeout(tapTimerRef.current);
+      }
     };
   }, []);
 
@@ -92,6 +112,17 @@ export const Layout: React.FC = () => {
     }
   };
 
+  const handleTabTap = (path: string) => {
+    if (navigator.vibrate) navigator.vibrate(10);
+    setTappedTab(path);
+    if (tapTimerRef.current) {
+      window.clearTimeout(tapTimerRef.current);
+    }
+    tapTimerRef.current = window.setTimeout(() => {
+      setTappedTab(null);
+    }, 150);
+  };
+
   return (
     <div
       className="flex bg-black text-white overflow-hidden"
@@ -122,45 +153,49 @@ export const Layout: React.FC = () => {
         </nav>
       </aside>
 
+      {!isImmersiveRoute && (
+        <header
+          className="md:hidden fixed top-0 left-0 right-0 z-[90] px-3"
+          style={{
+            paddingTop: 'env(safe-area-inset-top)',
+            backgroundColor: 'rgba(10, 15, 20, 0.6)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+          }}
+        >
+          <div className="flex h-[60px] items-center justify-between">
+            <button
+              type="button"
+              onClick={handleBack}
+              disabled={!canGoBack}
+              aria-label="Go back"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.07] text-white/90 transition-transform duration-150 hover:bg-white/[0.12] active:scale-95 disabled:cursor-default disabled:opacity-35"
+            >
+              <AppIcon name="Back" size="md" />
+            </button>
+            <p className="text-sm font-semibold tracking-wide text-slate-100">{currentPageLabel}</p>
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              aria-label="Go to home"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-cyan-400/18 text-cyan-300 transition-transform duration-150 hover:bg-cyan-400/25 active:scale-95"
+            >
+              <AppIcon name="Home" size="sm" />
+            </button>
+          </div>
+        </header>
+      )}
+
       {/* Main Content */}
       <main
-        className="flex-1 flex flex-col h-full relative overflow-y-auto md:pb-0"
+        className={`flex-1 flex flex-col h-full relative overflow-y-auto md:pb-0 ${
+          isImmersiveRoute
+            ? ''
+            : 'pt-[calc(60px+env(safe-area-inset-top))] pb-[calc(80px+env(safe-area-inset-bottom))] md:pt-0 md:pb-0'
+        }`}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        style={
-          isImmersiveRoute
-            ? undefined
-            : { paddingBottom: 'calc(102px + max(env(safe-area-inset-bottom), 12px))' }
-        }
       >
-        {!isImmersiveRoute && (
-          <div
-            className="md:hidden sticky top-0 z-[80] border-b border-white/5 bg-[linear-gradient(180deg,rgba(8,17,30,0.92),rgba(8,17,30,0.55),transparent)] backdrop-blur-xl px-3 pb-2"
-            style={{ paddingTop: 'max(env(safe-area-inset-top), 8px)' }}
-          >
-            <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.035] px-2 py-2 shadow-[0_10px_35px_rgba(0,0,0,0.28)]">
-              <button
-                type="button"
-                onClick={handleBack}
-                disabled={!canGoBack}
-                aria-label="Go back"
-                className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] px-2 text-white/90 transition hover:bg-white/[0.08] disabled:cursor-default disabled:opacity-35"
-              >
-                <AppIcon name="Back" size="md" />
-              </button>
-              <p className="text-sm font-semibold tracking-wide text-slate-100">{currentPageLabel}</p>
-              <button
-                type="button"
-                onClick={() => navigate('/')}
-                aria-label="Go to home"
-                className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-2 text-cyan-300 transition hover:bg-cyan-400/20"
-              >
-                <AppIcon name="Home" size="sm" />
-              </button>
-            </div>
-          </div>
-        )}
-
         <div
           className={`flex-1 w-full ${
             isImmersiveRoute
@@ -188,81 +223,56 @@ export const Layout: React.FC = () => {
 
       {/* Bottom Navigation for mobile */}
       {!isImmersiveRoute && (
-        <nav
-          className="md:hidden fixed left-3 right-3 z-[100] rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(18,30,48,0.48),rgba(8,18,30,0.86))] backdrop-blur-2xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]"
-          style={{ bottom: 'max(env(safe-area-inset-bottom), 10px)' }}
-        >
-          <div className="pointer-events-none absolute -top-px left-5 right-5 h-px bg-gradient-to-r from-transparent via-cyan-300/70 to-transparent" />
-          <div className="mx-auto h-[64px] max-w-[540px] flex items-center justify-between px-6 relative">
-            <NavLink
-              to="/"
-              className={({ isActive }) =>
-                `flex flex-col items-center justify-center h-full w-16 relative transition ${
-                  isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && <div className="absolute top-1 left-2 right-2 h-[2px] rounded-full bg-[var(--accent)]/90 shadow-[0_0_12px_var(--accent-glow)]" />}
-                  <AppIcon name="Home" size="md" className="mb-1" />
-                  <span className="text-[10px] font-medium tracking-wide">Home</span>
-                </>
-              )}
-            </NavLink>
+        <>
+          <div
+            className="md:hidden fixed left-0 right-0 z-[98] pointer-events-none"
+            style={{
+              bottom: 'calc(72px + env(safe-area-inset-bottom))',
+              height: '32px',
+              background: 'linear-gradient(to bottom, transparent 0%, rgba(10, 15, 20, 0.9) 100%)',
+            }}
+          />
 
-            <NavLink
-              to="/progress"
-              className={({ isActive }) =>
-                `flex flex-col items-center justify-center h-full w-16 relative transition ${
-                  isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && <div className="absolute top-1 left-2 right-2 h-[2px] rounded-full bg-[var(--accent)]/90 shadow-[0_0_12px_var(--accent-glow)]" />}
-                  <AppIcon name="Activity" size="md" className="mb-1" />
-                  <span className="text-[10px] font-medium tracking-wide">Health</span>
-                </>
-              )}
-            </NavLink>
-
-            <NavLink
-              to="/calendar"
-              className={({ isActive }) =>
-                `flex flex-col items-center justify-center h-full w-16 relative transition ${
-                  isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && <div className="absolute top-1 left-2 right-2 h-[2px] rounded-full bg-[var(--accent)]/90 shadow-[0_0_12px_var(--accent-glow)]" />}
-                  <AppIcon name="Calendar" size="md" className="mb-1" />
-                  <span className="text-[10px] font-medium tracking-wide">Calendar</span>
-                </>
-              )}
-            </NavLink>
-
-            <NavLink
-              to="/settings"
-              className={({ isActive }) =>
-                `flex flex-col items-center justify-center h-full w-16 relative transition ${
-                  isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && <div className="absolute top-1 left-2 right-2 h-[2px] rounded-full bg-[var(--accent)]/90 shadow-[0_0_12px_var(--accent-glow)]" />}
-                  <AppIcon name="More" size="md" className="mb-1" />
-                  <span className="text-[10px] font-medium tracking-wide">More</span>
-                </>
-              )}
-            </NavLink>
-          </div>
-        </nav>
+          <nav
+            className="md:hidden fixed left-0 right-0 bottom-0 z-[100]"
+            style={{
+              backgroundColor: 'rgba(10, 15, 20, 0.75)',
+              backdropFilter: 'blur(24px)',
+              WebkitBackdropFilter: 'blur(24px)',
+              paddingBottom: 'env(safe-area-inset-bottom)',
+            }}
+          >
+            <div className="mx-auto flex h-[72px] max-w-[540px] items-center justify-between px-6">
+              {mobileNavItems.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  end={item.path === '/'}
+                  onClick={() => handleTabTap(item.path)}
+                  className={({ isActive }) =>
+                    `group flex h-full w-[66px] flex-col items-center justify-center transition-all duration-150 ${
+                      isActive ? 'text-[#00D4FF] opacity-100' : 'text-slate-200 opacity-[0.35]'
+                    } ${tappedTab === item.path ? 'scale-[1.15]' : 'scale-100'}`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <AppIcon name={item.icon} size="md" />
+                      {isActive ? (
+                        <span className="mt-1 text-[10px] font-semibold leading-none tracking-wide">{item.label}</span>
+                      ) : (
+                        <span className="sr-only">{item.label}</span>
+                      )}
+                      {isActive && (
+                        <span className="mt-1 h-1 w-1 rounded-full bg-[#00D4FF] shadow-[0_0_6px_#00D4FF]" />
+                      )}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </nav>
+        </>
       )}
 
       <Toaster 
