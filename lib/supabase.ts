@@ -1,29 +1,10 @@
 import { createBrowserClient, createServerClient } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-const DUMMY_SUPABASE_URL = 'https://placeholder.supabase.co';
-const DUMMY_SUPABASE_ANON_KEY =
-  'public-anon-key-placeholder-public-anon-key-placeholder-public-anon-key';
-
-const getBrowserSupabaseEnv = () => {
-  if (supabaseUrl && supabaseAnonKey) {
-    return { url: supabaseUrl, anonKey: supabaseAnonKey };
-  }
-
-  if (typeof window !== 'undefined') {
-    throw new Error('Missing Supabase environment variables');
-  }
-
-  return {
-    url: DUMMY_SUPABASE_URL,
-    anonKey: DUMMY_SUPABASE_ANON_KEY,
-  };
-};
 
 const getServerSupabaseEnv = () => {
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -36,10 +17,16 @@ const getServerSupabaseEnv = () => {
   };
 };
 
-export function createBrowserSupabaseClient() {
-  const env = getBrowserSupabaseEnv();
+export function createClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  return createBrowserClient<Database>(env.url, env.anonKey, {
+  if (!url || !key) {
+    console.warn('Supabase env vars not set');
+    return null as any;
+  }
+
+  return createBrowserClient<Database>(url, key, {
     auth: {
       flowType: 'pkce',
       autoRefreshToken: true,
@@ -48,6 +35,8 @@ export function createBrowserSupabaseClient() {
     },
   });
 }
+
+export const createBrowserSupabaseClient = createClient;
 
 export async function createServerSupabaseClient() {
   const { cookies } = await import('next/headers');
@@ -110,7 +99,7 @@ export function createServiceRoleSupabaseClient() {
 
   const env = getServerSupabaseEnv();
 
-  return createClient<Database>(env.url, supabaseServiceRoleKey, {
+  return createSupabaseAdminClient<Database>(env.url, supabaseServiceRoleKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,

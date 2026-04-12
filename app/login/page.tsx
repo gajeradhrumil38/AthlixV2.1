@@ -10,7 +10,7 @@ import { Eye, EyeOff, Loader2, ShieldAlert, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { createBrowserSupabaseClient } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
@@ -54,7 +54,7 @@ const normalizeAttemptState = (state: AttemptState): AttemptState => {
 
 export default function LoginPage() {
   const router = useRouter();
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const supabase = useMemo(() => createClient(), []);
 
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [attemptState, setAttemptState] = useState<AttemptState>(initialAttemptState);
@@ -160,6 +160,11 @@ export default function LoginPage() {
   };
 
   const onSubmit = async (values: SignInFormValues) => {
+    if (!supabase) {
+      setErrorBanner('Authentication is temporarily unavailable.');
+      return;
+    }
+
     const normalizedAttemptState = normalizeAttemptState(attemptState);
     if (isLockedOut(normalizedAttemptState)) {
       const lockTime = formatRemainingLockTime(normalizedAttemptState) || 'a few minutes';
@@ -225,6 +230,11 @@ export default function LoginPage() {
   };
 
   const signInWithGoogle = async () => {
+    if (!supabase) {
+      setErrorBanner('Authentication is temporarily unavailable.');
+      return;
+    }
+
     const normalizedAttemptState = normalizeAttemptState(attemptState);
     if (isLockedOut(normalizedAttemptState)) {
       const lockTime = formatRemainingLockTime(normalizedAttemptState) || 'a few minutes';
@@ -259,6 +269,10 @@ export default function LoginPage() {
 
   const sendPasswordReset = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!supabase) {
+      setForgotPasswordMessage('Password reset is temporarily unavailable.');
+      return;
+    }
 
     const candidate = (forgotPasswordEmail || watchedEmail || '').trim().toLowerCase();
     const parsed = z.string().email().safeParse(candidate);
