@@ -126,26 +126,33 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
           <span className="tabular-nums">Elapsed {elapsedLabel}</span>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.14em] text-[#8294A9]">Sets</div>
-              <div className="text-[22px] font-bold text-white tabular-nums">{completedSets}/{exercise.sets.length}</div>
+        <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[rgba(12,20,32,0.72)]">
+          <div className="grid grid-cols-3">
+            {/* Sets */}
+            <div className="flex flex-col gap-0.5 px-3 py-2.5">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#4E6579]">Sets</div>
+              <div className="text-[20px] font-black text-white tabular-nums leading-none">{completedSets}<span className="text-[14px] font-bold text-[#3E5568]">/{exercise.sets.length}</span></div>
             </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.14em] text-[#8294A9]">Volume</div>
-              <div className="text-[22px] font-bold text-white tabular-nums">{totalVolume.toLocaleString()}</div>
+
+            {/* divider */}
+            <div className="border-l border-r border-white/[0.06] flex flex-col gap-0.5 px-3 py-2.5">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#4E6579]">Volume</div>
+              <div className="text-[20px] font-black text-white tabular-nums leading-none">{totalVolume > 0 ? totalVolume.toLocaleString() : <span className="text-[#2E4155]">—</span>}</div>
             </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.14em] text-[#8294A9]">Unit</div>
+
+            {/* Unit toggle */}
+            <div className="flex flex-col gap-1 px-3 py-2.5">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#4E6579]">Unit</div>
               {isWeightExerciseType(exerciseType) && (
-                <div className="mt-1 inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-1">
+                <div className="inline-flex rounded-lg border border-white/[0.08] bg-white/[0.03] p-[3px]">
                   {(['kg', 'lbs'] as const).map((unit) => (
                     <button
                       key={unit}
                       onClick={() => onWeightUnitChange(unit)}
-                      className={`h-7 min-w-[40px] rounded-md px-2 text-[11px] font-semibold uppercase ${
-                        weightUnit === unit ? 'bg-white/20 text-white' : 'text-[#8EA2B8]'
+                      className={`h-6 min-w-[34px] rounded-md px-2 text-[10px] font-bold uppercase transition-all ${
+                        weightUnit === unit
+                          ? 'bg-[#1E3D55] text-[#7BBFE0] shadow-sm'
+                          : 'text-[#3E5568]'
                       }`}
                     >
                       {unit}
@@ -154,13 +161,15 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
                 </div>
               )}
               {isDistanceExerciseType(exerciseType) && (
-                <div className="mt-1 inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-1">
+                <div className="inline-flex rounded-lg border border-white/[0.08] bg-white/[0.03] p-[3px]">
                   {(['km', 'mi'] as const).map((unit) => (
                     <button
                       key={unit}
                       onClick={() => onDistanceUnitChange(unit)}
-                      className={`h-7 min-w-[40px] rounded-md px-2 text-[11px] font-semibold uppercase ${
-                        distanceUnit === unit ? 'bg-white/20 text-white' : 'text-[#8EA2B8]'
+                      className={`h-6 min-w-[34px] rounded-md px-2 text-[10px] font-bold uppercase transition-all ${
+                        distanceUnit === unit
+                          ? 'bg-[#1E3D55] text-[#7BBFE0] shadow-sm'
+                          : 'text-[#3E5568]'
                       }`}
                     >
                       {unit}
@@ -169,7 +178,7 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
                 </div>
               )}
               {!isWeightExerciseType(exerciseType) && !isDistanceExerciseType(exerciseType) && (
-                <div className="text-[14px] font-semibold text-[#C6D3DF] uppercase">{statUnit || '--'}</div>
+                <div className="text-[13px] font-bold text-[#C6D3DF] uppercase">{statUnit || '—'}</div>
               )}
             </div>
           </div>
@@ -178,17 +187,25 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
 
       <div className="space-y-3 px-4 pt-3">
         {showPrefillBanner && exercise.lastSession && (
-          <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-[#C4D1DE]">
-            <span>Prefilled from last session ({exercise.lastSession.date})</span>
-            <button onClick={onClearPrefill} className="text-[12px] font-semibold text-[#BFD0DF]">
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-[#1E3448] bg-[rgba(16,30,46,0.6)] px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-[#3A7CA8]" />
+              <span className="text-[12px] font-medium text-[#7BAAC8]">
+                Prefilled from {exercise.lastSession.date}
+              </span>
+            </div>
+            <button
+              onClick={onClearPrefill}
+              className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#3A6A8A] transition-colors hover:text-[#6AADD4]"
+            >
               Clear
             </button>
           </div>
         )}
 
         {!exercise.lastSession && (
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-[#AEBECD]">
-            First time doing this exercise.
+          <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2.5 text-[12px] text-[#3E5568]">
+            First time doing this exercise
           </div>
         )}
 
@@ -225,7 +242,7 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
 
         <button
           onClick={onAddSet}
-          className="h-14 w-full rounded-xl border border-dashed border-white/20 bg-white/[0.02] text-[16px] font-medium text-[#C9D7E5]"
+          className="h-14 w-full rounded-xl border border-dashed border-[#1E3448] bg-white/[0.015] text-[14px] font-semibold tracking-[0.06em] text-[#2E5270] transition-all hover:border-[#2E5270] hover:text-[#4A87AD] active:scale-[0.99]"
         >
           + Add Set
         </button>

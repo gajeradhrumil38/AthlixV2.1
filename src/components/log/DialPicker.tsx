@@ -301,6 +301,7 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, format, initialIndex,
           paddingTop: VIEW_PADDING,
           paddingBottom: VIEW_PADDING,
           touchAction: 'pan-y',
+          overscrollBehavior: 'contain',
         }}
       >
         {values.map((value, index) => (
@@ -311,7 +312,7 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, format, initialIndex,
               if (!node) return;
               node.scrollTo({ top: index * ITEM_HEIGHT, behavior: 'smooth' });
             }}
-            className={`flex w-full items-center justify-center text-center tabular-nums leading-none ${
+            className={`relative flex w-full items-center justify-center text-center tabular-nums leading-none ${
               index === selectedIndex
                 ? 'font-semibold text-[#F4F8FC]'
                 : 'font-normal text-[#6D8095]'
@@ -319,9 +320,28 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, format, initialIndex,
             style={{
               height: `${ITEM_HEIGHT}px`,
               scrollSnapAlign: 'center',
+              scrollSnapStop: 'always',
               fontSize: '42px',
             }}
           >
+            {/* tick mark — mechanical dial feel */}
+            <span
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                left: '14px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: index === selectedIndex ? '10px' : '5px',
+                height: '2px',
+                borderRadius: '1px',
+                background:
+                  index === selectedIndex
+                    ? 'rgba(180,210,235,0.55)'
+                    : 'rgba(255,255,255,0.10)',
+                transition: 'width 0.12s ease, background 0.12s ease',
+              }}
+            />
             {format(value)}
           </button>
         ))}
