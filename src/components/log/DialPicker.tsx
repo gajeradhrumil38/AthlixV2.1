@@ -200,6 +200,13 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, format, initialIndex,
   const rafRef = useRef<number | null>(null);
   const mountedRef = useRef(false);
 
+  // Keep a stable ref to onChange so the initialization effect doesn't
+  // re-fire every time the parent re-renders with a new inline function.
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
+
   const [selectedIndex, setSelectedIndex] = useState(initialIndex);
   const selectedIndexRef = useRef(initialIndex);
 
@@ -211,12 +218,12 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, format, initialIndex,
       selectedIndexRef.current = clamped;
       setSelectedIndex(clamped);
       const value = values[clamped];
-      if (value != null) onChange(value);
+      if (value != null) onChangeRef.current(value);
       if (withHaptic && mountedRef.current) {
         haptics.tick();
       }
     },
-    [onChange, values],
+    [values],
   );
 
   const snapToNearest = useCallback(
@@ -237,7 +244,7 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, format, initialIndex,
     selectedIndexRef.current = safeInitial;
     setSelectedIndex(safeInitial);
     node.scrollTo({ top: safeInitial * ITEM_HEIGHT, behavior: 'auto' });
-    onChange(values[safeInitial] ?? values[0] ?? 0);
+    onChangeRef.current(values[safeInitial] ?? values[0] ?? 0);
 
     mountedRef.current = false;
     const mountedTimer = window.setTimeout(() => {
@@ -247,7 +254,9 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, format, initialIndex,
     return () => {
       window.clearTimeout(mountedTimer);
     };
-  }, [initialIndex, onChange, values]);
+  // Intentionally omit onChange — we use onChangeRef to avoid resetting the
+  // scroll position on every parent re-render caused by selectedValues changes.
+  }, [initialIndex, values]);
 
   useEffect(
     () => () => {
