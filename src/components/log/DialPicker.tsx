@@ -20,12 +20,13 @@ interface PickerColumn {
   values: number[];
   format: (value: number) => string;
   initialIndex: number;
+  unitLabel?: string;
 }
 
-const DIAL_ITEM_HEIGHT = 44;
-const DIAL_VIEW_HEIGHT = 220;
+const DIAL_ITEM_HEIGHT = 46;
+const DIAL_VIEW_HEIGHT = 252;
 const DIAL_PADDING = (DIAL_VIEW_HEIGHT - DIAL_ITEM_HEIGHT) / 2;
-const DIAL_SNAP_DELAY = 90;
+const DIAL_SNAP_DELAY = 110;
 
 const clampIndex = (index: number, length: number) => Math.max(0, Math.min(length - 1, index));
 
@@ -34,6 +35,7 @@ const buildColumns = (
   inputType: ExerciseInputType,
   initialValue: number,
   weightUnit: WeightUnit,
+  distanceUnit: DistanceUnit,
 ): PickerColumn[] => {
   const wholePart = Math.floor(Math.max(0, initialValue));
 
@@ -49,6 +51,7 @@ const buildColumns = (
           values: wholeValues,
           format: (value) => String(value),
           initialIndex: Math.min(maxWeight, wholePart),
+          unitLabel: weightUnit.toUpperCase(),
         },
         {
           id: 'decimal',
@@ -69,6 +72,7 @@ const buildColumns = (
           values: wholeValues,
           format: (value) => String(value),
           initialIndex: Math.min(wholeValues.length - 1, wholePart),
+          unitLabel: distanceUnit.toUpperCase(),
         },
         {
           id: 'decimal',
@@ -88,6 +92,7 @@ const buildColumns = (
           values,
           format: (value) => String(value),
           initialIndex: Math.max(0, Math.min(values.length - 1, Math.round(initialValue))),
+          unitLabel: 'MIN',
         },
       ];
     }
@@ -101,6 +106,7 @@ const buildColumns = (
           values,
           format: (value) => String(value).padStart(2, '0'),
           initialIndex: values.findIndex((value) => value === snapped),
+          unitLabel: 'SEC',
         },
       ];
     }
@@ -116,6 +122,7 @@ const buildColumns = (
           values,
           format: (value) => String(value),
           initialIndex: values.findIndex((value) => value === target),
+          unitLabel: 'REPS',
         },
       ];
     }
@@ -128,6 +135,7 @@ const buildColumns = (
           values,
           format: (value) => String(value),
           initialIndex: Math.max(0, Math.min(values.length - 1, Math.round(initialValue))),
+          unitLabel: 'CM',
         },
       ];
     }
@@ -142,6 +150,7 @@ const buildColumns = (
           values,
           format: (value) => String(value),
           initialIndex,
+          unitLabel: 'CAL',
         },
       ];
     }
@@ -178,10 +187,11 @@ interface DialColumnProps {
   values: number[];
   format: (value: number) => string;
   initialIndex: number;
+  unitLabel?: string;
   onChange: (value: number) => void;
 }
 
-const DialColumn: React.FC<DialColumnProps> = ({ values, format, initialIndex, onChange }) => {
+const DialColumn: React.FC<DialColumnProps> = ({ values, format, initialIndex, unitLabel, onChange }) => {
   const columnRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [selectedIndex, setSelectedIndex] = useState(initialIndex);
@@ -196,10 +206,7 @@ const DialColumn: React.FC<DialColumnProps> = ({ values, format, initialIndex, o
     const root = columnRef.current;
     if (!root) return;
 
-    const target = itemRefs.current[initialIndex];
-    if (target) {
-      root.scrollTo({ top: target.offsetTop - DIAL_PADDING, behavior: 'auto' });
-    }
+    root.scrollTo({ top: initialIndex * DIAL_ITEM_HEIGHT, behavior: 'auto' });
     hasMountedRef.current = false;
     const enableHapticsTimer = window.setTimeout(() => {
       hasMountedRef.current = true;
@@ -227,7 +234,6 @@ const DialColumn: React.FC<DialColumnProps> = ({ values, format, initialIndex, o
       }
       return nextIndex;
     });
-    return nextIndex;
   };
 
   const snapToNearest = (behavior: ScrollBehavior = 'smooth') => {
@@ -257,13 +263,13 @@ const DialColumn: React.FC<DialColumnProps> = ({ values, format, initialIndex, o
   }, [onChange, selectedIndex, values]);
 
   return (
-    <div className="relative flex-1 min-w-0">
+    <div className="relative min-w-0 flex-1">
       <div
         ref={columnRef}
         onScroll={handleScroll}
         onTouchEnd={() => snapToNearest('smooth')}
         onMouseUp={() => snapToNearest('smooth')}
-        className="dial-column h-[220px] overflow-y-auto rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0.01)_100%)]"
+        className="no-scrollbar h-[252px] overflow-y-auto"
         style={{
           scrollSnapType: 'y mandatory',
           WebkitOverflowScrolling: 'touch',
@@ -272,23 +278,29 @@ const DialColumn: React.FC<DialColumnProps> = ({ values, format, initialIndex, o
         }}
       >
         {values.map((value, index) => {
-          const selected = index === selectedIndex;
+          const distance = Math.abs(index - selectedIndex);
+          const opacity = distance === 0 ? 1 : distance === 1 ? 0.56 : distance === 2 ? 0.3 : 0.15;
+          const scale = distance === 0 ? 1 : distance === 1 ? 0.9 : 0.82;
+          const fontSize = distance === 0 ? 58 : distance === 1 ? 44 : 34;
+
           return (
             <button
               key={`${value}-${index}`}
               ref={(element) => {
                 itemRefs.current[index] = element;
               }}
-              data-index={index}
               onClick={() => {
                 const node = itemRefs.current[index];
                 if (!node || !columnRef.current) return;
                 columnRef.current.scrollTo({ top: node.offsetTop - DIAL_PADDING, behavior: 'smooth' });
               }}
-              className={`dial-item h-11 w-full flex items-center justify-center text-center tabular-nums font-mono transition-all duration-100 scroll-snap-align-center ${
-                selected ? 'text-[#F3F7FB] text-[30px] font-semibold selected' : 'text-[#6F8298] text-[22px] font-medium'
-              }`}
-              style={{ scrollSnapAlign: 'center' }}
+              className="flex h-[46px] w-full items-center justify-center text-center tabular-nums font-medium leading-none text-[#EAF1F8]"
+              style={{
+                scrollSnapAlign: 'center',
+                opacity,
+                transform: `scale(${scale})`,
+                fontSize: `${fontSize}px`,
+              }}
             >
               {format(value)}
             </button>
@@ -296,9 +308,14 @@ const DialColumn: React.FC<DialColumnProps> = ({ values, format, initialIndex, o
         })}
       </div>
 
-      <div className="pointer-events-none absolute left-1 right-1 top-1/2 -translate-y-1/2 h-11 rounded-xl border border-white/15 bg-[rgba(142,160,178,0.09)]" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-20 rounded-t-2xl bg-gradient-to-b from-[#0D1421] via-[#0D1421]/80 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 rounded-b-2xl bg-gradient-to-t from-[#0D1421] via-[#0D1421]/80 to-transparent" />
+      {unitLabel && (
+        <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold tracking-[0.12em] text-[#90A4BA]">
+          {unitLabel}
+        </div>
+      )}
+
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-[#0D1421] via-[#0D1421]/85 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#0D1421] via-[#0D1421]/85 to-transparent" />
     </div>
   );
 };
@@ -314,8 +331,8 @@ export const DialPicker: React.FC<DialPickerProps> = ({
   onConfirm,
 }) => {
   const columns = useMemo(
-    () => buildColumns(fieldKind, inputType, initialValue, weightUnit),
-    [fieldKind, initialValue, inputType, weightUnit],
+    () => buildColumns(fieldKind, inputType, initialValue, weightUnit, distanceUnit),
+    [distanceUnit, fieldKind, initialValue, inputType, weightUnit],
   );
 
   const [selectedValues, setSelectedValues] = useState<number[]>(
@@ -344,14 +361,14 @@ export const DialPicker: React.FC<DialPickerProps> = ({
         type="button"
         aria-label="Dismiss picker"
         onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-black/62 backdrop-blur-[1px]"
       />
 
       <motion.div
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
-        transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 270 }}
         className="absolute bottom-0 left-0 right-0 mx-auto w-full max-w-[860px] rounded-t-[24px] border border-white/10 border-b-0 bg-[rgba(11,17,27,0.96)] px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-3"
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/25" />
@@ -362,32 +379,37 @@ export const DialPicker: React.FC<DialPickerProps> = ({
             onClick={onClose}
             className="inline-flex h-9 items-center gap-1 rounded-lg bg-white/5 px-3 text-[12px] font-medium text-[#D1DCE7] transition-colors hover:bg-white/10"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="h-4 w-4" />
             Back
           </button>
-          <h3 className="text-[16px] font-semibold text-white">
-            {title}
-            {fieldKind === 'distance' ? ` (${distanceUnit.toUpperCase()})` : ''}
-          </h3>
+          <h3 className="text-center text-[16px] font-semibold text-white">{title}</h3>
           <button
             type="button"
             onClick={onClose}
             className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-[#9FB1C3] transition-colors hover:bg-white/10"
           >
-            <X className="w-4 h-4" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className={`grid gap-3 ${columns.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} mb-4`}>
+        <div
+          className={`relative mb-4 grid overflow-hidden rounded-[20px] border border-white/10 bg-[rgba(16,24,36,0.86)] ${
+            columns.length > 1 ? 'grid-cols-2' : 'grid-cols-1'
+          }`}
+        >
           {columns.map((column, index) => (
-            <DialColumn
-              key={column.id}
-              values={column.values}
-              format={column.format}
-              initialIndex={column.initialIndex}
-              onChange={(value) => handleColumnChange(index, value)}
-            />
+            <div key={column.id} className={index > 0 ? 'border-l border-white/10' : ''}>
+              <DialColumn
+                values={column.values}
+                format={column.format}
+                initialIndex={column.initialIndex}
+                unitLabel={column.unitLabel}
+                onChange={(value) => handleColumnChange(index, value)}
+              />
+            </div>
           ))}
+
+          <div className="pointer-events-none absolute inset-x-2 top-1/2 -translate-y-1/2 h-[46px] rounded-xl border border-white/20 bg-white/[0.06]" />
         </div>
 
         <button
