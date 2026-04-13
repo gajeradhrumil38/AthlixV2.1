@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronLeft, X } from 'lucide-react';
-import type { DialFieldKind, ExerciseInputType, WeightUnit, DistanceUnit } from '../../lib/exerciseTypes';
+import type { DialFieldKind, DistanceUnit, ExerciseInputType, WeightUnit } from '../../lib/exerciseTypes';
 import { haptics } from '../../lib/haptics';
 
 interface DialPickerProps {
@@ -23,10 +23,10 @@ interface PickerColumn {
   unitLabel?: string;
 }
 
-const DIAL_ITEM_HEIGHT = 46;
-const DIAL_VIEW_HEIGHT = 252;
-const DIAL_PADDING = (DIAL_VIEW_HEIGHT - DIAL_ITEM_HEIGHT) / 2;
-const DIAL_SNAP_DELAY = 110;
+const ITEM_HEIGHT = 52;
+const VIEW_HEIGHT = 260;
+const VIEW_PADDING = (VIEW_HEIGHT - ITEM_HEIGHT) / 2;
+const SNAP_DELAY = 120;
 
 const clampIndex = (index: number, length: number) => Math.max(0, Math.min(length - 1, index));
 
@@ -192,97 +192,103 @@ interface DialColumnProps {
 }
 
 const DialColumn: React.FC<DialColumnProps> = ({ values, format, initialIndex, unitLabel, onChange }) => {
-  const columnRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const selectedIndexRef = useRef(initialIndex);
+  const mountedRef = useRef(false);
+  const scrollStopTimerRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(initialIndex);
-  const hasMountedRef = useRef(false);
-  const snapTimerRef = useRef<number | null>(null);
+
+  const syncSelectedIndex = useCallback(
+    (scrollTop: number) => {
+      const nextIndex = clampIndex(Math.round(scrollTop / ITEM_HEIGHT), values.length);
+      if (nextIndex === selectedIndexRef.current) return;
+
+      selectedIndexRef.current = nextIndex;
+      setSelectedIndex(nextIndex);
+      const nextValue = values[nextIndex];
+      if (nextValue == null) return;
+
+      onChange(nextValue);
+      if (mountedRef.current) {
+        haptics.tick();
+      }
+    },
+    [onChange, values],
+  );
+
+  const snapToNearest = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    const node = scrollRef.current;
+    if (!node) return;
+    const nextIndex = clampIndex(Math.round(node.scrollTop / ITEM_HEIGHT), values.length);
+    node.scrollTo({ top: nextIndex * ITEM_HEIGHT, behavior });
+  }, [values.length]);
 
   useEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+
+    selectedIndexRef.current = initialIndex;
     setSelectedIndex(initialIndex);
-  }, [initialIndex]);
+    node.scrollTo({ top: initialIndex * ITEM_HEIGHT, behavior: 'auto' });
+    onChange(values[initialIndex] ?? values[0] ?? 0);
 
-  useEffect(() => {
-    const root = columnRef.current;
-    if (!root) return;
-
-    root.scrollTo({ top: initialIndex * DIAL_ITEM_HEIGHT, behavior: 'auto' });
-    hasMountedRef.current = false;
-    const enableHapticsTimer = window.setTimeout(() => {
-      hasMountedRef.current = true;
+    mountedRef.current = false;
+    const mountedTimer = window.setTimeout(() => {
+      mountedRef.current = true;
     }, 120);
 
     return () => {
-      window.clearTimeout(enableHapticsTimer);
+      window.clearTimeout(mountedTimer);
     };
-  }, [initialIndex]);
+  }, [initialIndex, onChange, values]);
 
   useEffect(
     () => () => {
-      if (snapTimerRef.current) {
-        window.clearTimeout(snapTimerRef.current);
-      }
+      if (scrollStopTimerRef.current) window.clearTimeout(scrollStopTimerRef.current);
+      if (rafRef.current) window.cancelAnimationFrame(rafRef.current);
     },
     [],
   );
 
-  const syncSelectedIndex = (scrollTop: number) => {
-    const nextIndex = clampIndex(Math.round(scrollTop / DIAL_ITEM_HEIGHT), values.length);
-    setSelectedIndex((prev) => {
-      if (prev !== nextIndex && hasMountedRef.current) {
-        haptics.tick();
-      }
-      return nextIndex;
-    });
-  };
+  const onScroll = () => {
+    const node = scrollRef.current;
+    if (!node) return;
 
-  const snapToNearest = (behavior: ScrollBehavior = 'smooth') => {
-    const root = columnRef.current;
-    if (!root) return;
-    const nextIndex = clampIndex(Math.round(root.scrollTop / DIAL_ITEM_HEIGHT), values.length);
-    root.scrollTo({ top: nextIndex * DIAL_ITEM_HEIGHT, behavior });
-  };
-
-  const handleScroll = () => {
-    const root = columnRef.current;
-    if (!root) return;
-
-    syncSelectedIndex(root.scrollTop);
-    if (snapTimerRef.current) {
-      window.clearTimeout(snapTimerRef.current);
+    if (rafRef.current) {
+      window.cancelAnimationFrame(rafRef.current);
     }
-    snapTimerRef.current = window.setTimeout(() => {
-      snapToNearest('smooth');
-    }, DIAL_SNAP_DELAY);
-  };
+    rafRef.current = window.requestAnimationFrame(() => {
+      syncSelectedIndex(node.scrollTop);
+    });
 
-  useEffect(() => {
-    const nextValue = values[selectedIndex];
-    if (nextValue == null) return;
-    onChange(nextValue);
-  }, [onChange, selectedIndex, values]);
+    if (scrollStopTimerRef.current) {
+      window.clearTimeout(scrollStopTimerRef.current);
+    }
+    scrollStopTimerRef.current = window.setTimeout(() => {
+      snapToNearest('smooth');
+    }, SNAP_DELAY);
+  };
 
   return (
     <div className="relative min-w-0 flex-1">
       <div
-        ref={columnRef}
-        onScroll={handleScroll}
+        ref={scrollRef}
+        onScroll={onScroll}
         onTouchEnd={() => snapToNearest('smooth')}
         onMouseUp={() => snapToNearest('smooth')}
-        className="no-scrollbar h-[252px] overflow-y-auto"
+        className="no-scrollbar h-[260px] overflow-y-auto overscroll-contain [scrollbar-width:none]"
         style={{
           scrollSnapType: 'y mandatory',
           WebkitOverflowScrolling: 'touch',
-          paddingTop: DIAL_PADDING,
-          paddingBottom: DIAL_PADDING,
+          paddingTop: VIEW_PADDING,
+          paddingBottom: VIEW_PADDING,
+          touchAction: 'pan-y',
         }}
       >
         {values.map((value, index) => {
-          const distance = Math.abs(index - selectedIndex);
-          const opacity = distance === 0 ? 1 : distance === 1 ? 0.56 : distance === 2 ? 0.3 : 0.15;
-          const scale = distance === 0 ? 1 : distance === 1 ? 0.9 : 0.82;
-          const fontSize = distance === 0 ? 58 : distance === 1 ? 44 : 34;
-
+          const selected = index === selectedIndex;
           return (
             <button
               key={`${value}-${index}`}
@@ -291,16 +297,16 @@ const DialColumn: React.FC<DialColumnProps> = ({ values, format, initialIndex, u
               }}
               onClick={() => {
                 const node = itemRefs.current[index];
-                if (!node || !columnRef.current) return;
-                columnRef.current.scrollTo({ top: node.offsetTop - DIAL_PADDING, behavior: 'smooth' });
+                const container = scrollRef.current;
+                if (!node || !container) return;
+                container.scrollTo({ top: node.offsetTop - VIEW_PADDING, behavior: 'smooth' });
               }}
-              className="flex h-[46px] w-full items-center justify-center text-center tabular-nums font-medium leading-none text-[#EAF1F8]"
-              style={{
-                scrollSnapAlign: 'center',
-                opacity,
-                transform: `scale(${scale})`,
-                fontSize: `${fontSize}px`,
-              }}
+              className={`flex h-[52px] w-full items-center justify-center text-center tabular-nums leading-none transition-colors ${
+                selected
+                  ? 'text-[52px] font-semibold tracking-[-0.02em] text-[#F2F6FB]'
+                  : 'text-[42px] font-medium tracking-[-0.01em] text-[#70859C]'
+              }`}
+              style={{ scrollSnapAlign: 'center' }}
             >
               {format(value)}
             </button>
@@ -309,13 +315,13 @@ const DialColumn: React.FC<DialColumnProps> = ({ values, format, initialIndex, u
       </div>
 
       {unitLabel && (
-        <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold tracking-[0.12em] text-[#90A4BA]">
+        <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold tracking-[0.12em] text-[#8FA4BB]">
           {unitLabel}
         </div>
       )}
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-[#0D1421] via-[#0D1421]/85 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#0D1421] via-[#0D1421]/85 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-[#0D1421] via-[#0D1421]/86 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#0D1421] via-[#0D1421]/86 to-transparent" />
     </div>
   );
 };
@@ -343,6 +349,15 @@ export const DialPicker: React.FC<DialPickerProps> = ({
     setSelectedValues(columns.map((column) => column.values[Math.max(0, column.initialIndex)] ?? 0));
   }, [columns]);
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
   const handleColumnChange = (columnIndex: number, value: number) => {
     setSelectedValues((prev) => {
       const next = [...prev];
@@ -361,14 +376,14 @@ export const DialPicker: React.FC<DialPickerProps> = ({
         type="button"
         aria-label="Dismiss picker"
         onClick={onClose}
-        className="absolute inset-0 bg-black/62 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-black/64 backdrop-blur-[1px]"
       />
 
       <motion.div
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
-        transition={{ type: 'spring', damping: 28, stiffness: 270 }}
+        transition={{ type: 'spring', damping: 30, stiffness: 280 }}
         className="absolute bottom-0 left-0 right-0 mx-auto w-full max-w-[860px] rounded-t-[24px] border border-white/10 border-b-0 bg-[rgba(11,17,27,0.96)] px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-3"
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/25" />
@@ -382,7 +397,7 @@ export const DialPicker: React.FC<DialPickerProps> = ({
             <ChevronLeft className="h-4 w-4" />
             Back
           </button>
-          <h3 className="text-center text-[16px] font-semibold text-white">{title}</h3>
+          <h3 className="text-[16px] font-semibold text-white">{title}</h3>
           <button
             type="button"
             onClick={onClose}
@@ -408,8 +423,7 @@ export const DialPicker: React.FC<DialPickerProps> = ({
               />
             </div>
           ))}
-
-          <div className="pointer-events-none absolute inset-x-2 top-1/2 -translate-y-1/2 h-[46px] rounded-xl border border-white/20 bg-white/[0.06]" />
+          <div className="pointer-events-none absolute inset-x-2 top-1/2 -translate-y-1/2 h-[52px] rounded-xl border border-white/20 bg-white/[0.06]" />
         </div>
 
         <button
