@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useRouter } from 'next/navigation';
-import { Mail, Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 
@@ -20,40 +20,24 @@ export default function VerifyEmailPage() {
 
   const openMailHref = useMemo(() => {
     if (typeof navigator === 'undefined') return 'mailto:';
-
     const ua = navigator.userAgent;
-    if (/iPhone|iPad|iPod/i.test(ua)) {
-      return 'message://';
-    }
-
-    if (/Android/i.test(ua)) {
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'message://';
+    if (/Android/i.test(ua))
       return 'intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.APP_EMAIL;end';
-    }
-
     return 'mailto:';
   }, []);
 
   const resendEmail = async () => {
     if (!supabase || !email || countdown > 0 || busy) return;
-
     setBusy(true);
     setMessage(null);
-
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email,
-      options: {
-        emailRedirectTo: 'https://athlix-v2-1.vercel.app/auth/callback',
-      },
+      options: { emailRedirectTo: 'https://athlix-v2-1.vercel.app/auth/callback' },
     });
-
-    if (error) {
-      setBusy(false);
-      setMessage('Unable to resend right now. Please try again.');
-      return;
-    }
-
     setBusy(false);
+    if (error) { setMessage('Unable to resend right now. Please try again.'); return; }
     setMessage('Email resent!');
     setCountdown(RESEND_SECONDS);
   };
@@ -61,75 +45,76 @@ export default function VerifyEmailPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const queryEmail = (params.get('email') || '').trim().toLowerCase();
-    if (!queryEmail) {
-      router.replace('/signup');
-      return;
-    }
+    if (!queryEmail) { router.replace('/signup'); return; }
     setEmail(queryEmail);
   }, [router]);
 
   useEffect(() => {
-    if (!email) {
-      return;
-    }
-
+    if (!email) return;
     const timer = window.setInterval(() => {
-      setCountdown((current) => (current > 0 ? current - 1 : 0));
+      setCountdown((c) => (c > 0 ? c - 1 : 0));
     }, 1000);
-
     return () => window.clearInterval(timer);
-  }, [email, router]);
+  }, [email]);
 
   return (
-    <main className="min-h-screen w-full overflow-x-hidden bg-[#070d16] px-4 py-8 text-slate-100" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}>
-      <div className="mx-auto flex min-h-[calc(100dvh-32px)] w-full max-w-[400px] flex-col justify-center py-4">
-        <section className="rounded-3xl border border-cyan-400/18 bg-[rgba(15,20,30,0.85)] p-6 text-center backdrop-blur-xl">
-          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-cyan-400/15 text-cyan-300">
-            <Mail className="h-10 w-10 animate-pulse" />
-          </div>
+    <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-5 py-12">
+      <div className="w-full max-w-[420px] rounded-xl border border-[#2a2a2a] bg-[#141414] p-8 text-center">
 
-          <h1 className="text-2xl font-bold text-white">Check your inbox</h1>
-          <p className="mt-2 text-sm text-slate-300">
-            We sent a confirmation link to <span className="font-semibold text-cyan-300">{email}</span>
+        {/* Icon */}
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-[#C8FF00]/20 bg-[#C8FF00]/8">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#C8FF00" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"/>
+            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+          </svg>
+        </div>
+
+        <h1 className="text-[24px] font-semibold text-[#f0f0f0]">Check your inbox</h1>
+        <p className="mt-2 text-[14px] text-[#888]">
+          We sent a verification link to{' '}
+          <span className="font-semibold text-[#C8FF00]">{email}</span>.
+          Click the link to activate your account.
+        </p>
+        <p className="mt-1 text-[12px] text-[#555]">
+          Check your spam folder if you don&apos;t see it.
+        </p>
+
+        {/* Open mail */}
+        <a
+          href={openMailHref}
+          className="brand-btn brand-btn-primary mt-8 flex"
+        >
+          Open Mail App
+        </a>
+
+        {/* Resend */}
+        <button
+          type="button"
+          onClick={resendEmail}
+          disabled={countdown > 0 || busy}
+          className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-[#2a2a2a] text-[13px] text-[#888] transition hover:border-[#444] hover:text-[#f0f0f0] disabled:opacity-40"
+        >
+          {busy
+            ? <Loader2 className="h-4 w-4 animate-spin" />
+            : <RefreshCw className="h-4 w-4" />
+          }
+          {countdown > 0 ? `Resend email in ${countdown}s` : 'Resend email'}
+        </button>
+
+        {message && (
+          <p className="mt-3 text-[13px]" style={{ color: message.includes('Unable') ? '#ff8080' : '#4dff91' }} aria-live="polite">
+            {message}
           </p>
-          <p className="mt-2 text-xs text-slate-400">
-            Tap the link in the email to activate your account and go straight to your dashboard.
-          </p>
+        )}
 
-          <a
-            href={openMailHref}
-            className="mt-6 inline-flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#00D4FF] px-4 text-base font-semibold text-slate-950"
-          >
-            Open Mail App
-          </a>
-
-          <button
-            type="button"
-            onClick={resendEmail}
-            disabled={countdown > 0 || busy}
-            className="mt-3 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl border border-slate-600 bg-slate-900/50 px-4 text-sm font-medium text-slate-100 disabled:opacity-50"
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            {countdown > 0 ? `Resend email in ${countdown}s` : 'Resend email'}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => router.replace(`/signup?email=${encodeURIComponent(email)}`)}
-            className="mt-3 inline-flex min-h-[44px] items-center justify-center text-sm text-cyan-300 underline-offset-4 hover:underline"
-          >
-            Wrong email? Go back
-          </button>
-
-          {message ? (
-            <p className="mt-2 text-sm text-slate-300" aria-live="polite">{message}</p>
-          ) : null}
-
-          <p className="mt-6 text-xs text-slate-500">
-            Can&apos;t find it? Check your spam or junk folder and mark it as &quot;Not spam&quot;.
-          </p>
-        </section>
+        <button
+          type="button"
+          onClick={() => router.replace(`/signup?email=${encodeURIComponent(email)}`)}
+          className="mt-4 text-[12px] text-[#555] underline-offset-4 hover:text-[#888] hover:underline"
+        >
+          Wrong email? Go back
+        </button>
       </div>
-    </main>
+    </div>
   );
 }

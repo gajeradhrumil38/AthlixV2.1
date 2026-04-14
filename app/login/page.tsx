@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CheckCircle2, Eye, EyeOff, Loader2, X } from 'lucide-react';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase';
 
@@ -19,15 +19,8 @@ const RESEND_WAIT_SECONDS = 60;
 
 const emailSchema = z.string().trim().email();
 
-type AttemptState = {
-  failedAttempts: number;
-  lockUntil: number | null;
-};
-
-const defaultAttemptState: AttemptState = {
-  failedAttempts: 0,
-  lockUntil: null,
-};
+type AttemptState = { failedAttempts: number; lockUntil: number | null };
+const defaultAttemptState: AttemptState = { failedAttempts: 0, lockUntil: null };
 
 const normalizeAttemptState = (state: AttemptState): AttemptState => {
   if (!state.lockUntil) return state;
@@ -35,28 +28,28 @@ const normalizeAttemptState = (state: AttemptState): AttemptState => {
   return state;
 };
 
-const isSafePath = (path: string | null) => {
-  if (!path) return false;
-  return path.startsWith('/') && !path.startsWith('//');
-};
+const isSafePath = (path: string | null) =>
+  !!path && path.startsWith('/') && !path.startsWith('//');
 
 const getGenericAuthError = (message: string, status?: number) => {
   const normalized = message.toLowerCase();
-
-  if (status === 429 || normalized.includes('too many requests')) {
+  if (status === 429 || normalized.includes('too many requests'))
     return 'Too many attempts. Try again in 15 minutes.';
-  }
-
-  if (normalized.includes('network') || normalized.includes('fetch')) {
+  if (normalized.includes('network') || normalized.includes('fetch'))
     return 'Connection issue. Please try again.';
-  }
-
   return 'Incorrect email or password. Try again.';
 };
+
+const FEATURES = [
+  'Log workouts in seconds',
+  'Monitor recovery & readiness',
+  'Analyze performance over time',
+];
 
 export default function LoginPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+  const emailRef = useRef<HTMLInputElement>(null);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -87,128 +80,71 @@ export default function LoginPage() {
   const isLocked = Boolean(attemptState.lockUntil && attemptState.lockUntil > Date.now());
   const disableActions = submitting || Boolean(oauthSubmitting) || isLocked;
 
-  const shakeCard = () => {
-    setShakeNonce((current) => current + 1);
-  };
-
   const setErrorBanner = (message: string) => {
     setSuccessMessage(null);
     setErrorMessage(message);
-    shakeCard();
+    setShakeNonce((n) => n + 1);
   };
 
   const markFailedAttempt = (forceLock = false) => {
-    setAttemptState((previous) => {
-      const normalized = normalizeAttemptState(previous);
+    setAttemptState((prev) => {
+      const normalized = normalizeAttemptState(prev);
       const failedAttempts = forceLock ? MAX_FAILED_ATTEMPTS : normalized.failedAttempts + 1;
-      const lockUntil =
-        failedAttempts >= MAX_FAILED_ATTEMPTS ? Date.now() + LOCKOUT_DURATION_MS : null;
-
-      const nextState = {
-        failedAttempts,
-        lockUntil,
-      };
-
+      const lockUntil = failedAttempts >= MAX_FAILED_ATTEMPTS ? Date.now() + LOCKOUT_DURATION_MS : null;
       setFailedHint(failedAttempts >= 3);
-      return nextState;
+      return { failedAttempts, lockUntil };
     });
   };
 
-  const clearFailedAttempts = () => {
-    setAttemptState(defaultAttemptState);
-    setFailedHint(false);
-  };
+  const clearFailedAttempts = () => { setAttemptState(defaultAttemptState); setFailedHint(false); };
 
   const saveRememberPreference = (nextEmail: string) => {
     if (rememberMe) {
       localStorage.setItem(REMEMBER_EMAIL_KEY, nextEmail);
-      localStorage.setItem(
-        REMEMBER_UNTIL_KEY,
-        String(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      );
-      return;
+      localStorage.setItem(REMEMBER_UNTIL_KEY, String(Date.now() + 30 * 24 * 60 * 60 * 1000));
+    } else {
+      localStorage.removeItem(REMEMBER_EMAIL_KEY);
+      localStorage.removeItem(REMEMBER_UNTIL_KEY);
     }
-
-    localStorage.removeItem(REMEMBER_EMAIL_KEY);
-    localStorage.removeItem(REMEMBER_UNTIL_KEY);
   };
 
   const redirectAfterSuccess = (path: string) => {
-    setTimeout(() => {
-      router.replace(path);
-      router.refresh();
-    }, 650);
+    setTimeout(() => { router.replace(path); router.refresh(); }, 650);
   };
 
   const sendResetEmail = async (event?: FormEvent) => {
     event?.preventDefault();
-
-    if (!supabase) {
-      setForgotMessage('Connection issue. Please try again.');
-      return;
-    }
-
+    if (!supabase) { setForgotMessage('Connection issue. Please try again.'); return; }
     const candidateEmail = (forgotEmail || email).trim().toLowerCase();
-
-    if (!emailSchema.safeParse(candidateEmail).success) {
-      setForgotMessage('Enter a valid email address.');
-      return;
-    }
-
+    if (!emailSchema.safeParse(candidateEmail).success) { setForgotMessage('Enter a valid email address.'); return; }
     const { error } = await supabase.auth.resetPasswordForEmail(candidateEmail, {
       redirectTo: 'https://athlix-v2-1.vercel.app/auth/callback?next=/reset-password',
     });
-
-    if (error) {
-      setForgotMessage('Connection issue. Please try again.');
-      return;
-    }
-
+    if (error) { setForgotMessage('Connection issue. Please try again.'); return; }
     setForgotMessage('Reset link sent! Check your inbox.');
     setForgotCountdown(RESEND_WAIT_SECONDS);
   };
 
   const handleSignIn = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
-    if (!supabase) {
-      setErrorBanner('Connection issue. Please try again.');
-      return;
-    }
-
+    if (!supabase) { setErrorBanner('Connection issue. Please try again.'); return; }
     const sanitizedEmail = email.trim().toLowerCase();
     const sanitizedPassword = password;
-
-    if (!emailSchema.safeParse(sanitizedEmail).success) {
-      setErrorBanner('Incorrect email or password. Try again.');
-      return;
-    }
-
-    if (isLocked) {
-      setErrorBanner('Too many attempts. Try again in 15 minutes.');
-      return;
-    }
-
+    if (!emailSchema.safeParse(sanitizedEmail).success) { setErrorBanner('Incorrect email or password. Try again.'); return; }
+    if (isLocked) { setErrorBanner('Too many attempts. Try again in 15 minutes.'); return; }
     setShowAlreadyExistsPrompt(false);
     setErrorMessage(null);
     setForgotMessage(null);
     setSubmitting(true);
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: sanitizedEmail,
-      password: sanitizedPassword,
-    });
-
+    const { error } = await supabase.auth.signInWithPassword({ email: sanitizedEmail, password: sanitizedPassword });
     if (error) {
       const genericMessage = getGenericAuthError(error.message || '', error.status);
-      const shouldLock = genericMessage.includes('Too many attempts');
-      markFailedAttempt(shouldLock);
+      markFailedAttempt(genericMessage.includes('Too many attempts'));
       setPassword('');
       setSubmitting(false);
       setErrorBanner(genericMessage);
       return;
     }
-
     saveRememberPreference(sanitizedEmail);
     clearFailedAttempts();
     setSubmitting(false);
@@ -217,35 +153,19 @@ export default function LoginPage() {
   };
 
   const handleOAuthLogin = async (provider: 'google' | 'apple') => {
-    if (!supabase) {
-      setErrorBanner('Connection issue. Please try again.');
-      return;
-    }
-
-    if (isLocked) {
-      setErrorBanner('Too many attempts. Try again in 15 minutes.');
-      return;
-    }
-
+    if (!supabase) { setErrorBanner('Connection issue. Please try again.'); return; }
+    if (isLocked) { setErrorBanner('Too many attempts. Try again in 15 minutes.'); return; }
     setErrorMessage(null);
     setOauthSubmitting(provider);
-
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: {
-        redirectTo: 'https://athlix-v2-1.vercel.app/auth/callback',
-      },
+      options: { redirectTo: 'https://athlix-v2-1.vercel.app/auth/callback' },
     });
-
-    if (error) {
-      setOauthSubmitting(null);
-      setErrorBanner('Connection issue. Please try again.');
-    }
+    if (error) { setOauthSubmitting(null); setErrorBanner('Connection issue. Please try again.'); }
   };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-
     const requestedPath = params.get('redirect');
     setRedirectPath(isSafePath(requestedPath) ? requestedPath ?? '/dashboard' : '/dashboard');
 
@@ -256,14 +176,11 @@ export default function LoginPage() {
         const normalized = normalizeAttemptState(parsed);
         setAttemptState(normalized);
         setFailedHint(normalized.failedAttempts >= 3);
-      } catch {
-        localStorage.removeItem(ATTEMPT_STORAGE_KEY);
-      }
+      } catch { localStorage.removeItem(ATTEMPT_STORAGE_KEY); }
     }
 
     const rememberUntil = Number(localStorage.getItem(REMEMBER_UNTIL_KEY) || '0');
     const rememberedEmail = localStorage.getItem(REMEMBER_EMAIL_KEY) || '';
-
     if (rememberUntil > Date.now() && rememberedEmail) {
       setEmail(rememberedEmail);
       setForgotEmail(rememberedEmail);
@@ -280,331 +197,359 @@ export default function LoginPage() {
       setForgotEmail(trimmedEmail);
     }
 
-    if (params.get('signup') === 'already_exists') {
-      setShowAlreadyExistsPrompt(true);
-      setErrorMessage(null);
-    }
-
+    if (params.get('signup') === 'already_exists') { setShowAlreadyExistsPrompt(true); setErrorMessage(null); }
     if (params.get('error') === 'link_expired') {
-      setSuccessMessage(null);
       setErrorMessage('Your link has expired. Request a new one below.');
-      setShakeNonce((current) => current + 1);
+      setShakeNonce((n) => n + 1);
       setForgotOpen(true);
     }
-
-    if (params.get('showForgot') === '1') {
-      setForgotOpen(true);
-    }
+    if (params.get('showForgot') === '1') setForgotOpen(true);
 
     const ua = navigator.userAgent;
-    const isIOS = /iPhone|iPad|iPod/i.test(ua);
-    const isSafari = /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua);
-    setShowApple(isIOS && isSafari);
+    setShowApple(/iPhone|iPad|iPod/i.test(ua) && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua));
+
+    // Autofocus email (after remembered email is set)
+    setTimeout(() => emailRef.current?.focus(), 80);
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem(ATTEMPT_STORAGE_KEY, JSON.stringify(attemptState));
-  }, [attemptState]);
+  useEffect(() => { localStorage.setItem(ATTEMPT_STORAGE_KEY, JSON.stringify(attemptState)); }, [attemptState]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setAttemptState((current) => normalizeAttemptState(current));
-      setForgotCountdown((current) => (current > 0 ? current - 1 : 0));
+      setAttemptState((c) => normalizeAttemptState(c));
+      setForgotCountdown((c) => (c > 0 ? c - 1 : 0));
     }, 1000);
-
     return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
     if (!supabase) return;
-
     let cancelled = false;
     supabase.auth.getUser().then(({ data }) => {
-      if (cancelled) return;
-      if (data.user) {
-        router.replace(redirectPath);
-      }
+      if (!cancelled && data.user) router.replace(redirectPath);
     });
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [router, redirectPath, supabase]);
 
   return (
-    <main className="min-h-screen w-full overflow-x-hidden bg-[#070d16] px-4 py-8 text-slate-100 sm:px-6" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}>
-      <div className="mx-auto flex min-h-[calc(100dvh-32px)] w-full max-w-[400px] flex-col justify-center py-4">
-        <div className="mb-6 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.36em] text-[#00D4FF]">Athlix</p>
-          <h1 className="mt-2 text-4xl font-bold leading-tight text-[#00D4FF]">ATHLIX</h1>
-          <p className="mt-2 text-sm text-slate-300">Track. Recover. Perform.</p>
+    <div className="flex min-h-screen bg-[#0a0a0a]">
+
+      {/* ── Left panel (desktop only) ── */}
+      <div className="relative hidden flex-col justify-between overflow-hidden bg-[#0d0d0d] p-12 md:flex md:w-1/2">
+        {/* Geometric background pattern */}
+        <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.04]" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#fff" strokeWidth="0.5"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid)"/>
+        </svg>
+        {/* Lime glow blob */}
+        <div className="pointer-events-none absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-[#C8FF00] opacity-[0.06] blur-[80px]" />
+
+        <div className="relative z-10">
+          <div
+            className="text-[72px] leading-none text-[#C8FF00]"
+            style={{ fontFamily: 'var(--font-bebas, sans-serif)' }}
+          >
+            ATHLIX
+          </div>
+          <p className="mt-3 text-lg text-[#666]">Track. Recover. Perform.</p>
         </div>
 
-        <motion.section
-          animate={shakeNonce > 0 ? { x: [0, -8, 8, -6, 6, 0] } : { x: 0 }}
-          transition={{ duration: 0.32, ease: 'easeOut' }}
-          className="rounded-3xl border border-cyan-400/18 bg-[rgba(15,20,30,0.85)] p-5 backdrop-blur-xl"
-        >
-          <AnimatePresence>
-            {showAlreadyExistsPrompt ? (
-              <motion.div
-                key="already-exists"
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100"
-              >
-                <p>
-                  An account with this email already exists. Sign in instead?
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAlreadyExistsPrompt(false);
-                    setErrorMessage(null);
-                  }}
-                  className="mt-2 inline-flex min-h-11 items-center rounded-xl bg-amber-200 px-3 py-2 text-sm font-semibold text-amber-950"
-                >
-                  Sign In
-                </button>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {errorMessage ? (
-              <motion.div
-                key="error-banner"
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-rose-500/35 bg-rose-500/15 p-3 text-sm text-rose-100"
-                role="alert"
-                aria-live="assertive"
-              >
-                <span>{errorMessage}</span>
-                <button
-                  type="button"
-                  onClick={() => setErrorMessage(null)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-rose-100/80 transition hover:bg-rose-500/20"
-                  aria-label="Dismiss error"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-
-          {isLocked ? (
-            <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100">
-              Too many attempts. Try again in {lockTimeRemainingMinutes || 15} minutes.
+        <div className="relative z-10 space-y-5">
+          {FEATURES.map((feat) => (
+            <div key={feat} className="flex items-start gap-4">
+              <div className="mt-1 h-5 w-0.5 shrink-0 bg-[#C8FF00]" />
+              <p className="text-[15px] text-[#888]">{feat}</p>
             </div>
-          ) : null}
+          ))}
+        </div>
+      </div>
 
-          {successMessage ? (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-4 flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100"
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              {successMessage}
-            </motion.div>
-          ) : null}
+      {/* ── Right panel (form) ── */}
+      <div className="flex w-full flex-col items-center justify-center overflow-y-auto bg-[#141414] px-5 py-12 md:w-1/2">
+        {/* Mobile wordmark */}
+        <div className="mb-8 text-center md:hidden">
+          <div
+            className="text-[52px] leading-none text-[#C8FF00]"
+            style={{ fontFamily: 'var(--font-bebas, sans-serif)' }}
+          >
+            ATHLIX
+          </div>
+          <p className="mt-1 text-sm text-[#666]">Track. Recover. Perform.</p>
+        </div>
 
-          <form onSubmit={handleSignIn} className="space-y-4" noValidate>
-            <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-200">Email</label>
-              <input
-                id="email"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                onBlur={() => {
-                  const trimmed = email.trim().toLowerCase();
-                  setEmail(trimmed);
-                  if (!forgotEmail) setForgotEmail(trimmed);
-                }}
-                disabled={disableActions}
-                className="min-h-[52px] w-full rounded-2xl border border-slate-700/80 bg-[#0b1220] px-4 text-base text-white outline-none transition focus:border-cyan-400 focus:shadow-[0_0_0_3px_rgba(0,212,255,0.2)]"
-                aria-label="Email"
-              />
-            </div>
+        <div className="w-full max-w-[400px]">
+          <h2 className="mb-6 text-[22px] font-semibold text-[#f0f0f0]">Sign in</h2>
 
-            <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-200">Password</label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  disabled={disableActions}
-                  className="min-h-[52px] w-full rounded-2xl border border-slate-700/80 bg-[#0b1220] px-4 pr-12 text-base text-white outline-none transition focus:border-cyan-400 focus:shadow-[0_0_0_3px_rgba(0,212,255,0.2)]"
-                  aria-label="Password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((value) => !value)}
-                  className="absolute right-2 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-slate-300 transition hover:bg-white/10"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  disabled={disableActions}
+          {/* Shake wrapper */}
+          <motion.div
+            animate={shakeNonce > 0 ? { x: [0, -8, 8, -6, 6, 0] } : { x: 0 }}
+            transition={{ duration: 0.32, ease: 'easeOut' }}
+            className="space-y-4"
+          >
+            {/* Already-exists banner */}
+            <AnimatePresence>
+              {showAlreadyExistsPrompt && (
+                <motion.div
+                  key="already-exists"
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200"
                 >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
+                  <p>An account with this email already exists. Sign in instead?</p>
+                  <button
+                    type="button"
+                    onClick={() => { setShowAlreadyExistsPrompt(false); setErrorMessage(null); }}
+                    className="mt-2 inline-flex h-9 items-center rounded-md bg-amber-300 px-3 text-sm font-semibold text-amber-950"
+                  >
+                    Sign In
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Error banner */}
+            <AnimatePresence>
+              {errorMessage && (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  role="alert"
+                  aria-live="assertive"
+                  className="flex items-start justify-between gap-3 rounded-lg border border-[#ff4d4d]/30 bg-[#ff4d4d]/10 p-3 text-sm text-[#ff8080]"
+                >
+                  <span>{errorMessage}</span>
+                  <button
+                    type="button"
+                    onClick={() => setErrorMessage(null)}
+                    className="shrink-0 rounded p-1 hover:bg-[#ff4d4d]/20"
+                    aria-label="Dismiss"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Lockout */}
+            {isLocked && (
+              <div className="rounded-lg border border-[#ff4d4d]/30 bg-[#ff4d4d]/10 p-3 text-sm text-[#ff8080]">
+                Too many attempts. Try again in {lockTimeRemainingMinutes || 15} min.
               </div>
-            </div>
+            )}
 
-            <div className="flex items-center justify-between gap-3">
-              <label className="inline-flex min-h-11 items-center gap-2 text-sm text-slate-300">
+            {/* Success */}
+            {successMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 rounded-lg border border-[#4dff91]/30 bg-[#4dff91]/10 p-3 text-sm text-[#4dff91]"
+              >
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                {successMessage}
+              </motion.div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleSignIn} noValidate className="space-y-4">
+              <div>
+                <label htmlFor="email" className="brand-label">Email</label>
+                <input
+                  ref={emailRef}
+                  id="email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => { const t = email.trim().toLowerCase(); setEmail(t); if (!forgotEmail) setForgotEmail(t); }}
+                  disabled={disableActions}
+                  className="brand-input"
+                  aria-label="Email"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password" className="brand-label">Password</label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={disableActions}
+                    className="brand-input pr-12"
+                    aria-label="Password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    disabled={disableActions}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded text-[#888] hover:text-[#f0f0f0]"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {/* Forgot password — below password field, right-aligned */}
+                <div className="mt-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => { setForgotOpen((v) => !v); setForgotMessage(null); setForgotEmail((c) => c || email.trim().toLowerCase()); }}
+                    className="text-[12px] text-[#888] underline-offset-4 hover:text-[#f0f0f0] hover:underline"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              </div>
+
+              {failedHint && (
+                <p className="text-sm text-[#888]">Forgot your password? Use the reset option above.</p>
+              )}
+
+              {/* Remember me */}
+              <label className="flex cursor-pointer items-center gap-2 text-[13px] text-[#888]">
                 <input
                   type="checkbox"
                   checked={rememberMe}
-                  onChange={(event) => setRememberMe(event.target.checked)}
+                  onChange={(e) => setRememberMe(e.target.checked)}
                   disabled={disableActions}
-                  className="h-4 w-4 rounded border-slate-600 bg-[#0b1220] text-cyan-400"
+                  className="h-4 w-4 rounded border-[#2a2a2a] bg-[#1e1e1e] accent-[#C8FF00]"
                 />
-                Remember me (30 days)
+                Remember me for 30 days
               </label>
+
+              {/* Submit */}
               <button
-                type="button"
-                onClick={() => {
-                  setForgotOpen((value) => !value);
-                  setForgotMessage(null);
-                  setForgotEmail((current) => current || email.trim().toLowerCase());
-                }}
-                className="min-h-11 text-sm font-medium text-cyan-300 underline-offset-4 hover:underline"
+                type="submit"
+                disabled={disableActions}
+                className="brand-btn brand-btn-primary"
               >
-                Forgot password?
+                {submitting ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Signing in…</>
+                ) : successMessage ? (
+                  <><CheckCircle2 className="h-4 w-4" /> Welcome back!</>
+                ) : (
+                  'Sign In'
+                )}
               </button>
+            </form>
+
+            {/* Forgot password panel */}
+            <AnimatePresence>
+              {forgotOpen && (
+                <motion.form
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  onSubmit={sendResetEmail}
+                  className="overflow-hidden rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4"
+                >
+                  <label htmlFor="forgot-email" className="brand-label">Reset your password</label>
+                  <input
+                    id="forgot-email"
+                    type="email"
+                    autoComplete="email"
+                    inputMode="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    onBlur={() => setForgotEmail(forgotEmail.trim().toLowerCase())}
+                    placeholder="you@example.com"
+                    className="brand-input"
+                  />
+                  <button
+                    type="submit"
+                    className="mt-3 flex h-11 w-full items-center justify-center rounded-lg border border-[#2a2a2a] text-[13px] font-medium text-[#f0f0f0] hover:bg-white/5"
+                  >
+                    Send reset link
+                  </button>
+                  {forgotMessage && (
+                    <p className="mt-2 text-[13px] text-[#888]" aria-live="polite">{forgotMessage}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => sendResetEmail()}
+                    disabled={forgotCountdown > 0}
+                    className="mt-2 text-[12px] text-[#C8FF00] disabled:text-[#444]"
+                  >
+                    {forgotCountdown > 0 ? `Resend in ${forgotCountdown}s` : 'Resend email'}
+                  </button>
+                </motion.form>
+              )}
+            </AnimatePresence>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-[#444]">
+              <span className="h-px flex-1 bg-[#2a2a2a]" />
+              <span>or continue with</span>
+              <span className="h-px flex-1 bg-[#2a2a2a]" />
             </div>
 
-            {failedHint ? (
-              <p className="text-sm text-slate-300">
-                Forgot your password? Use the reset option below.
-              </p>
-            ) : null}
-
-            <button
-              type="submit"
-              disabled={disableActions}
-              className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-[#00D4FF] px-4 text-base font-semibold text-slate-950 transition hover:bg-[#2cdcff] disabled:cursor-not-allowed disabled:bg-cyan-900 disabled:text-slate-300"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  Signing in...
-                </>
-              ) : successMessage ? (
-                <>
-                  <CheckCircle2 className="h-5 w-5" />
-                  Welcome back!
-                </>
-              ) : (
-                'Sign In'
-              )}
-            </button>
-          </form>
-
-          <AnimatePresence>
-            {forgotOpen ? (
-              <motion.form
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.22, ease: 'easeOut' }}
-                onSubmit={sendResetEmail}
-                className="mt-4 overflow-hidden rounded-2xl border border-slate-700/70 bg-[#0b1220]/70 p-3"
-              >
-                <label htmlFor="forgot-email" className="mb-2 block text-sm font-medium text-slate-200">
-                  Reset your password
-                </label>
-                <input
-                  id="forgot-email"
-                  type="email"
-                  autoComplete="email"
-                  inputMode="email"
-                  value={forgotEmail}
-                  onChange={(event) => setForgotEmail(event.target.value)}
-                  onBlur={() => setForgotEmail(forgotEmail.trim().toLowerCase())}
-                  className="min-h-[52px] w-full rounded-2xl border border-slate-700/80 bg-[#090f1a] px-4 text-base text-white outline-none transition focus:border-cyan-400 focus:shadow-[0_0_0_3px_rgba(0,212,255,0.2)]"
-                  placeholder="you@example.com"
-                />
-                <button
-                  type="submit"
-                  className="mt-3 inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl border border-slate-500/70 px-4 text-sm font-medium text-slate-100 transition hover:bg-white/10"
-                >
-                  Send reset link
-                </button>
-                {forgotMessage ? (
-                  <p className="mt-2 text-sm text-slate-300" aria-live="polite">
-                    {forgotMessage}
-                  </p>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => sendResetEmail()}
-                  disabled={forgotCountdown > 0}
-                  className="mt-2 min-h-11 text-sm text-cyan-300 disabled:text-slate-500"
-                >
-                  {forgotCountdown > 0
-                    ? `Resend available in ${forgotCountdown}s`
-                    : 'Resend email'}
-                </button>
-              </motion.form>
-            ) : null}
-          </AnimatePresence>
-
-          <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-slate-500">
-            <span className="h-px flex-1 bg-slate-700" />
-            <span>or continue with</span>
-            <span className="h-px flex-1 bg-slate-700" />
-          </div>
-
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => handleOAuthLogin('google')}
-              disabled={disableActions}
-              className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-base font-semibold text-slate-900 transition hover:bg-slate-100 disabled:opacity-60"
-            >
-              {oauthSubmitting === 'google' ? <Loader2 className="h-5 w-5 animate-spin" /> : <span className="font-bold text-[#DB4437]">G</span>}
-              Continue with Google
-            </button>
-
-            {showApple ? (
+            {/* OAuth */}
+            <div className="space-y-3">
               <button
                 type="button"
-                onClick={() => handleOAuthLogin('apple')}
+                onClick={() => handleOAuthLogin('google')}
                 disabled={disableActions}
-                className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-black px-4 text-base font-semibold text-white transition hover:bg-[#111] disabled:opacity-60"
+                className="flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-[#ddd] bg-white text-[14px] font-medium text-[#111] transition hover:bg-[#f5f5f5] disabled:opacity-50"
               >
-                {oauthSubmitting === 'apple' ? <Loader2 className="h-5 w-5 animate-spin" /> : <span className="text-lg"></span>}
-                Continue with Apple
+                {oauthSubmitting === 'google'
+                  ? <Loader2 className="h-4 w-4 animate-spin text-[#888]" />
+                  : (
+                    <svg width="18" height="18" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                  )
+                }
+                Continue with Google
               </button>
-            ) : null}
-          </div>
 
-          <div className="mt-5 text-center text-sm text-slate-300">
-            Don&apos;t have an account?{' '}
-            <Link
-              href={`/signup${redirectPath && redirectPath !== '/dashboard' ? `?redirect=${encodeURIComponent(redirectPath)}` : ''}`}
-              className="font-semibold text-cyan-300 underline-offset-4 hover:underline"
-            >
-              Sign up
-            </Link>
-          </div>
+              {showApple && (
+                <button
+                  type="button"
+                  onClick={() => handleOAuthLogin('apple')}
+                  disabled={disableActions}
+                  className="flex h-12 w-full items-center justify-center gap-3 rounded-lg bg-black text-[14px] font-medium text-white border border-[#333] transition hover:bg-[#111] disabled:opacity-50"
+                >
+                  {oauthSubmitting === 'apple'
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <span className="text-xl"></span>
+                  }
+                  Continue with Apple
+                </button>
+              )}
+            </div>
 
-          <div className="mt-4 text-center text-xs text-slate-500">
-            <Link href="/legacy-app/privacy.html" className="hover:text-slate-300 hover:underline">Privacy Policy</Link>
-            {' · '}
-            <Link href="/legacy-app/terms.html" className="hover:text-slate-300 hover:underline">Terms</Link>
-          </div>
-        </motion.section>
+            {/* Footer links */}
+            <p className="text-center text-[13px] text-[#666]">
+              Don&apos;t have an account?{' '}
+              <Link
+                href={`/signup${redirectPath !== '/dashboard' ? `?redirect=${encodeURIComponent(redirectPath)}` : ''}`}
+                className="font-semibold text-[#C8FF00] underline-offset-4 hover:underline"
+              >
+                Sign up free
+              </Link>
+            </p>
+
+            <p className="text-center text-[11px] text-[#444]">
+              <Link href="/legacy-app/privacy.html" className="hover:text-[#888]">Privacy Policy</Link>
+              {' · '}
+              <Link href="/legacy-app/terms.html" className="hover:text-[#888]">Terms</Link>
+            </p>
+          </motion.div>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
