@@ -67,8 +67,6 @@ export const Auth: React.FC = () => {
     setError(null);
     setSuccess(null);
     setAlreadyExists(false);
-    setForgotOpen(false);
-    setForgotMsg(null);
     setPassword('');
     setShowPw(false);
     setTimeout(() => emailRef.current?.focus(), 80);
@@ -82,13 +80,6 @@ export const Auth: React.FC = () => {
       : base;
     window.location.href = withEmail;
   };
-
-  /* countdown tick */
-  useEffect(() => {
-    if (forgotCountdown <= 0) return;
-    const t = window.setTimeout(() => setForgotCountdown((c) => c - 1), 1000);
-    return () => window.clearTimeout(t);
-  }, [forgotCountdown]);
 
   /* autofocus on mount */
   useEffect(() => {
