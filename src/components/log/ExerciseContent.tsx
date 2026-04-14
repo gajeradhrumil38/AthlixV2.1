@@ -261,12 +261,15 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
         </button>
 
         {allSetsDone && (
-          <button
-            onClick={onFinishExercise}
-            className="h-12 w-full rounded-xl bg-[#CAD7E4] text-[15px] font-semibold text-[#0F1A27]"
-          >
-            Finish Exercise
-          </button>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5">
+            <p className="mb-2 text-[11px] font-medium text-[#8DA2B7]">All sets completed.</p>
+            <button
+              onClick={onFinishExercise}
+              className="h-12 w-full rounded-xl bg-[#CAD7E4] text-[15px] font-semibold text-[#0F1A27]"
+            >
+              Review & Finish Workout
+            </button>
+          </div>
         )}
       </div>
     </div>
