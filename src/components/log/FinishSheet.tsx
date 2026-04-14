@@ -2,10 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Check, Trophy, Clock, Weight, Activity } from 'lucide-react';
 import type { WorkoutState } from '../../legacy-pages/Log';
+import { convertWeight, type WeightUnit } from '../../lib/units';
+import { isWeightExerciseType, resolveExerciseInputType } from '../../lib/exerciseTypes';
 
 interface FinishSheetProps {
   workout: WorkoutState;
   weightUnit?: 'kg' | 'lbs';
+  bodyWeight?: number | null;
+  bodyWeightUnit?: WeightUnit;
   onConfirm: (title: string, notes: string) => void;
   onCancel: () => void;
   saving?: boolean;
@@ -14,6 +18,8 @@ interface FinishSheetProps {
 export const FinishSheet: React.FC<FinishSheetProps> = ({
   workout,
   weightUnit = 'kg',
+  bodyWeight,
+  bodyWeightUnit = 'kg',
   onConfirm,
   onCancel,
   saving = false,
@@ -22,8 +28,11 @@ export const FinishSheet: React.FC<FinishSheetProps> = ({
   const [notes, setNotes] = useState(workout.notes || '');
 
   const totalSets = (workout.exercises || []).reduce((acc, ex) => acc + (ex.sets || []).filter(s => s.done).length, 0);
-  const totalVolume = (workout.exercises || []).reduce((acc, ex) => 
-    acc + (ex.sets || []).filter(s => s.done).reduce((v, s) => v + (Number(s.weight || 0) * Number(s.reps || 0)), 0), 0);
+  const totalVolume = (workout.exercises || []).reduce((acc, ex) => {
+    const exerciseType = resolveExerciseInputType(ex.name);
+    if (!isWeightExerciseType(exerciseType)) return acc;
+    return acc + (ex.sets || []).filter((s) => s.done).reduce((v, s) => v + Number(s.weight || 0) * Number(s.reps || 0), 0);
+  }, 0);
   const prCount = useMemo(
     () =>
       (workout.exercises || []).reduce(
@@ -32,6 +41,11 @@ export const FinishSheet: React.FC<FinishSheetProps> = ({
       ),
     [workout.exercises],
   );
+  const bodyWeightForMath = useMemo(() => {
+    if (!bodyWeight || !Number.isFinite(bodyWeight) || bodyWeight <= 0) return null;
+    return convertWeight(bodyWeight, bodyWeightUnit, weightUnit, 0.1);
+  }, [bodyWeight, bodyWeightUnit, weightUnit]);
+  const relativeLoad = bodyWeightForMath && bodyWeightForMath > 0 ? totalVolume / bodyWeightForMath : null;
 
   useEffect(() => {
     setTitle(workout.title);
@@ -76,7 +90,13 @@ export const FinishSheet: React.FC<FinishSheetProps> = ({
             </div>
             <div className="p-4 bg-[#141C28] border border-[#1E2F42] rounded-2xl">
               <Weight className="w-4 h-4 text-[#00D4FF] mb-2" />
-              <div className="text-[20px] font-extrabold text-[#E2E8F0] tabular-nums">{totalVolume.toLocaleString()}{weightUnit}</div>
+              <div className="text-[20px] font-extrabold text-[#E2E8F0] tabular-nums">
+                {totalVolume.toLocaleString()}
+                {weightUnit}
+              </div>
+              {relativeLoad !== null && (
+                <div className="mt-1 text-[10px] font-semibold text-[#7EA8C6] tabular-nums">{relativeLoad.toFixed(2)}x BW</div>
+              )}
               <div className="text-[9px] text-[#8892A4] uppercase tracking-wider">Total Volume</div>
             </div>
             <div className="p-4 bg-[#141C28] border border-[#1E2F42] rounded-2xl">

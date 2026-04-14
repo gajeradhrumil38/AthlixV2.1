@@ -180,6 +180,12 @@ const EXERCISE_MUSCLE_PATTERNS: ExercisePatternProfile[] = [
     targets: [target('chest', 1), target('deltoids', 0.16)],
   },
   {
+    patterns: [/landmine press/i],
+    targets: [target('chest', 0.68), target('deltoids', 0.62), target('triceps', 0.42), target('abs', 0.16)],
+    primaryRegions: ['Chest', 'Shoulders'],
+    secondaryRegions: ['Triceps', 'Core'],
+  },
+  {
     patterns: [/push-?ups?/i],
     targets: [target('chest', 0.82), target('triceps', 0.45), target('deltoids', 0.35), target('abs', 0.18)],
   },
@@ -190,6 +196,12 @@ const EXERCISE_MUSCLE_PATTERNS: ExercisePatternProfile[] = [
   {
     patterns: [/\bdips\b/i],
     targets: [target('triceps', 0.85), target('chest', 0.42), target('deltoids', 0.2)],
+  },
+  {
+    patterns: [/straight arm pulldown/i, /straight-arm pulldown/i],
+    targets: [target('upper-back', 0.9), target('triceps', 0.14), target('abs', 0.1)],
+    primaryRegions: ['Back'],
+    secondaryRegions: ['Triceps', 'Core'],
   },
   {
     patterns: [/pull-?ups?/i, /chin-?ups?/i, /lat pull/i, /pulldown/i],
@@ -216,6 +228,17 @@ const EXERCISE_MUSCLE_PATTERNS: ExercisePatternProfile[] = [
     patterns: [/romanian deadlift/i, /\brdl\b/i, /straight leg deadlift/i, /stiff leg deadlift/i, /good morning/i],
     targets: [target('hamstring', 0.95), target('gluteal', 0.72), target('lower-back', 0.35)],
     primaryRegions: ['Legs', 'Back'],
+  },
+  {
+    patterns: [/rack pull/i],
+    targets: [target('trapezius', 0.82), target('lower-back', 0.56), target('gluteal', 0.45), target('hamstring', 0.36)],
+    primaryRegions: ['Back', 'Legs'],
+  },
+  {
+    patterns: [/back extension/i],
+    targets: [target('lower-back', 0.95), target('gluteal', 0.42), target('hamstring', 0.26)],
+    primaryRegions: ['Back'],
+    secondaryRegions: ['Legs'],
   },
   {
     patterns: [/deadlift/i, /trap bar deadlift/i],
@@ -313,15 +336,45 @@ const EXERCISE_MUSCLE_PATTERNS: ExercisePatternProfile[] = [
     primaryRegions: ['Core'],
   },
   {
+    patterns: [/ski erg/i, /skierg/i],
+    targets: [target('upper-back', 0.68), target('triceps', 0.48), target('abs', 0.4), target('obliques', 0.25), target('quadriceps', 0.16)],
+    primaryRegions: ['Cardio', 'Back', 'Core'],
+    secondaryRegions: ['Triceps', 'Legs'],
+  },
+  {
     patterns: [/rowing machine/i, /\berg\b/i],
     targets: [target('upper-back', 0.48), target('quadriceps', 0.42), target('hamstring', 0.3), target('biceps', 0.18)],
     primaryRegions: ['Cardio', 'Back'],
     secondaryRegions: ['Legs', 'Biceps'],
   },
   {
+    patterns: [/assault bike/i, /echo bike/i, /air bike/i],
+    targets: [target('quadriceps', 0.62), target('deltoids', 0.42), target('triceps', 0.26), target('gluteal', 0.26), target('hamstring', 0.2), target('abs', 0.14)],
+    primaryRegions: ['Cardio', 'Legs'],
+    secondaryRegions: ['Shoulders', 'Triceps', 'Core'],
+  },
+  {
     patterns: [/cycling/i, /\bbike\b/i, /spin bike/i],
     targets: [target('quadriceps', 0.62), target('gluteal', 0.24), target('calves', 0.18), target('hamstring', 0.15)],
     primaryRegions: ['Cardio', 'Legs'],
+  },
+  {
+    patterns: [/battle rope/i, /battle ropes/i],
+    targets: [target('deltoids', 0.82), target('trapezius', 0.42), target('triceps', 0.36), target('abs', 0.3), target('obliques', 0.2)],
+    primaryRegions: ['Cardio', 'Shoulders'],
+    secondaryRegions: ['Triceps', 'Core', 'Back'],
+  },
+  {
+    patterns: [/farmers walk/i, /farmer'?s walk/i, /farmer carry/i, /loaded carry/i],
+    targets: [target('trapezius', 0.86), target('upper-back', 0.4), target('abs', 0.35), target('obliques', 0.28), target('quadriceps', 0.24), target('calves', 0.2)],
+    primaryRegions: ['Back', 'Cardio'],
+    secondaryRegions: ['Core', 'Legs'],
+  },
+  {
+    patterns: [/swimming/i, /\bswim\b/i],
+    targets: [target('upper-back', 0.62), target('deltoids', 0.58), target('triceps', 0.34), target('abs', 0.22), target('quadriceps', 0.2), target('calves', 0.12)],
+    primaryRegions: ['Cardio', 'Back', 'Shoulders'],
+    secondaryRegions: ['Triceps', 'Core', 'Legs'],
   },
   {
     patterns: [/treadmill/i, /elliptical/i, /stair ?master/i, /stepmill/i, /\brun\b/i, /\bwalk\b/i, /\bjog\b/i, /sprint/i],

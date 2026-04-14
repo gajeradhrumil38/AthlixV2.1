@@ -22,12 +22,23 @@ export type DialFieldKind =
 export const EXERCISE_TYPE_MAP: Record<string, ExerciseInputType> = {
   treadmill: 'distance_time',
   running: 'distance_time',
+  'running outdoor': 'distance_time',
   cycling: 'distance_time',
   rowing: 'distance_time',
+  'rowing machine': 'distance_time',
   elliptical: 'distance_time',
   'stair climber': 'time_only',
   'stairmaster': 'time_only',
+  'assault bike': 'distance_time',
+  'ski erg': 'distance_time',
+  skierg: 'distance_time',
   'jump rope': 'time_only',
+  'battle ropes': 'time_only',
+  'battle rope': 'time_only',
+  'farmers walk': 'distance_time',
+  "farmer's walk": 'distance_time',
+  'farmer carry': 'distance_time',
+  'sled push': 'distance_time',
 
   'pull-ups': 'reps_only',
   pullups: 'reps_only',
@@ -45,6 +56,8 @@ export const EXERCISE_TYPE_MAP: Record<string, ExerciseInputType> = {
 
   swimming: 'distance_only',
   walking: 'distance_only',
+  'walking lunge': 'weight_reps',
+  'walking lunges': 'weight_reps',
 
   bike: 'distance_time',
   run: 'distance_time',
@@ -66,7 +79,7 @@ export const INPUT_LABELS: Record<
   calories_time: { primary: 'CAL', secondary: 'MIN' },
 };
 
-const CARDIO_HINT_NAMES = ['run', 'jog', 'cycle', 'bike', 'row', 'swim', 'walk', 'elliptical', 'stair'];
+const CARDIO_HINT_NAMES = ['run', 'jog', 'cycle', 'bike', 'row', 'swim', 'elliptical', 'stair', 'ski', 'rope'];
 
 const normalizeKey = (value: string) =>
   value

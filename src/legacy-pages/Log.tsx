@@ -350,6 +350,8 @@ export const Log: React.FC = () => {
           setWorkout={setWorkout}
           onFinish={handleFinish}
           onBackToPrevious={handleBackToPrevious}
+          bodyWeight={profile?.body_weight ?? null}
+          bodyWeightUnit={(profile?.body_weight_unit || 'kg') as 'kg' | 'lbs'}
           allowLiveAddExercise={allowLiveAddExercise}
           openExercisePickerOnStart={openPickerOnStart}
           weightUnit={weightUnit}
@@ -364,6 +366,8 @@ export const Log: React.FC = () => {
           <FinishSheet 
             workout={workout}
             weightUnit={weightUnit}
+            bodyWeight={profile?.body_weight ?? null}
+            bodyWeightUnit={(profile?.body_weight_unit || 'kg') as 'kg' | 'lbs'}
             onConfirm={handleSave}
             onCancel={() => setShowFinish(false)}
             saving={saving}

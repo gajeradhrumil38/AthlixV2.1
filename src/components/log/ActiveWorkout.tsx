@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Activity, ArrowLeft, ChevronLeft, ChevronRight, Pause, Play, Trash2 } from 'lucide-react';
+import { Activity, ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Pause, Play, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { WorkoutState, ExerciseEntry, Set } from '../../legacy-pages/Log';
 import { ExerciseTabBar } from './ExerciseTabBar';
@@ -21,12 +21,15 @@ import {
   resolveExerciseInputType,
 } from '../../lib/exerciseTypes';
 import { haptics } from '../../lib/haptics';
+import { convertWeight } from '../../lib/units';
 
 interface ActiveWorkoutProps {
   workout: WorkoutState;
   setWorkout: React.Dispatch<React.SetStateAction<WorkoutState | null>>;
   onFinish: () => void;
   onBackToPrevious?: () => void;
+  bodyWeight?: number | null;
+  bodyWeightUnit?: WeightUnit;
   allowLiveAddExercise?: boolean;
   openExercisePickerOnStart?: boolean;
   weightUnit?: WeightUnit;
@@ -75,6 +78,20 @@ const formatElapsedTime = (seconds: number) => {
   return `${pad2(minutes)}:${pad2(secs)}`;
 };
 
+const formatDateInputValue = (value?: string) => {
+  const date = parseLocalDateTime(value);
+  if (!date) return '';
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+};
+
+const parseDateInputValue = (value: string) => {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return null;
+  const next = new Date(year, month - 1, day);
+  if (Number.isNaN(next.getTime())) return null;
+  return next;
+};
+
 const getFieldBinding = (type: ExerciseInputType) => {
   switch (type) {
     case 'reps_only':
@@ -91,6 +108,8 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   setWorkout,
   onFinish,
   onBackToPrevious,
+  bodyWeight,
+  bodyWeightUnit = 'kg',
   allowLiveAddExercise = true,
   openExercisePickerOnStart = false,
   weightUnit = 'kg',
@@ -407,6 +426,44 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   const showPrefillBanner =
     Boolean(currentExercise?.lastSession) && !hiddenPrefillExerciseIds.includes(currentExercise?.id || '');
 
+  const workoutDateValue = useMemo(() => formatDateInputValue(workout.startAt), [workout.startAt]);
+
+  const handleWorkoutDateChange = useCallback(
+    (nextDate: string) => {
+      const parsedDate = parseDateInputValue(nextDate);
+      if (!parsedDate) return;
+
+      setWorkout((prev) => {
+        if (!prev) return null;
+        const existingStart = parseLocalDateTime(prev.startAt) || new Date(prev.startTime);
+        const nextStart = new Date(
+          parsedDate.getFullYear(),
+          parsedDate.getMonth(),
+          parsedDate.getDate(),
+          existingStart.getHours(),
+          existingStart.getMinutes(),
+          existingStart.getSeconds(),
+          0,
+        );
+        const nextEnd = new Date(nextStart.getTime() + prev.elapsedSeconds * 1000);
+
+        return {
+          ...prev,
+          startTime: nextStart.getTime(),
+          startAt: toLocalDateTimeInput(nextStart),
+          endAt: toLocalDateTimeInput(nextEnd),
+        };
+      });
+      haptics.tick();
+    },
+    [setWorkout],
+  );
+
+  const bodyWeightForMath = useMemo(() => {
+    if (!bodyWeight || !Number.isFinite(bodyWeight) || bodyWeight <= 0) return null;
+    return convertWeight(bodyWeight, bodyWeightUnit, weightUnit, 0.1);
+  }, [bodyWeight, bodyWeightUnit, weightUnit]);
+
   const handleBackToPrevious = useCallback(() => {
     if (onBackToPrevious) {
       onBackToPrevious();
@@ -441,6 +498,16 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             <p className="text-[11px] text-[#8FA6BD]">
               {workout.exercises.length} exercise{workout.exercises.length === 1 ? '' : 's'}
             </p>
+            <label className="mt-1 inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-semibold text-[#9FB4C8]">
+              <CalendarDays className="h-3.5 w-3.5" />
+              <input
+                type="date"
+                value={workoutDateValue}
+                onChange={(event) => handleWorkoutDateChange(event.target.value)}
+                className="bg-transparent text-[#C7D6E4] outline-none"
+                aria-label="Workout date"
+              />
+            </label>
           </div>
         </div>
 
@@ -485,6 +552,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
               exercise={currentExercise}
               weightUnit={weightUnit}
               distanceUnit={distanceUnit}
+              bodyWeightForMath={bodyWeightForMath}
               elapsedLabel={formatElapsedTime(workout.elapsedSeconds)}
               startedAtLabel={formatClockTime(workout.startAt)}
               onWeightUnitChange={(unit) => onWeightUnitChange?.(unit)}

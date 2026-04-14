@@ -18,6 +18,7 @@ interface ExerciseContentProps {
   exercise: ExerciseEntry;
   weightUnit?: WeightUnit;
   distanceUnit?: DistanceUnit;
+  bodyWeightForMath?: number | null;
   elapsedLabel: string;
   startedAtLabel: string;
   onWeightUnitChange: (unit: WeightUnit) => void;
@@ -49,6 +50,7 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
     exercise,
     weightUnit = 'kg',
     distanceUnit = 'km',
+    bodyWeightForMath = null,
     elapsedLabel,
     startedAtLabel,
     onWeightUnitChange,
@@ -100,6 +102,10 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
 
   const allSetsDone = exercise.sets.length > 0 && completedSets === exercise.sets.length;
   const statUnit = getUnitDisplay(exerciseType, { weightUnit, distanceUnit }).toLowerCase();
+  const relativeLoad =
+    bodyWeightForMath && bodyWeightForMath > 0 && isWeightExerciseType(exerciseType)
+      ? totalVolume / bodyWeightForMath
+      : null;
 
   return (
     <div
@@ -137,7 +143,14 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
             {/* divider */}
             <div className="border-l border-r border-white/[0.06] flex flex-col gap-0.5 px-3 py-2.5">
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#4E6579]">Volume</div>
-              <div className="text-[20px] font-black text-white tabular-nums leading-none">{totalVolume > 0 ? totalVolume.toLocaleString() : <span className="text-[#2E4155]">—</span>}</div>
+              <div className="text-[20px] font-black text-white tabular-nums leading-none">
+                {totalVolume > 0 ? totalVolume.toLocaleString() : <span className="text-[#2E4155]">—</span>}
+              </div>
+              {relativeLoad !== null && (
+                <div className="text-[10px] font-semibold tracking-wide text-[#6E879E] tabular-nums">
+                  {relativeLoad.toFixed(2)}x BW
+                </div>
+              )}
             </div>
 
             {/* Unit toggle */}
