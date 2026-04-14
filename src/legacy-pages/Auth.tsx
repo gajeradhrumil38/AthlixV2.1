@@ -4,8 +4,13 @@ import { Navigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Activity, CheckCircle2, Eye, EyeOff, Loader2, X } from 'lucide-react';
 import { signInLocal, signUpLocal } from '../lib/supabaseData';
-import { supabase, hasSupabaseConfig } from '../lib/supabase';
 
+// Dark autofill override — prevents browser from applying white autofill bg.
+const inputStyle: React.CSSProperties = {
+  caretColor: '#C8FF00',
+  WebkitBoxShadow: '0 0 0 1000px #1e1e1e inset',
+  WebkitTextFillColor: '#f0f0f0',
+};
 /* ─── Password strength ──────────────────────────────────── */
 const getStrength = (v: string) => {
   const score =
@@ -19,7 +24,8 @@ const getStrength = (v: string) => {
 };
 
 const RESEND_WAIT = 60;
-const RESET_REDIRECT = 'https://athlix-v2-1.vercel.app/auth/callback?next=/reset-password';
+// Forgot-password is handled by the Next.js /login page which has Supabase fully configured.
+const FORGOT_PASSWORD_URL = '/login?showForgot=1';
 
 export const Auth: React.FC = () => {
   const { user } = useAuth();
@@ -38,12 +44,8 @@ export const Auth: React.FC = () => {
   const [alreadyExists, setAlreadyExists] = useState(false);
   const [shakeKey, setShakeKey]   = useState(0);
 
-  /* forgot password */
-  const [forgotOpen, setForgotOpen]       = useState(false);
-  const [forgotEmail, setForgotEmail]     = useState('');
-  const [forgotBusy, setForgotBusy]       = useState(false);
-  const [forgotMsg, setForgotMsg]         = useState<string | null>(null);
-  const [forgotCountdown, setForgotCountdown] = useState(0);
+  /* forgot password (unused — handled via redirect) */
+  const [forgotEmail] = useState('');
 
   const strength = getStrength(password);
   const isSignUp = mode === 'signup';
@@ -72,30 +74,13 @@ export const Auth: React.FC = () => {
     setTimeout(() => emailRef.current?.focus(), 80);
   };
 
-  /* ── forgot password ── */
-  const sendReset = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const candidate = (forgotEmail || email).trim().toLowerCase();
-    if (!candidate.includes('@')) {
-      setForgotMsg('Enter a valid email address.');
-      return;
-    }
-    if (!hasSupabaseConfig) {
-      setForgotMsg('Password reset requires an internet connection.');
-      return;
-    }
-    setForgotBusy(true);
-    setForgotMsg(null);
-    const { error: resetErr } = await supabase.auth.resetPasswordForEmail(candidate, {
-      redirectTo: RESET_REDIRECT,
-    });
-    setForgotBusy(false);
-    if (resetErr) {
-      setForgotMsg('Could not send reset email. Try again.');
-      return;
-    }
-    setForgotMsg('Reset link sent — check your inbox.');
-    setForgotCountdown(RESEND_WAIT);
+  /* ── forgot password — redirect to Next.js /login which has full Supabase reset ── */
+  const goToForgotPassword = () => {
+    const base = FORGOT_PASSWORD_URL;
+    const withEmail = email.trim()
+      ? `${base}&email=${encodeURIComponent(email.trim().toLowerCase())}`
+      : base;
+    window.location.href = withEmail;
   };
 
   /* countdown tick */
@@ -283,7 +268,7 @@ export const Auth: React.FC = () => {
                 disabled={loading}
                 placeholder="you@example.com"
                 className="h-11 w-full rounded-lg border border-[#2a2a2a] bg-[#1e1e1e] px-3 text-[14px] text-[#f0f0f0] outline-none placeholder:text-[#444] transition-colors focus:border-[#C8FF00] focus:ring-0 disabled:opacity-50"
-                style={{ caretColor: '#C8FF00' }}
+                style={inputStyle}
               />
             </div>
 
@@ -296,11 +281,7 @@ export const Auth: React.FC = () => {
                 {!isSignUp && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setForgotOpen((v) => !v);
-                      setForgotMsg(null);
-                      setForgotEmail((c) => c || email.trim().toLowerCase());
-                    }}
+                    onClick={goToForgotPassword}
                     className="text-[11px] text-[#555] underline-offset-2 hover:text-[#C8FF00] hover:underline transition-colors"
                   >
                     Forgot password?
@@ -317,7 +298,7 @@ export const Auth: React.FC = () => {
                   disabled={loading}
                   placeholder="••••••••"
                   className="h-11 w-full rounded-lg border border-[#2a2a2a] bg-[#1e1e1e] px-3 pr-10 text-[14px] text-[#f0f0f0] outline-none placeholder:text-[#444] transition-colors focus:border-[#C8FF00] disabled:opacity-50"
-                  style={{ caretColor: '#C8FF00' }}
+                  style={inputStyle}
                 />
                 <button
                   type="button"
@@ -369,68 +350,6 @@ export const Auth: React.FC = () => {
               }
             </button>
           </form>
-
-          {/* ── Forgot password panel ── */}
-          <AnimatePresence>
-            {forgotOpen && !isSignUp && (
-              <motion.div
-                key="forgot"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
-                className="overflow-hidden"
-              >
-                <form
-                  onSubmit={sendReset}
-                  className="mt-4 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4"
-                >
-                  <p className="mb-3 text-[13px] font-medium text-[#f0f0f0]">Reset your password</p>
-                  <input
-                    type="email"
-                    inputMode="email"
-                    value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
-                    onBlur={() => setForgotEmail(forgotEmail.trim().toLowerCase())}
-                    placeholder="you@example.com"
-                    className="h-10 w-full rounded-lg border border-[#2a2a2a] bg-[#121212] px-3 text-[13px] text-[#f0f0f0] outline-none placeholder:text-[#444] focus:border-[#C8FF00] transition-colors"
-                    style={{ caretColor: '#C8FF00' }}
-                  />
-                  <button
-                    type="submit"
-                    disabled={forgotBusy}
-                    className="mt-2.5 flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-[#2a2a2a] text-[12px] font-medium text-[#f0f0f0] hover:bg-white/5 disabled:opacity-40 transition-colors"
-                  >
-                    {forgotBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                    Send reset link
-                  </button>
-                  {forgotMsg && (
-                    <p
-                      className="mt-2 text-[12px]"
-                      style={{ color: forgotMsg.includes('sent') ? '#4dff91' : '#ff8080' }}
-                      aria-live="polite"
-                    >
-                      {forgotMsg}
-                    </p>
-                  )}
-                  {forgotCountdown > 0 && (
-                    <p className="mt-1 text-[11px] text-[#555]">
-                      Resend available in {forgotCountdown}s
-                    </p>
-                  )}
-                  {forgotMsg?.includes('sent') && forgotCountdown === 0 && (
-                    <button
-                      type="button"
-                      onClick={() => sendReset()}
-                      className="mt-1 text-[11px] text-[#C8FF00]"
-                    >
-                      Resend email
-                    </button>
-                  )}
-                </form>
-              </motion.div>
-            )}
-          </AnimatePresence>
 
           {/* ── Divider + mode toggle ── */}
           <div className="mt-5">
