@@ -6,6 +6,23 @@ export const dynamic = 'force-dynamic';
 
 const DEFAULT_SUPABASE_URL = 'https://mrntwydykqsdawpklumf.supabase.co';
 const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_h8Mv7ku_c2I9XIS1tzarYQ_ozj9Dkxw';
+type OtpType =
+  | 'signup'
+  | 'invite'
+  | 'magiclink'
+  | 'recovery'
+  | 'email_change'
+  | 'email';
+
+const isOtpType = (value: string): value is OtpType =>
+  [
+    'signup',
+    'invite',
+    'magiclink',
+    'recovery',
+    'email_change',
+    'email',
+  ].includes(value);
 
 const getSafeNextPath = (value: string | null) => {
   if (!value) return '/dashboard';
@@ -67,11 +84,10 @@ export async function GET(request: NextRequest) {
   }
 
   // ── OTP / token_hash (password-reset implicit flow, magic links) ─────────
-  if (tokenHash && type) {
+  if (tokenHash && type && isOtpType(type)) {
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      type: type as any,
+      type,
     });
 
     if (error) {

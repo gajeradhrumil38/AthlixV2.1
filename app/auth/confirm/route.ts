@@ -21,13 +21,30 @@ export const dynamic = 'force-dynamic';
 const DEFAULT_SUPABASE_URL = 'https://mrntwydykqsdawpklumf.supabase.co';
 const DEFAULT_SUPABASE_KEY =
   'sb_publishable_h8Mv7ku_c2I9XIS1tzarYQ_ozj9Dkxw';
+type OtpType =
+  | 'signup'
+  | 'invite'
+  | 'magiclink'
+  | 'recovery'
+  | 'email_change'
+  | 'email';
+
+const isOtpType = (value: string): value is OtpType =>
+  [
+    'signup',
+    'invite',
+    'magiclink',
+    'recovery',
+    'email_change',
+    'email',
+  ].includes(value);
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const token_hash = searchParams.get('token_hash');
   const type       = searchParams.get('type'); // 'recovery' for password reset
 
-  if (token_hash && type) {
+  if (token_hash && type && isOtpType(type)) {
     const url  = process.env.NEXT_PUBLIC_SUPABASE_URL  || DEFAULT_SUPABASE_URL;
     const key  =
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY        ||
@@ -55,8 +72,7 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.verifyOtp({
       token_hash,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      type: type as any,
+      type,
     });
 
     if (!error) {
