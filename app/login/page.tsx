@@ -8,7 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { CheckCircle2, Eye, EyeOff, Loader2, X } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase';
+import { createClient, createPasswordResetClient } from '@/lib/supabase';
 
 const ATTEMPT_STORAGE_KEY = 'athlix_login_guard_v2';
 const REMEMBER_EMAIL_KEY = 'athlix_login_remember_email_v2';
@@ -129,7 +129,11 @@ export default function LoginPage() {
     }
     setForgotSending(true);
     setForgotMessage(null);
-    const { error } = await supabase.auth.resetPasswordForEmail(candidateEmail, {
+    // Use the implicit-flow client so the email link contains a token_hash
+    // instead of a PKCE code. Token links work in any browser/email app —
+    // they don't require the code_verifier cookie that PKCE links need.
+    const resetClient = createPasswordResetClient();
+    const { error } = await resetClient.auth.resetPasswordForEmail(candidateEmail, {
       redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
     });
     setForgotSending(false);
