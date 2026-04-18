@@ -1492,28 +1492,51 @@ export const logBodyWeight = async (
     return logRow as LocalBodyWeightLog;
   }
 
-  const id = createId();
-  await upsertRows(
-    'body_weight_logs',
-    [
-      {
-        id,
-        user_id: userId,
-        date: input.date,
+  // No unique constraint on (user_id, date) — check-then-insert/update manually.
+  const { data: existing, error: lookupError } = await supabase
+    .from('body_weight_logs')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('date', input.date)
+    .maybeSingle();
+
+  if (lookupError) throw normalizeError(lookupError, 'Failed to check existing weight log.');
+
+  if (existing?.id) {
+    // Update the existing entry for today
+    const { data: updated, error: updateError } = await supabase
+      .from('body_weight_logs')
+      .update({
         weight: input.weight,
         unit: input.unit || 'kg',
-        notes: input.notes || null,
-        created_at: nowIso(),
-      },
-    ],
-    'user_id,date',
-  );
+        notes: input.notes ?? null,
+      })
+      .eq('id', existing.id)
+      .select()
+      .maybeSingle();
+
+    if (updateError) throw normalizeError(updateError, 'Failed to update weight log.');
+    return updated as LocalBodyWeightLog;
+  }
+
+  // Insert new entry
+  const newId = createId();
+  await upsertRows('body_weight_logs', [
+    {
+      id: newId,
+      user_id: userId,
+      date: input.date,
+      weight: input.weight,
+      unit: input.unit || 'kg',
+      notes: input.notes || null,
+      created_at: nowIso(),
+    },
+  ], 'id');
 
   const { data, error } = await supabase
     .from('body_weight_logs')
     .select('*')
-    .eq('user_id', userId)
-    .eq('date', input.date)
+    .eq('id', newId)
     .maybeSingle();
 
   if (error) throw normalizeError(error, 'Failed to fetch body weight log.');
