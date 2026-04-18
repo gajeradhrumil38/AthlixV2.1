@@ -207,6 +207,7 @@ export const Progress: React.FC = () => {
 
   // New weight log state
   const [newWeight, setNewWeight] = useState('');
+  const [weightDate, setWeightDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [heightCm, setHeightCm] = useState('');
   const [bmiValue, setBmiValue] = useState<string | null>(null);
   const {
@@ -807,17 +808,16 @@ export const Progress: React.FC = () => {
     const weightNum = parseFloat(newWeight);
     if (isNaN(weightNum)) return;
 
-    const today = format(new Date(), 'yyyy-MM-dd');
-
     try {
       await logBodyWeight(user.id, {
-        date: today,
+        date: weightDate,
         weight: weightNum,
         unit: displayUnit,
         notes: null,
       });
 
       setNewWeight('');
+      setWeightDate(format(new Date(), 'yyyy-MM-dd'));
       toast.success('Weight logged');
       fetchData();
     } catch (error: any) {
@@ -1247,10 +1247,19 @@ export const Progress: React.FC = () => {
           <div className="space-y-5 animate-fade-in">
 
             {/* ── Log weight ──────────────────────────── */}
-            <div className="glass-card p-5">
-              <p className="text-[11px] font-bold uppercase tracking-[1.4px] text-[var(--text-muted)] mb-3">
-                Log Today's Weight
+            <div className="glass-card p-5 space-y-3">
+              <p className="text-[11px] font-bold uppercase tracking-[1.4px] text-[var(--text-muted)]">
+                Log Weight
               </p>
+              {/* Date row */}
+              <input
+                type="date"
+                max={format(new Date(), 'yyyy-MM-dd')}
+                value={weightDate}
+                onChange={(e) => setWeightDate(e.target.value)}
+                className="w-full bg-[var(--bg-elevated)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text-primary)] text-[14px] font-medium focus:outline-none focus:border-[var(--accent)] transition-colors [color-scheme:dark]"
+              />
+              {/* Weight + save row */}
               <div className="flex gap-3">
                 <input
                   type="number"
