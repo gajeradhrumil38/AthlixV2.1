@@ -27,38 +27,44 @@ export const useDashboardLayout = () => {
   }, [user])
 
   const fetchLayout = async () => {
-    const savedLayout = await getDashboardLayout(user!.id)
+    try {
+      const savedLayout = await getDashboardLayout(user!.id)
 
-    if (savedLayout && Array.isArray(savedLayout)) {
-      // Merge with DEFAULT_LAYOUT to handle new widgets
-      // added after user saved their layout
-      const saved = savedLayout as LayoutItem[]
-      const savedIds = saved.map(s => s.id)
-      const newWidgets = DEFAULT_LAYOUT.filter(
-        d => !savedIds.includes(d.id)
-      )
-      
-      let merged = [...saved]
-      const maxOrder = Math.max(...saved.map(s => s.order), 0)
-      
-      newWidgets.forEach((w, i) => {
-        if (w.id === 'weekly_goal') {
-          const quickStatsIndex = merged.findIndex(s => s.id === 'quick_stats')
-          if (quickStatsIndex !== -1) {
-            merged.splice(quickStatsIndex + 1, 0, { ...w, order: merged[quickStatsIndex].order + 0.5 })
+      if (savedLayout && Array.isArray(savedLayout)) {
+        // Merge with DEFAULT_LAYOUT to handle new widgets
+        // added after user saved their layout
+        const saved = savedLayout as LayoutItem[]
+        const savedIds = saved.map(s => s.id)
+        const newWidgets = DEFAULT_LAYOUT.filter(
+          d => !savedIds.includes(d.id)
+        )
+
+        let merged = [...saved]
+        const maxOrder = Math.max(...saved.map(s => s.order), 0)
+
+        newWidgets.forEach((w, i) => {
+          if (w.id === 'weekly_goal') {
+            const quickStatsIndex = merged.findIndex(s => s.id === 'quick_stats')
+            if (quickStatsIndex !== -1) {
+              merged.splice(quickStatsIndex + 1, 0, { ...w, order: merged[quickStatsIndex].order + 0.5 })
+            } else {
+              merged.push({ ...w, order: maxOrder + i + 1 })
+            }
           } else {
             merged.push({ ...w, order: maxOrder + i + 1 })
           }
-        } else {
-          merged.push({ ...w, order: maxOrder + i + 1 })
-        }
-      })
+        })
 
-      merged = merged.sort((a, b) => a.order - b.order).map((m, i) => ({ ...m, order: i + 1 }))
+        merged = merged.sort((a, b) => a.order - b.order).map((m, i) => ({ ...m, order: i + 1 }))
 
-      setLayout(merged)
+        setLayout(merged)
+      }
+    } catch (err) {
+      console.warn('Failed to load dashboard layout, using default:', err)
+      setLayout(DEFAULT_LAYOUT)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const saveLayout = useCallback(async () => {

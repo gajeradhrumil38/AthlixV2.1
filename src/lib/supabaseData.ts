@@ -839,7 +839,10 @@ export const getCurrentUserAsync = async (): Promise<LocalUser | null> => {
 
   currentUserCache = toLocalUser(data.user);
   if (data.user) {
-    await migrateLegacyDataIfNeeded(data.user.id, data.user.email || null);
+    // Run migration in the background — a failure must never block auth.
+    migrateLegacyDataIfNeeded(data.user.id, data.user.email || null).catch((err) => {
+      console.warn('Legacy data migration failed (non-fatal):', err);
+    });
   }
 
   return currentUserCache;

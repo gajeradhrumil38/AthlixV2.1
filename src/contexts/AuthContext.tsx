@@ -65,27 +65,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    const initializeAuth = async () => {
+    let mounted = true;
+    let unsubscribeRef: (() => void) | null = null;
+
+    const run = async () => {
+      // Step 1: Determine real initial auth state before setting up subscription.
+      // This prevents subscribeToAuth's immediate listener(null) call from
+      // setting loading=false before we know whether a session actually exists.
       try {
         const currentUser = await getCurrentUserAsync();
+        if (!mounted) return;
         await syncAuthState(currentUser ? { user: currentUser } : null);
       } catch (error) {
         console.warn('Failed to initialize auth:', error);
+        if (!mounted) return;
         setSession(null);
         setUser(null);
         setProfile(null);
         setLoading(false);
+      } finally {
+        // Step 2: Subscribe to future auth changes (login / logout / token refresh)
+        // only AFTER the initial state is confirmed. The immediate listener call
+        // from subscribeToAuth will now use the already-correct currentUserCache.
+        if (mounted) {
+          unsubscribeRef = subscribeToAuth(async (nextUser) => {
+            if (!mounted) return;
+            await syncAuthState(nextUser ? { user: nextUser } : null);
+          });
+        }
       }
     };
 
-    initializeAuth();
-
-    const unsubscribe = subscribeToAuth(async (nextUser) => {
-      await syncAuthState(nextUser ? { user: nextUser } : null);
-    });
+    run();
 
     return () => {
-      unsubscribe();
+      mounted = false;
+      unsubscribeRef?.();
     };
   }, []);
 
