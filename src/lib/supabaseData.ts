@@ -1313,7 +1313,7 @@ export const saveWorkout = async (
   });
 
   if (rowsToUpsert.length) {
-    await upsertRows('personal_records', rowsToUpsert, 'user_id,exercise_name');
+    await upsertRows('personal_records', rowsToUpsert, 'id');
   }
 
   return workout;

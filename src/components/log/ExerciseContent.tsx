@@ -31,7 +31,6 @@ interface ExerciseContentProps {
   onOpenDial: (setId: string, field: 'weight' | 'reps') => void;
   onSwipeLeft: () => void;
   onSwipeRight: () => void;
-  onFinishExercise: () => void;
 }
 
 const getFieldBinding = (type: ReturnType<typeof resolveExerciseInputType>) => {
@@ -62,7 +61,6 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
     onOpenDial,
     onSwipeLeft,
     onSwipeRight,
-    onFinishExercise,
   } = props;
 
   const touchStart = useRef(0);
@@ -100,7 +98,6 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
     [exercise.sets],
   );
 
-  const allSetsDone = exercise.sets.length > 0 && completedSets === exercise.sets.length;
   const statUnit = getUnitDisplay(exerciseType, { weightUnit, distanceUnit }).toLowerCase();
   const relativeLoad =
     bodyWeightForMath && bodyWeightForMath > 0 && isWeightExerciseType(exerciseType)
@@ -260,14 +257,6 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
           + Add Set
         </button>
 
-        {allSetsDone && (
-          <button
-            onClick={onFinishExercise}
-            className="h-12 w-full rounded-xl bg-[#CAD7E4] text-[15px] font-semibold text-[#0F1A27]"
-          >
-            Finish Exercise
-          </button>
-        )}
       </div>
     </div>
   );

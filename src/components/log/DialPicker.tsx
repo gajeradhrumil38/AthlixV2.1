@@ -298,7 +298,7 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, format, initialIndex,
   };
 
   return (
-    <div className="relative min-w-0 flex-1">
+    <div className="relative min-w-0 flex-1" style={{ height: `${VIEW_HEIGHT}px` }}>
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -314,45 +314,22 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, format, initialIndex,
         }}
       >
         {values.map((value, index) => (
-          <button
+          <div
             key={`${value}-${index}`}
-            onClick={() => {
-              const node = scrollRef.current;
-              if (!node) return;
-              node.scrollTo({ top: index * ITEM_HEIGHT, behavior: 'smooth' });
-            }}
-            className={`relative flex w-full items-center justify-center text-center tabular-nums leading-none ${
+            className={`relative flex w-full items-center justify-center text-center tabular-nums leading-none select-none ${
               index === selectedIndex
-                ? 'font-semibold text-[#F4F8FC]'
-                : 'font-normal text-[#6D8095]'
+                ? 'font-bold text-[#F4F8FC]'
+                : 'font-normal text-[#5A7089]'
             }`}
             style={{
               height: `${ITEM_HEIGHT}px`,
               scrollSnapAlign: 'center',
-              scrollSnapStop: 'always',
-              fontSize: '42px',
+              fontSize: index === selectedIndex ? '30px' : '26px',
+              transition: 'font-size 0.1s ease, color 0.1s ease',
             }}
           >
-            {/* tick mark — mechanical dial feel */}
-            <span
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                left: '14px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: index === selectedIndex ? '10px' : '5px',
-                height: '2px',
-                borderRadius: '1px',
-                background:
-                  index === selectedIndex
-                    ? 'rgba(180,210,235,0.55)'
-                    : 'rgba(255,255,255,0.10)',
-                transition: 'width 0.12s ease, background 0.12s ease',
-              }}
-            />
             {format(value)}
-          </button>
+          </div>
         ))}
       </div>
 
@@ -365,8 +342,8 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, format, initialIndex,
         </div>
       )}
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-[#0D1421] via-[#0D1421]/86 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#0D1421] via-[#0D1421]/86 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[88px] bg-gradient-to-b from-[#101824] via-[#101824]/90 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[88px] bg-gradient-to-t from-[#101824] via-[#101824]/90 to-transparent" />
     </div>
   );
 };
@@ -447,12 +424,12 @@ export const DialPicker: React.FC<DialPickerProps> = ({
           className={`relative mb-4 grid overflow-hidden rounded-[20px] border border-white/10 bg-[rgba(16,24,36,0.86)] ${
             columns.length > 1 ? 'grid-cols-2' : 'grid-cols-1'
           }`}
-          style={{ gap: `${COLUMN_SPACING}px` }}
+          style={{ gap: `${COLUMN_SPACING}px`, height: `${VIEW_HEIGHT}px` }}
         >
           {columns.map((column, columnIndex) => (
             <div
               key={column.id}
-              className={columnIndex > 0 ? 'border-l border-white/10' : ''}
+              className={`flex flex-col ${columnIndex > 0 ? 'border-l border-white/10' : ''}`}
             >
               <WheelColumn
                 values={column.values}

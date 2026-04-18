@@ -119,11 +119,10 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 }) => {
   const { user } = useAuth();
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isPaused, setIsPaused] = useState(true);
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [dialPicker, setDialPicker] = useState<DialPickerState | null>(null);
   const [hiddenPrefillExerciseIds, setHiddenPrefillExerciseIds] = useState<string[]>([]);
-  const [showExerciseSummary, setShowExerciseSummary] = useState(false);
   const autoOpenedPickerForStartRef = useRef<number | null>(null);
 
   const createSetId = () =>
@@ -414,15 +413,6 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
     setDialPicker(null);
   };
 
-  const currentSummary = useMemo(() => {
-    if (!currentExercise) return null;
-    const doneSets = currentExercise.sets.filter((set) => set.done).length;
-    return {
-      doneSets,
-      totalSets: currentExercise.sets.length,
-    };
-  }, [currentExercise]);
-
   const showPrefillBanner =
     Boolean(currentExercise?.lastSession) && !hiddenPrefillExerciseIds.includes(currentExercise?.id || '');
 
@@ -565,10 +555,6 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
               onOpenDial={handleOpenDial}
               onSwipeLeft={() => activeIndex < workout.exercises.length - 1 && setActiveIndex(activeIndex + 1)}
               onSwipeRight={() => activeIndex > 0 && setActiveIndex(activeIndex - 1)}
-              onFinishExercise={() => {
-                haptics.success();
-                setShowExerciseSummary(true);
-              }}
             />
           </motion.div>
         ) : (
@@ -655,41 +641,6 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showExerciseSummary && currentExercise && currentSummary && (
-          <motion.div
-            className="fixed inset-0 z-[210] bg-black/60 backdrop-blur-[2px] flex items-end justify-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 26, stiffness: 260 }}
-              className="w-full max-w-[480px] rounded-t-[20px] border-t border-white/10 bg-[#121A28] p-5 pb-[calc(env(safe-area-inset-bottom)+20px)]"
-            >
-              <h3 className="text-[20px] font-semibold text-white">Exercise completed</h3>
-              <p className="text-[#AABBCB] mt-1 text-[14px]">
-                {currentSummary.doneSets}/{currentSummary.totalSets} sets finished.
-              </p>
-
-              <button
-                onClick={() => {
-                  setShowExerciseSummary(false);
-                  if (activeIndex < workout.exercises.length - 1) {
-                    setActiveIndex(activeIndex + 1);
-                  }
-                }}
-                className="mt-5 w-full h-[48px] rounded-xl bg-[#DDE6F0] text-[#111827] font-semibold"
-              >
-                Done
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };
