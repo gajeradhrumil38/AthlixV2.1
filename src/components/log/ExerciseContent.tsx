@@ -1,5 +1,4 @@
-import React, { useMemo, useRef } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import React, { useMemo } from 'react';
 import type { ExerciseEntry } from '../../legacy-pages/Log';
 import { SetRow } from './SetRow';
 import {
@@ -19,8 +18,6 @@ interface ExerciseContentProps {
   weightUnit?: WeightUnit;
   distanceUnit?: DistanceUnit;
   bodyWeightForMath?: number | null;
-  elapsedLabel: string;
-  startedAtLabel: string;
   onWeightUnitChange: (unit: WeightUnit) => void;
   onDistanceUnitChange: (unit: DistanceUnit) => void;
   onUpdateSet: (setId: string, field: 'weight' | 'reps', value: number) => void;
@@ -29,8 +26,6 @@ interface ExerciseContentProps {
   onClearPrefill: () => void;
   showPrefillBanner: boolean;
   onOpenDial: (setId: string, field: 'weight' | 'reps') => void;
-  onSwipeLeft: () => void;
-  onSwipeRight: () => void;
 }
 
 const getFieldBinding = (type: ReturnType<typeof resolveExerciseInputType>) => {
@@ -50,8 +45,6 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
     weightUnit = 'kg',
     distanceUnit = 'km',
     bodyWeightForMath = null,
-    elapsedLabel,
-    startedAtLabel,
     onWeightUnitChange,
     onDistanceUnitChange,
     onMarkSetDone,
@@ -59,12 +52,7 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
     onClearPrefill,
     showPrefillBanner,
     onOpenDial,
-    onSwipeLeft,
-    onSwipeRight,
   } = props;
-
-  const touchStart = useRef(0);
-  const touchEnd = useRef(0);
 
   const exerciseType = useMemo(() => resolveExerciseInputType(exercise.name), [exercise.name]);
   const inputLabels = useMemo(
@@ -73,20 +61,6 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
   );
   const fieldKinds = useMemo(() => getFieldKinds(exerciseType), [exerciseType]);
   const binding = useMemo(() => getFieldBinding(exerciseType), [exerciseType]);
-
-  const handleTouchStart = (event: React.TouchEvent) => {
-    touchStart.current = event.targetTouches[0].clientX;
-  };
-
-  const handleTouchMove = (event: React.TouchEvent) => {
-    touchEnd.current = event.targetTouches[0].clientX;
-  };
-
-  const handleTouchEnd = () => {
-    const delta = touchStart.current - touchEnd.current;
-    if (delta > 50) onSwipeLeft();
-    if (delta < -50) onSwipeRight();
-  };
 
   const completedSets = useMemo(() => exercise.sets.filter((set) => set.done).length, [exercise.sets]);
 
@@ -105,30 +79,8 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
       : null;
 
   return (
-    <div
-      className="h-full overflow-y-auto bg-transparent pb-[calc(env(safe-area-inset-bottom)+208px)]"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
+    <div className="h-full overflow-y-auto bg-transparent pb-24">
       <div className="sticky top-0 z-20 border-b border-white/5 bg-[var(--bg-base)]/72 px-4 pb-3 pt-3 backdrop-blur-xl">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-[30px] sm:text-[34px] leading-none font-black tracking-tight text-white">{exercise.name}</h2>
-          <button
-            onClick={onSwipeRight}
-            className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-white/10 bg-white/[0.04] px-3 text-[12px] font-medium text-[var(--text-primary)]"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
-        </div>
-
-        <div className="mb-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[13px] text-[var(--text-secondary)]">
-          <span>Started {startedAtLabel}</span>
-          <span className="mx-2 text-white/30">·</span>
-          <span className="tabular-nums">Elapsed {elapsedLabel}</span>
-        </div>
-
         <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[rgba(12,20,32,0.72)]">
           <div className="grid grid-cols-3">
             {/* Sets */}
@@ -210,12 +162,6 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
             >
               Clear
             </button>
-          </div>
-        )}
-
-        {!exercise.lastSession && (
-          <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2.5 text-[12px] text-[#3E5568]">
-            First time doing this exercise
           </div>
         )}
 

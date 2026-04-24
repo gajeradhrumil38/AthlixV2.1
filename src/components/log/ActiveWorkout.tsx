@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Activity, ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Pause, Play, Trash2 } from 'lucide-react';
+import { Activity, ArrowLeft, CalendarDays, ChevronRight, Pause, Play, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { WorkoutState, ExerciseEntry, Set } from '../../legacy-pages/Log';
-import { ExerciseTabBar } from './ExerciseTabBar';
 import { ExerciseContent } from './ExerciseContent';
 import { ExercisePicker } from './ExercisePicker';
 import { DialPicker } from './DialPicker';
@@ -56,14 +55,6 @@ const parseLocalDateTime = (value?: string) => {
   return date;
 };
 
-const formatClockTime = (value?: string) => {
-  const date = parseLocalDateTime(value);
-  if (!date) return '--:--';
-  const hour = date.getHours();
-  const displayHour = hour % 12 || 12;
-  const period = hour >= 12 ? 'PM' : 'AM';
-  return `${displayHour}:${pad2(date.getMinutes())} ${period}`;
-};
 
 const toLocalDateTimeInput = (date: Date) =>
   `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(
@@ -119,11 +110,13 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 }) => {
   const { user } = useAuth();
   const [activeIndex, setActiveIndex] = useState(0);
+  const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
   const [isPaused, setIsPaused] = useState(true);
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [dialPicker, setDialPicker] = useState<DialPickerState | null>(null);
   const [hiddenPrefillExerciseIds, setHiddenPrefillExerciseIds] = useState<string[]>([]);
   const autoOpenedPickerForStartRef = useRef<number | null>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   const createSetId = () =>
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -166,7 +159,6 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   }, [activeIndex, workout.exercises.length]);
 
   const currentExercise = workout.exercises[activeIndex];
-  const hasExercises = workout.exercises.length > 0;
 
   const updateSetField = useCallback(
     (setId: string, field: 'weight' | 'reps', value: number) => {
@@ -356,27 +348,12 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       }
 
       setActiveIndex(workout.exercises.length);
+      setViewMode('detail');
       setShowExercisePicker(false);
       haptics.tick();
     },
     [setWorkout, user, workout.exercises],
   );
-
-  const handleDeleteExercise = () => {
-    if (!currentExercise) return;
-    if (!window.confirm(`Remove ${currentExercise.name}?`)) return;
-
-    setWorkout((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        exercises: prev.exercises.filter((_, index) => index !== activeIndex),
-      };
-    });
-
-    setActiveIndex((prev) => Math.max(0, prev - 1));
-    haptics.tick();
-  };
 
   const handleClearPrefill = () => {
     const exercise = workout.exercises[activeIndex];
@@ -418,11 +395,47 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
   const workoutDateValue = useMemo(() => formatDateInputValue(workout.startAt), [workout.startAt]);
 
+  const todayDateStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }, []);
+
+  const fmtWorkoutDate = useCallback((dateStr: string): string => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const d = parseDateInputValue(dateStr);
+    if (!d) return dateStr;
+    d.setHours(0, 0, 0, 0);
+    const diff = Math.round((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  }, []);
+
+  const totalDone = useMemo(
+    () => workout.exercises.reduce((acc, ex) => acc + ex.sets.filter((s) => s.done).length, 0),
+    [workout.exercises],
+  );
+  const totalSets = useMemo(
+    () => workout.exercises.reduce((acc, ex) => acc + ex.sets.length, 0),
+    [workout.exercises],
+  );
+  const isPastDate = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const d = parseDateInputValue(workoutDateValue);
+    if (!d) return false;
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() < today.getTime();
+  }, [workoutDateValue]);
+
   const handleWorkoutDateChange = useCallback(
     (nextDate: string) => {
       const parsedDate = parseDateInputValue(nextDate);
       if (!parsedDate) return;
 
+      // Reset timer when logging for a different date
+      setIsPaused(true);
       setWorkout((prev) => {
         if (!prev) return null;
         const existingStart = parseLocalDateTime(prev.startAt) || new Date(prev.startTime);
@@ -435,13 +448,12 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
           existingStart.getSeconds(),
           0,
         );
-        const nextEnd = new Date(nextStart.getTime() + prev.elapsedSeconds * 1000);
-
         return {
           ...prev,
           startTime: nextStart.getTime(),
           startAt: toLocalDateTimeInput(nextStart),
-          endAt: toLocalDateTimeInput(nextEnd),
+          endAt: toLocalDateTimeInput(nextStart),
+          elapsedSeconds: 0,
         };
       });
       haptics.tick();
@@ -472,168 +484,196 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
   return (
     <div className="fixed inset-0 z-40 bg-[var(--bg-base)] overflow-hidden">
-      <div className="mx-auto flex h-full w-full max-w-[920px] flex-col bg-[radial-gradient(circle_at_top,rgba(31,45,66,0.28)_0%,rgba(11,16,25,0.96)_40%,var(--bg-base)_100%)]">
-      {/* ── Header ─────────────────────────────────────────────────── */}
-      <div className="shrink-0 border-b border-white/5 bg-[var(--bg-base)]/80 backdrop-blur-xl">
-        {/* Row 1: Back · Title · Actions */}
-        <div className="flex h-14 items-center gap-3 px-4">
+      <div className="mx-auto flex h-full w-full max-w-[920px] flex-col">
+
+        {/* ── Nav Bar ──────────────────────────────────────────────── */}
+        <div className="shrink-0 flex h-14 items-center gap-3 px-4 border-b border-white/5 bg-[var(--bg-base)]/80 backdrop-blur-xl">
           <button
             type="button"
-            onClick={handleBackToPrevious}
-            className="inline-flex shrink-0 h-8 items-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            onClick={viewMode === 'detail' ? () => setViewMode('list') : handleBackToPrevious}
+            className="inline-flex shrink-0 h-8 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-[12px] font-medium text-[var(--text-secondary)]"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            Back
+            {viewMode === 'detail' ? 'All' : 'Back'}
           </button>
 
-          <div className="flex-1 min-w-0">
-            <h1 className="text-[15px] font-semibold text-[var(--text-primary)] truncate leading-none">
-              {workout.title}
-            </h1>
+          <div className="flex-1 min-w-0 text-center">
+            <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate leading-none">{workout.title}</p>
             <p className="text-[11px] text-[var(--text-muted)] mt-0.5 leading-none">
               {workout.exercises.length} exercise{workout.exercises.length === 1 ? '' : 's'}
-              {!isPaused && (
-                <span className="ml-2 text-[var(--accent)]">
-                  {formatElapsedTime(workout.elapsedSeconds)}
-                </span>
-              )}
             </p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              onClick={() => setIsPaused((prev) => !prev)}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-            >
-              {isPaused ? <Play className="w-3.5 h-3.5 fill-current" /> : <Pause className="w-3.5 h-3.5" />}
-            </button>
-            <button
-              onClick={() => { haptics.complete(); onFinish(); }}
-              className="h-8 rounded-full bg-[var(--accent)] px-4 text-[12px] font-bold text-black"
-            >
-              Finish
-            </button>
-          </div>
+          {/* DateChip — calendar icon button that opens a hidden native picker */}
+          <button
+            type="button"
+            onClick={() => { dateInputRef.current?.showPicker?.(); }}
+            className="relative inline-flex shrink-0 h-8 items-center gap-1.5 rounded-xl border border-white/10 bg-[var(--bg-surface)] px-2.5 text-[12px] font-medium text-[var(--text-secondary)] cursor-pointer"
+          >
+            <CalendarDays className="w-3 h-3 text-[var(--text-muted)]" />
+            <span>{fmtWorkoutDate(workoutDateValue)}</span>
+            <input
+              ref={dateInputRef}
+              type="date"
+              value={workoutDateValue}
+              max={todayDateStr}
+              onChange={(e) => handleWorkoutDateChange(e.target.value)}
+              className="absolute opacity-0 pointer-events-none w-px h-px"
+              aria-hidden
+              tabIndex={-1}
+            />
+          </button>
         </div>
 
-        {/* Row 2: Date picker — full-width, easy to tap */}
-        <div className="flex items-center gap-2 px-4 pb-3">
-          <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
-          <input
-            type="date"
-            value={workoutDateValue}
-            onChange={(event) => handleWorkoutDateChange(event.target.value)}
-            className="flex-1 bg-transparent text-[12px] font-medium text-[var(--text-secondary)] outline-none [color-scheme:dark] cursor-pointer"
-            aria-label="Workout date"
-          />
-          {isPaused && (
-            <span className="text-[11px] tabular-nums text-[var(--text-muted)]">
+        {/* ── Timer Bar (visible when exercises exist) ──────────────── */}
+        {workout.exercises.length > 0 && (
+          <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-white/5">
+            <span className="text-[18px] font-semibold text-[var(--text-primary)] tabular-nums">
               {formatElapsedTime(workout.elapsedSeconds)}
             </span>
-          )}
-        </div>
-      </div>
-
-      <ExerciseTabBar
-        exercises={workout.exercises}
-        activeIndex={activeIndex}
-        onTabClick={setActiveIndex}
-        onAddExercise={() => setShowExercisePicker(true)}
-        showAddButton={allowLiveAddExercise}
-      />
-
-      <AnimatePresence mode="wait" initial={false}>
-        {currentExercise ? (
-          <motion.div
-            key={currentExercise.id}
-            className="flex-1 min-h-0 overflow-hidden"
-            initial={{ opacity: 0, x: 16 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -16 }}
-            transition={{ duration: 0.16, ease: 'easeOut' }}
-          >
-            <ExerciseContent
-              exercise={currentExercise}
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
-              bodyWeightForMath={bodyWeightForMath}
-              elapsedLabel={formatElapsedTime(workout.elapsedSeconds)}
-              startedAtLabel={formatClockTime(workout.startAt)}
-              onWeightUnitChange={(unit) => onWeightUnitChange?.(unit)}
-              onDistanceUnitChange={(unit) => onDistanceUnitChange?.(unit)}
-              onUpdateSet={updateSetField}
-              onMarkSetDone={handleMarkSetDone}
-              onAddSet={handleAddSet}
-              onClearPrefill={handleClearPrefill}
-              showPrefillBanner={showPrefillBanner}
-              onOpenDial={handleOpenDial}
-              onSwipeLeft={() => activeIndex < workout.exercises.length - 1 && setActiveIndex(activeIndex + 1)}
-              onSwipeRight={() => activeIndex > 0 && setActiveIndex(activeIndex - 1)}
-            />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="empty-workout"
-            className="flex-1 flex flex-col items-center justify-center p-8 text-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
-          >
-            <Activity className="w-12 h-12 text-[var(--border)] mb-4" />
-            <h3 className="text-[16px] font-semibold text-[var(--text-secondary)] mb-2">No exercises yet</h3>
-            <p className="text-[12px] text-[var(--text-muted)] mb-6">Add your first exercise to start tracking.</p>
             <button
-              onClick={() => setShowExercisePicker(true)}
-              className="h-11 rounded-xl border border-white/15 bg-white/[0.04] px-8 text-[12px] font-semibold text-[var(--text-primary)]"
+              type="button"
+              onClick={() => setIsPaused((p) => !p)}
+              className="flex w-8 h-8 items-center justify-center rounded-lg border transition-colors"
+              style={{
+                background: !isPaused ? 'var(--accent)' : 'var(--bg-surface)',
+                borderColor: !isPaused ? 'transparent' : 'rgba(255,255,255,0.1)',
+              }}
             >
-              + Add Exercise
+              {isPaused
+                ? <Play className="w-3 h-3 text-[var(--accent)] fill-current" />
+                : <Pause className="w-3 h-3 text-black" />}
             </button>
-          </motion.div>
+            <div className="w-px h-4 bg-white/10" />
+            <span className="text-[12px] font-medium text-[var(--text-muted)]">
+              {totalDone}/{totalSets} sets done
+            </span>
+            {isPastDate && (
+              <span className="ml-auto inline-flex h-[18px] items-center rounded px-1.5 border border-[rgba(200,255,0,0.2)] bg-[rgba(200,255,0,0.06)] text-[9px] font-semibold tracking-[0.1em] text-[var(--accent)]">
+                PAST
+              </span>
+            )}
+          </div>
         )}
-      </AnimatePresence>
 
-      <div className="flex min-h-[56px] shrink-0 items-center justify-between border-t border-white/5 bg-[var(--bg-base)]/78 px-4 py-1 pb-[max(0px,env(safe-area-inset-bottom))] backdrop-blur-xl">
-        <button
-          onClick={handleDeleteExercise}
-          className="p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-          disabled={!currentExercise}
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {/* ── Body ─────────────────────────────────────────────────── */}
+        {viewMode === 'list' ? (
+          workout.exercises.length === 0 ? (
+            /* Empty state */
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
+              <div className="w-14 h-14 rounded-xl border border-white/10 bg-[var(--bg-surface)] flex items-center justify-center">
+                <Activity className="w-6 h-6 text-[var(--text-muted)]" />
+              </div>
+              <div>
+                <p className="text-[15px] font-semibold text-[var(--text-primary)] mb-1.5">No exercises yet</p>
+                <p className="text-[13px] text-[var(--text-muted)]">Add your first exercise to start tracking.</p>
+              </div>
+            </div>
+          ) : (
+            /* Exercise list */
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="flex flex-col gap-2 p-4">
+                {workout.exercises.map((ex, i) => {
+                  const doneCount = ex.sets.filter((s) => s.done).length;
+                  return (
+                    <button
+                      key={ex.id}
+                      type="button"
+                      onClick={() => { setActiveIndex(i); setViewMode('detail'); }}
+                      className="flex items-center gap-3 p-3 rounded-xl border text-left w-full transition-colors"
+                      style={{ background: 'var(--bg-surface)', borderColor: 'rgba(255,255,255,0.07)' }}
+                    >
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-white/10 bg-white/[0.03]">
+                        <Activity className="w-4 h-4 text-[var(--text-muted)]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate leading-none mb-1">{ex.name}</p>
+                        <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-[0.08em]">
+                          {ex.muscleGroup || 'Exercise'} · {ex.sets.length} set{ex.sets.length !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      {doneCount > 0 && (
+                        <span
+                          className="inline-flex h-5 items-center px-1.5 rounded border text-[10px] font-semibold shrink-0"
+                          style={{ background: 'rgba(200,255,0,0.1)', borderColor: 'rgba(200,255,0,0.2)', color: 'var(--accent)' }}
+                        >
+                          {doneCount}/{ex.sets.length}
+                        </span>
+                      )}
+                      <ChevronRight className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )
+        ) : (
+          /* Exercise detail view */
+          <AnimatePresence mode="wait" initial={false}>
+            {currentExercise ? (
+              <motion.div
+                key={currentExercise.id}
+                className="flex-1 min-h-0 flex flex-col overflow-hidden"
+                initial={{ opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -16 }}
+                transition={{ duration: 0.16, ease: 'easeOut' }}
+              >
+                {/* Exercise name header */}
+                <div className="shrink-0 px-4 py-3 border-b border-white/5">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1.5">
+                    {currentExercise.muscleGroup || 'Exercise'}
+                  </p>
+                  <p className="text-[22px] font-bold text-[var(--text-primary)] tracking-tight leading-none">
+                    {currentExercise.name}
+                  </p>
+                </div>
+                <ExerciseContent
+                  exercise={currentExercise}
+                  weightUnit={weightUnit}
+                  distanceUnit={distanceUnit}
+                  bodyWeightForMath={bodyWeightForMath}
+                  onWeightUnitChange={(unit) => onWeightUnitChange?.(unit)}
+                  onDistanceUnitChange={(unit) => onDistanceUnitChange?.(unit)}
+                  onUpdateSet={updateSetField}
+                  onMarkSetDone={handleMarkSetDone}
+                  onAddSet={handleAddSet}
+                  onClearPrefill={handleClearPrefill}
+                  showPrefillBanner={showPrefillBanner}
+                  onOpenDial={handleOpenDial}
+                />
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        )}
 
-        <div className="flex items-center gap-3">
+        {/* ── Bottom Bar ───────────────────────────────────────────── */}
+        <div className="shrink-0 flex gap-2 px-4 py-3 border-t border-white/5 bg-[var(--bg-base)]/80 backdrop-blur-xl pb-[max(12px,env(safe-area-inset-bottom))]">
+          {allowLiveAddExercise && (
+            <button
+              type="button"
+              onClick={() => setShowExercisePicker(true)}
+              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-[var(--bg-surface)] text-[13px] font-semibold text-[var(--text-primary)]"
+            >
+              <Plus className="w-3.5 h-3.5 text-[var(--accent)]" />
+              Add Exercise
+            </button>
+          )}
           <button
-            onClick={() => hasExercises && activeIndex > 0 && setActiveIndex(activeIndex - 1)}
-            disabled={!hasExercises || activeIndex === 0}
-            className={`p-2 ${!hasExercises || activeIndex === 0 ? 'text-[#2A3545]' : 'text-[#A7B7C8]'}`}
+            type="button"
+            onClick={() => { haptics.complete(); onFinish(); }}
+            className={`flex h-12 items-center justify-center rounded-xl bg-[var(--accent)] text-[14px] font-bold text-black ${allowLiveAddExercise ? 'flex-[2]' : 'flex-1'}`}
           >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <span className="text-[11px] text-[#7F92A8] font-semibold tabular-nums">
-            {hasExercises ? activeIndex + 1 : 0} / {workout.exercises.length}
-          </span>
-          <button
-            onClick={() => hasExercises && activeIndex < workout.exercises.length - 1 && setActiveIndex(activeIndex + 1)}
-            disabled={!hasExercises || activeIndex >= workout.exercises.length - 1}
-            className={`p-2 ${
-              !hasExercises || activeIndex >= workout.exercises.length - 1 ? 'text-[#2A3545]' : 'text-[#A7B7C8]'
-            }`}
-          >
-            <ChevronRight className="w-5 h-5" />
+            Finish Workout
           </button>
         </div>
 
-        <div className="w-8" />
-      </div>
       </div>
 
       <AnimatePresence>
         {showExercisePicker && (
           <ExercisePicker
-            onSelect={(exercise) => {
-              void handleAddExercise(exercise);
-            }}
+            onSelect={(exercise) => { void handleAddExercise(exercise); }}
             onClose={() => setShowExercisePicker(false)}
             recentExercises={[]}
           />
@@ -654,7 +694,6 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
           />
         )}
       </AnimatePresence>
-
     </div>
   );
 };
