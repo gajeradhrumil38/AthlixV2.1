@@ -473,50 +473,64 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   return (
     <div className="fixed inset-0 z-40 bg-[var(--bg-base)] overflow-hidden">
       <div className="mx-auto flex h-full w-full max-w-[920px] flex-col bg-[radial-gradient(circle_at_top,rgba(31,45,66,0.28)_0%,rgba(11,16,25,0.96)_40%,var(--bg-base)_100%)]">
-      <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-white/5 bg-[var(--bg-base)]/74 px-4 backdrop-blur-xl">
-        <div className="flex items-center gap-3">
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <div className="shrink-0 border-b border-white/5 bg-[var(--bg-base)]/80 backdrop-blur-xl">
+        {/* Row 1: Back · Title · Actions */}
+        <div className="flex h-14 items-center gap-3 px-4">
           <button
             type="button"
             onClick={handleBackToPrevious}
-            className="inline-flex h-9 items-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-[12px] font-medium text-[var(--text-primary)]"
+            className="inline-flex shrink-0 h-8 items-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-3.5 h-3.5" />
             Back
           </button>
-          <div>
-            <h1 className="text-[15px] font-semibold tracking-wide text-[var(--text-primary)]">{workout.title}</h1>
-            <p className="text-[11px] text-[var(--text-secondary)]">
+
+          <div className="flex-1 min-w-0">
+            <h1 className="text-[15px] font-semibold text-[var(--text-primary)] truncate leading-none">
+              {workout.title}
+            </h1>
+            <p className="text-[11px] text-[var(--text-muted)] mt-0.5 leading-none">
               {workout.exercises.length} exercise{workout.exercises.length === 1 ? '' : 's'}
+              {!isPaused && (
+                <span className="ml-2 text-[var(--accent)]">
+                  {formatElapsedTime(workout.elapsedSeconds)}
+                </span>
+              )}
             </p>
-            <label className="mt-1 inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-semibold text-[var(--text-secondary)]">
-              <CalendarDays className="h-3.5 w-3.5" />
-              <input
-                type="date"
-                value={workoutDateValue}
-                onChange={(event) => handleWorkoutDateChange(event.target.value)}
-                className="bg-transparent text-[#C7D6E4] outline-none"
-                aria-label="Workout date"
-              />
-            </label>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={() => setIsPaused((prev) => !prev)}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              {isPaused ? <Play className="w-3.5 h-3.5 fill-current" /> : <Pause className="w-3.5 h-3.5" />}
+            </button>
+            <button
+              onClick={() => { haptics.complete(); onFinish(); }}
+              className="h-8 rounded-full bg-[var(--accent)] px-4 text-[12px] font-bold text-black"
+            >
+              Finish
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsPaused((prev) => !prev)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[var(--text-secondary)]"
-          >
-            {isPaused ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4" />}
-          </button>
-          <button
-            onClick={() => {
-              haptics.complete();
-              onFinish();
-            }}
-            className="h-9 rounded-full bg-[var(--accent)] px-4 text-[12px] font-bold text-black"
-          >
-            Finish
-          </button>
+        {/* Row 2: Date picker — full-width, easy to tap */}
+        <div className="flex items-center gap-2 px-4 pb-3">
+          <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
+          <input
+            type="date"
+            value={workoutDateValue}
+            onChange={(event) => handleWorkoutDateChange(event.target.value)}
+            className="flex-1 bg-transparent text-[12px] font-medium text-[var(--text-secondary)] outline-none [color-scheme:dark] cursor-pointer"
+            aria-label="Workout date"
+          />
+          {isPaused && (
+            <span className="text-[11px] tabular-nums text-[var(--text-muted)]">
+              {formatElapsedTime(workout.elapsedSeconds)}
+            </span>
+          )}
         </div>
       </div>
 
