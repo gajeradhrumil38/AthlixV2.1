@@ -219,7 +219,9 @@ export const Log: React.FC = () => {
       if (draftMatchesForcedDate) {
         setWorkout(draft);
         setShowQuickStart(false);
-        setOpenPickerOnStart(false);
+        // If user tapped the + FAB (?add=1) we still want the picker to open
+        // even when resuming an existing draft.
+        setOpenPickerOnStart(forceAddExercise);
         return;
       }
       // Draft is for a different date — ignore it, fall through.

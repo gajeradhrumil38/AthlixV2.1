@@ -145,12 +145,11 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
   useEffect(() => {
     if (!openExercisePickerOnStart) return;
-    if (workout.exercises.length > 0) return;
     if (autoOpenedPickerForStartRef.current === workout.startTime) return;
 
     autoOpenedPickerForStartRef.current = workout.startTime;
     setShowExercisePicker(true);
-  }, [openExercisePickerOnStart, workout.exercises.length, workout.startTime]);
+  }, [openExercisePickerOnStart, workout.startTime]);
 
   useEffect(() => {
     if (workout.exercises.length > 0 && activeIndex > workout.exercises.length - 1) {
@@ -568,6 +567,14 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                 <p className="text-[15px] font-semibold text-[var(--text-primary)] mb-1.5">No exercises yet</p>
                 <p className="text-[13px] text-[var(--text-muted)]">Add your first exercise to start tracking.</p>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowExercisePicker(true)}
+                className="flex h-12 items-center gap-2 rounded-xl bg-[var(--accent)] px-6 text-[14px] font-bold text-black"
+              >
+                <Plus className="w-4 h-4" />
+                Add Exercise
+              </button>
             </div>
           ) : (
             /* Exercise list */
