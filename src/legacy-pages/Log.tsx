@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
-import { saveWorkout } from '../lib/supabaseData';
+import { saveWorkout, getWorkouts, type LocalExercise } from '../lib/supabaseData';
 import { QuickStartSheet } from '../components/log/QuickStartSheet';
 import { ActiveWorkout } from '../components/log/ActiveWorkout';
 import { FinishSheet } from '../components/log/FinishSheet';
@@ -204,13 +204,25 @@ export const Log: React.FC = () => {
   // Initialize flow: resume draft -> + shortcut opens picker -> optional start sheet -> direct start
   useEffect(() => {
     if (workout) return;
+    let cancelled = false;
 
     const draft = readDraft();
+
+    // If a specific past date is forced, only load the draft when it matches that date.
+    // Prevents today's in-progress draft from hijacking a past-date edit session.
     if (draft) {
-      setWorkout(draft);
-      setShowQuickStart(false);
-      setOpenPickerOnStart(false);
-      return;
+      const draftDate = formatLocalDate(
+        parseDateTimeInput(draft.startAt) || new Date(draft.startTime),
+      );
+      const draftMatchesForcedDate = !forcedWorkoutDate || draftDate === forcedWorkoutDate;
+
+      if (draftMatchesForcedDate) {
+        setWorkout(draft);
+        setShowQuickStart(false);
+        setOpenPickerOnStart(false);
+        return;
+      }
+      // Draft is for a different date — ignore it, fall through.
     }
 
     if (forceAddExercise) {
@@ -220,6 +232,64 @@ export const Log: React.FC = () => {
       setOpenPickerOnStart(true);
       writeDraft(initialState);
       return;
+    }
+
+    // When a past date is forced, attempt to pre-fill from any existing saved workout.
+    if (forcedWorkoutDate && user) {
+      getWorkouts(user.id, {
+        startDate: forcedWorkoutDate,
+        endDate: forcedWorkoutDate,
+        includeExercises: true,
+      })
+        .then((results) => {
+          if (cancelled) return;
+          const saved = results[0] as (typeof results[0] & { exercises?: LocalExercise[] }) | undefined;
+          const savedRows = saved?.exercises || [];
+
+          // Group individual set-rows (one LocalExercise = one set) back into ExerciseEntry[]
+          const map = new Map<string, ExerciseEntry>();
+          [...savedRows]
+            .sort((a, b) => a.order_index - b.order_index)
+            .forEach((ex) => {
+              if (!map.has(ex.name)) {
+                map.set(ex.name, {
+                  id: crypto.randomUUID(),
+                  name: ex.name,
+                  muscleGroup: ex.muscle_group || '',
+                  exercise_db_id: ex.exercise_db_id || undefined,
+                  sets: [],
+                });
+              }
+              map.get(ex.name)!.sets.push({
+                id: crypto.randomUUID(),
+                weight: ex.weight,
+                reps: ex.reps,
+                done: true,
+              });
+            });
+
+          const preloaded = Array.from(map.values());
+          const state = createWorkoutState(
+            preloaded,
+            saved?.title ?? undefined,
+            forcedWorkoutDate,
+          );
+          setWorkout(state);
+          setShowQuickStart(false);
+          // Open picker immediately so user can add more exercises right away
+          setOpenPickerOnStart(preloaded.length === 0);
+          writeDraft(state);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          // On fetch error, fall back to an empty workout for the forced date
+          const state = createWorkoutState([], undefined, forcedWorkoutDate);
+          setWorkout(state);
+          setShowQuickStart(false);
+          setOpenPickerOnStart(true);
+          writeDraft(state);
+        });
+      return () => { cancelled = true; };
     }
 
     if (showStartSheet) {
@@ -233,7 +303,7 @@ export const Log: React.FC = () => {
     setShowQuickStart(false);
     setOpenPickerOnStart(false);
     writeDraft(initialState);
-  }, [showStartSheet, workout, createWorkoutState, forceAddExercise, forcedWorkoutDate]);
+  }, [showStartSheet, workout, createWorkoutState, forceAddExercise, forcedWorkoutDate, user]);
 
   // Auto-save draft every 30s
   useEffect(() => {
@@ -342,7 +412,7 @@ export const Log: React.FC = () => {
           onBackToPrevious={handleBackToPrevious}
           bodyWeight={profile?.body_weight ?? null}
           bodyWeightUnit={(profile?.body_weight_unit || 'kg') as 'kg' | 'lbs'}
-          allowLiveAddExercise={allowLiveAddExercise}
+          allowLiveAddExercise={allowLiveAddExercise || !!forcedWorkoutDate}
           openExercisePickerOnStart={openPickerOnStart}
           weightUnit={weightUnit}
           distanceUnit={distanceUnit}
