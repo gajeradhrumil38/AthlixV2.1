@@ -28,7 +28,7 @@ const ValueBox: React.FC<{
       onClick={onTap}
       className={`relative flex h-[82px] w-full flex-col items-center justify-center gap-[3px] overflow-hidden rounded-2xl border text-center transition-all active:scale-[0.97] ${
         isDone
-          ? 'border-[var(--accent)]/22 bg-[var(--accent)]/8'
+          ? 'border-[var(--accent)]/38 bg-[var(--bg-elevated)]'
           : 'border-[var(--border)] bg-[var(--bg-elevated)]'
       }`}
     >
@@ -52,14 +52,14 @@ export const SetRow: React.FC<SetRowProps> = ({
     <div
       className={`relative overflow-hidden rounded-2xl border transition-all duration-200 ${
         set.done
-          ? 'border-[var(--accent)]/22 bg-[var(--accent)]/6'
+          ? 'border-[var(--accent)]/45 bg-[var(--bg-surface)]'
           : 'border-[var(--border)] bg-[var(--bg-surface)]'
       }`}
     >
       {/* left accent bar */}
       <div
         className={`absolute left-0 top-0 bottom-0 w-[3px] transition-colors duration-200 ${
-          set.done ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
+          set.done ? 'bg-[var(--accent)]/85' : 'bg-[var(--border)]'
         }`}
       />
 
@@ -69,7 +69,7 @@ export const SetRow: React.FC<SetRowProps> = ({
           <div
             className={`rounded-md px-2 py-[3px] text-[10px] font-bold tracking-[0.14em] uppercase transition-colors duration-200 ${
               set.done
-                ? 'border border-[var(--accent)]/25 bg-[var(--accent-dim)] text-[var(--accent)]'
+                ? 'border border-[var(--accent)]/35 bg-transparent text-[var(--accent)]'
                 : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)]'
             }`}
           >
@@ -87,7 +87,7 @@ export const SetRow: React.FC<SetRowProps> = ({
           aria-label={set.done ? `Mark set ${index} incomplete` : `Mark set ${index} complete`}
           className={`h-[46px] w-[46px] rounded-full border flex items-center justify-center transition-all duration-200 active:scale-95 ${
             set.done
-              ? 'border-[var(--accent)]/40 bg-[var(--accent-dim)] text-[var(--accent)]'
+              ? 'border-[var(--accent)]/60 bg-[var(--bg-elevated)] text-[var(--accent)]'
               : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)]'
           }`}
         >

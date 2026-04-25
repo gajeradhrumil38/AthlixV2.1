@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Activity, ArrowLeft, CalendarDays, ChevronRight, Pause, Play, Plus } from 'lucide-react';
+import { Activity, ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Pause, Play, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { WorkoutState, ExerciseEntry, Set } from '../../legacy-pages/Log';
 import { ExerciseContent } from './ExerciseContent';
@@ -117,7 +117,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   const [hiddenPrefillExerciseIds, setHiddenPrefillExerciseIds] = useState<string[]>([]);
   const autoOpenedPickerForStartRef = useRef<number | null>(null);
   const addExerciseInFlightRef = useRef(false);
-  const dateInputRef = useRef<HTMLInputElement>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   const createSetId = () =>
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -519,24 +519,13 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             </p>
           </div>
 
-          {/* DateChip — calendar icon button that opens a hidden native picker */}
           <button
             type="button"
-            onClick={() => { dateInputRef.current?.showPicker?.(); }}
-            className="relative inline-flex shrink-0 h-8 items-center gap-1.5 rounded-xl border border-white/10 bg-[var(--bg-surface)] px-2.5 text-[12px] font-medium text-[var(--text-secondary)] cursor-pointer"
+            onClick={() => setShowCalendar(true)}
+            className="inline-flex shrink-0 h-8 items-center gap-1.5 rounded-xl border border-white/10 bg-[var(--bg-surface)] px-2.5 text-[12px] font-medium text-[var(--text-secondary)] cursor-pointer"
           >
             <CalendarDays className="w-3 h-3 text-[var(--text-muted)]" />
             <span>{fmtWorkoutDate(workoutDateValue)}</span>
-            <input
-              ref={dateInputRef}
-              type="date"
-              value={workoutDateValue}
-              max={todayDateStr}
-              onChange={(e) => handleWorkoutDateChange(e.target.value)}
-              className="absolute opacity-0 pointer-events-none w-px h-px"
-              aria-hidden
-              tabIndex={-1}
-            />
           </button>
         </div>
 
@@ -717,6 +706,175 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
           />
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {showCalendar && (
+          <CalendarPicker
+            value={workoutDateValue}
+            maxDate={todayDateStr}
+            onSelect={handleWorkoutDateChange}
+            onClose={() => setShowCalendar(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
+  );
+};
+
+// ── CalendarPicker ────────────────────────────────────────────────────────────
+const MONTH_NAMES = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
+];
+const DAY_LABELS = ['M','T','W','T','F','S','S'];
+
+const CalendarPicker: React.FC<{
+  value: string;
+  maxDate: string;
+  onSelect: (date: string) => void;
+  onClose: () => void;
+}> = ({ value, maxDate, onSelect, onClose }) => {
+  const parsedSelected = parseDateInputValue(value);
+  const parsedMax = parseDateInputValue(maxDate);
+
+  const [viewYear, setViewYear] = useState(() => parsedSelected?.getFullYear() ?? new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => parsedSelected?.getMonth() ?? new Date().getMonth());
+
+  const today = new Date();
+  const todayY = today.getFullYear();
+  const todayM = today.getMonth();
+  const todayD = today.getDate();
+
+  const firstDow = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7; // Mon=0
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const cells: (number | null)[] = [
+    ...Array<null>(firstDow).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const isSelected = (d: number) =>
+    parsedSelected?.getFullYear() === viewYear &&
+    parsedSelected?.getMonth() === viewMonth &&
+    parsedSelected?.getDate() === d;
+
+  const isToday = (d: number) => todayY === viewYear && todayM === viewMonth && todayD === d;
+
+  const isDisabled = (d: number) => {
+    if (!parsedMax) return false;
+    const cell = new Date(viewYear, viewMonth, d);
+    cell.setHours(0, 0, 0, 0);
+    const max = new Date(parsedMax);
+    max.setHours(0, 0, 0, 0);
+    return cell > max;
+  };
+
+  const canGoNext = !(viewYear === todayY && viewMonth === todayM);
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (!canGoNext) return;
+    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); }
+    else setViewMonth(m => m + 1);
+  };
+
+  const handleSelect = (d: number) => {
+    if (isDisabled(d)) return;
+    onSelect(`${viewYear}-${pad2(viewMonth + 1)}-${pad2(d)}`);
+    onClose();
+  };
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-end justify-center px-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <motion.div
+        initial={{ y: 24, opacity: 0, scale: 0.97 }}
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        exit={{ y: 24, opacity: 0, scale: 0.97 }}
+        transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+        className="relative w-full max-w-sm rounded-2xl p-5 mb-[max(16px,env(safe-area-inset-bottom))]"
+        style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.08)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Month navigation */}
+        <div className="flex items-center justify-between mb-5">
+          <button
+            type="button"
+            onClick={prevMonth}
+            className="w-8 h-8 flex items-center justify-center rounded-xl transition-colors"
+            style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="text-[14px] font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            {MONTH_NAMES[viewMonth]} {viewYear}
+          </span>
+          <button
+            type="button"
+            onClick={nextMonth}
+            disabled={!canGoNext}
+            className="w-8 h-8 flex items-center justify-center rounded-xl transition-colors"
+            style={{
+              background: canGoNext ? 'var(--bg-elevated)' : 'transparent',
+              color: canGoNext ? 'var(--text-secondary)' : 'var(--text-muted)',
+              opacity: canGoNext ? 1 : 0.3,
+            }}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Day-of-week labels */}
+        <div className="grid grid-cols-7 mb-1">
+          {DAY_LABELS.map((label, i) => (
+            <div key={i} className="text-center text-[11px] font-semibold py-1.5" style={{ color: 'var(--text-muted)' }}>
+              {label}
+            </div>
+          ))}
+        </div>
+
+        {/* Day grid */}
+        <div className="grid grid-cols-7 gap-y-0.5">
+          {cells.map((day, i) => {
+            if (day === null) return <div key={i} className="h-9" />;
+            const selected = isSelected(day);
+            const todayCell = isToday(day);
+            const disabled = isDisabled(day);
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => handleSelect(day)}
+                disabled={disabled}
+                className="relative flex items-center justify-center h-9 w-9 mx-auto rounded-xl text-[13px] transition-colors"
+                style={{
+                  background: selected ? 'var(--accent)' : 'transparent',
+                  color: selected ? '#000' : disabled ? 'var(--text-muted)' : 'var(--text-primary)',
+                  opacity: disabled ? 0.3 : 1,
+                  fontWeight: selected || todayCell ? 700 : 500,
+                }}
+              >
+                {day}
+                {todayCell && !selected && (
+                  <span
+                    className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
+                    style={{ background: 'var(--accent)' }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
+    </motion.div>
   );
 };
