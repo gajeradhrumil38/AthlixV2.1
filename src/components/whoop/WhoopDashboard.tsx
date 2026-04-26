@@ -7,7 +7,7 @@ import type { WhoopRecovery, WhoopSleep, WhoopCycle } from '../../types/whoop';
 
 type Tab = 'day' | 'week' | 'month';
 
-const TAB_DAYS: Record<Tab, number> = { day: 3, week: 7, month: 30 };
+const TAB_DAYS: Record<Tab, number> = { day: 7, week: 7, month: 30 };
 
 function buildDateRange(days: number) {
   const end = new Date();
@@ -208,12 +208,12 @@ export const WhoopDashboard: React.FC = () => {
   if (tab === 'day') {
     recoveryVal = recovery[0]?.recovery_score ?? null;
     strainVal = steps[0]?.strain_score ?? null;
-    sleepVal = sleep[0]?.sleep_efficiency_percentage ?? null;
+    sleepVal = sleep[0]?.sleep_performance_percentage ?? null;
   } else {
     recoveryVal = numAvg(recovery.map((r) => r.recovery_score));
     const strainArr = steps.filter((s) => s.strain_score != null).map((s) => s.strain_score!);
     strainVal = numAvg(strainArr);
-    sleepVal = numAvg(sleep.map((s) => s.sleep_efficiency_percentage));
+    sleepVal = numAvg(sleep.map((s) => s.sleep_performance_percentage));
   }
 
   // ── Sub-stats (day only) ───────────────────────────────────
@@ -223,14 +223,14 @@ export const WhoopDashboard: React.FC = () => {
 
   const hrv = todayRec?.hrv_rmssd_milli ?? null;
   const rhr = todayRec?.resting_heart_rate ?? null;
-  const inBedHours = todaySleep ? (todaySleep.total_in_bed_time_milli / 3_600_000).toFixed(1) : null;
+  const inBedHours = todaySleep ? (todaySleep.total_in_bed_duration_milli / 3_600_000).toFixed(1) : null;
   const strain = todayStep?.strain_score ?? null;
 
   // Week/month: compute averages for sub-stats
   const avgRecovery = tab !== 'day' ? numAvg(recovery.map((r) => r.recovery_score)) : null;
   const avgHrv = tab !== 'day' ? numAvg(recovery.map((r) => r.hrv_rmssd_milli)) : null;
   const avgRhr = tab !== 'day' ? numAvg(recovery.map((r) => r.resting_heart_rate)) : null;
-  const avgSleep = tab !== 'day' ? numAvg(sleep.map((s) => s.sleep_efficiency_percentage)) : null;
+  const avgSleep = tab !== 'day' ? numAvg(sleep.map((s) => s.sleep_performance_percentage)) : null;
   const avgStrain = tab !== 'day' ? numAvg(steps.filter((s) => s.strain_score != null).map((s) => s.strain_score!)) : null;
   const lastDate = recovery[0]?.date ? format(new Date(recovery[0].date), 'MMM d') : null;
 
@@ -315,7 +315,7 @@ export const WhoopDashboard: React.FC = () => {
               value={sleepVal}
               max={100}
               color="#60a5fa"
-              label="Sleep"
+              label="Performance"
               status={sleepVal != null ? sleepStatus(sleepVal) : ''}
               unit="%"
             />

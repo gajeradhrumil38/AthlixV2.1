@@ -8,9 +8,10 @@ export interface WhoopRecovery {
 
 export interface WhoopSleep {
   date: string;
+  sleep_performance_percentage: number;
   sleep_efficiency_percentage: number;
-  total_in_bed_time_milli: number;
-  total_slow_wave_sleep_time_milli?: number;
+  total_in_bed_duration_milli: number;
+  total_slow_wave_sleep_duration_milli?: number;
 }
 
 export interface WhoopHeartRate {

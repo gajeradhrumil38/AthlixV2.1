@@ -192,15 +192,16 @@ export const whoopService = {
     const path = `/v1/activity/sleep?start=${startDate}&end=${endDate}&limit=25`;
     const records = await fetchAllPages<WhoopSleep>(path, (body) =>
       ((body.records as Record<string, unknown>[]) || [])
-        .filter((r) => !r.nap && r.score_state === 'SCORED')
+        .filter((r) => !r.nap && (r.score_state === 'SCORED' || r.score_state === 'PENDING_SCORE'))
         .map((r) => {
           const score = r.score as Record<string, unknown>;
           const stages = score?.stage_summary as Record<string, number> | undefined;
           return {
             date: format(new Date(r.start as string), 'yyyy-MM-dd'),
+            sleep_performance_percentage: (score?.sleep_performance_percentage as number) ?? 0,
             sleep_efficiency_percentage: (score?.sleep_efficiency_percentage as number) ?? 0,
-            total_in_bed_time_milli: stages?.total_in_bed_time_milli ?? 0,
-            total_slow_wave_sleep_time_milli: stages?.total_slow_wave_sleep_time_milli,
+            total_in_bed_duration_milli: stages?.total_in_bed_duration_milli ?? 0,
+            total_slow_wave_sleep_duration_milli: stages?.total_slow_wave_sleep_duration_milli,
           };
         }),
     );
