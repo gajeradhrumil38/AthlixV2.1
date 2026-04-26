@@ -224,20 +224,7 @@ export const WhoopDashboard: React.FC = () => {
 
   if (connectionLoading) return null;
 
-  if (!connected) {
-    return (
-      <div
-        className="rounded-2xl border border-dashed p-5 text-center animate-card-enter"
-        style={{ borderColor: 'var(--border)', animationDelay: '420ms' }}
-      >
-        <Activity className="w-6 h-6 mx-auto mb-2 opacity-40" style={{ color: 'var(--accent)' }} />
-        <p className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>WHOOP not connected</p>
-        <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-          Connect your account in Settings → Integrations
-        </p>
-      </div>
-    );
-  }
+  if (!connected) return null;
 
   // ── Compute ring values ────────────────────────────────────
   let recoveryVal: number | null = null;

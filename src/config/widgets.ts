@@ -19,15 +19,6 @@ export const ALL_WIDGETS: WidgetConfig[] = [
     defaultOrder: 1
   },
   {
-    id: 'quick_stats',
-    name: 'Quick Stats',
-    description: 'Streak · Sessions · Volume · Progress',
-    icon: 'quick_stats',
-    defaultVisible: true,
-    canHide: true,
-    defaultOrder: 2
-  },
-  {
     id: 'weekly_goal',
     name: 'Weekly Goal',
     description: 'Weekly training progress chart',

@@ -5,7 +5,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, isSameDay, isSameWeek, isSameMonth, addWeeks, subWeeks, subDays, addDays, addMonths, subMonths, isAfter, startOfDay } from 'date-fns';
 import { MuscleMap, MuscleData } from '../components/home/MuscleMap';
 import { WeeklyRing } from '../components/home/WeeklyRing';
-import { ThreeRingHero } from '../components/home/ThreeRingHero';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useDashboardLayout } from '../hooks/useDashboardLayout';
 import { getBodyWeightLogs, getPersonalRecords, getWorkouts } from '../lib/supabaseData';
@@ -413,16 +412,8 @@ export const Home: React.FC = () => {
     return isSameMonth(currentDate, now);
   }, [viewMode, currentDate]);
 
-  // Dynamic Ring Calculations
-  const volumeScore = Math.min((totalVolume / 15000) * 100, 100); // Example: 15k is 100%
-  const recoveryScore = Math.max(100 - (trainedDaysCount * 15), 10); // Example
-  const strainScore = Math.min((trainedDaysCount / 5) * 100, 100); // Example: 5 days is 100%
-
   // --- Alert Logic ---
   const alert = useMemo(() => {
-    if (strainScore > 90) {
-      return { type: 'warning', icon: 'warning', text: 'High strain detected. Prioritize recovery today.', color: 'var(--red)' };
-    }
     if (trainedMuscleGroups.includes('Chest') && !trainedMuscleGroups.includes('Back')) {
       return { type: 'imbalance', icon: 'imbalance', text: 'Muscle imbalance: You trained Chest but not Back.', color: 'var(--yellow)' };
     }
@@ -554,7 +545,7 @@ export const Home: React.FC = () => {
         </div>
       </div>
     ),
-    quick_stats: <div key="quick_stats"><ThreeRingHero volume={volumeScore} recovery={recoveryScore} strain={strainScore} /></div>,
+    quick_stats: null,
     muscle_map: (
       <div key="muscle_map" ref={muscleMapRef} className="flex flex-col h-full">
         <MuscleMap muscleData={muscleMapData} view={muscleView} onViewChange={setMuscleView} title={muscleMapTitle} />
