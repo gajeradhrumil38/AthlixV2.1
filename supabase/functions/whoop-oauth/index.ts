@@ -9,6 +9,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const REDIRECT_URI = `${SUPABASE_URL}/functions/v1/whoop-oauth`;
 const TOKEN_URL = 'https://api.prod.whoop.com/oauth/oauth2/token';
 const PROFILE_URL = 'https://api.prod.whoop.com/developer/v1/user/profile/basic';
+const WHOOP_API_BASE = 'https://api.prod.whoop.com/developer';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -22,13 +23,55 @@ function json(body: unknown, status = 200) {
   });
 }
 
+async function resolveToken(sb: any, userId: string): Promise<string | null> {
+  const { data: row } = await sb
+    .from('whoop_tokens')
+    .select('access_token, expires_at, refresh_token')
+    .eq('user_id', userId)
+    .single();
+
+  if (!row) return null;
+
+  let accessToken = row.access_token as string;
+  const expiresAt = row.expires_at ? new Date(row.expires_at as string).getTime() : Infinity;
+
+  if (Date.now() >= expiresAt - 5 * 60 * 1000 && row.refresh_token) {
+    const res = await fetch(TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: row.refresh_token as string,
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+      }),
+    });
+    if (res.ok) {
+      const t = await res.json() as any;
+      accessToken = t.access_token;
+      await sb.from('whoop_tokens').upsert({
+        user_id: userId,
+        access_token: t.access_token,
+        refresh_token: t.refresh_token ?? row.refresh_token,
+        expires_at: new Date(Date.now() + t.expires_in * 1000).toISOString(),
+      });
+    }
+  }
+
+  return accessToken;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
 
   const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-  // ── POST: refresh an expiring access token ─────────────────
+  // ── POST: action-based handler ─────────────────────────────
   if (req.method === 'POST') {
+    let body: any = {};
+    try { body = await req.json(); } catch { /* ignore */ }
+
+    const action = (body.action as string) ?? 'refresh';
     const auth = req.headers.get('Authorization');
     if (!auth) return json({ error: 'Unauthorized' }, 401);
 
@@ -36,38 +79,59 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: authErr } = await sb.auth.getUser(jwt);
     if (authErr || !user) return json({ error: 'Unauthorized' }, 401);
 
-    const { data: row } = await sb
-      .from('whoop_tokens')
-      .select('refresh_token')
-      .eq('user_id', user.id)
-      .single();
+    // ── refresh: exchange refresh token for new access token ───
+    if (action === 'refresh') {
+      const { data: row } = await sb
+        .from('whoop_tokens')
+        .select('refresh_token')
+        .eq('user_id', user.id)
+        .single();
 
-    if (!row?.refresh_token) return json({ error: 'Not connected' }, 404);
+      if (!row?.refresh_token) return json({ error: 'Not connected' }, 404);
 
-    const tokenRes = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: row.refresh_token,
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-      }),
-    });
+      const tokenRes = await fetch(TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: row.refresh_token as string,
+          client_id: CLIENT_ID,
+          client_secret: CLIENT_SECRET,
+        }),
+      });
 
-    if (!tokenRes.ok) return json({ error: 'Token refresh failed' }, 400);
+      if (!tokenRes.ok) return json({ error: 'Token refresh failed' }, 400);
 
-    const t = await tokenRes.json() as any;
-    const expiresAt = new Date(Date.now() + t.expires_in * 1000).toISOString();
+      const t = await tokenRes.json() as any;
+      const expiresAt = new Date(Date.now() + t.expires_in * 1000).toISOString();
 
-    await sb.from('whoop_tokens').upsert({
-      user_id: user.id,
-      access_token: t.access_token,
-      refresh_token: t.refresh_token ?? row.refresh_token,
-      expires_at: expiresAt,
-    });
+      await sb.from('whoop_tokens').upsert({
+        user_id: user.id,
+        access_token: t.access_token,
+        refresh_token: t.refresh_token ?? row.refresh_token,
+        expires_at: expiresAt,
+      });
 
-    return json({ access_token: t.access_token, expires_at: expiresAt });
+      return json({ access_token: t.access_token, expires_at: expiresAt });
+    }
+
+    // ── fetch: server-side proxy for WHOOP API (avoids browser CORS) ──
+    if (action === 'fetch') {
+      const path = body.path as string;
+      if (!path) return json({ error: 'Missing path' }, 400);
+
+      const accessToken = await resolveToken(sb, user.id);
+      if (!accessToken) return json({ error: 'Not connected' }, 404);
+
+      const whoopRes = await fetch(`${WHOOP_API_BASE}${path}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      const data = await whoopRes.json().catch(() => ({}));
+      return json(data, whoopRes.status);
+    }
+
+    return json({ error: 'Unknown action' }, 400);
   }
 
   // ── GET: OAuth callback from WHOOP ─────────────────────────
@@ -98,7 +162,6 @@ Deno.serve(async (req: Request) => {
     return errorRedirect(oauthErrorDesc ?? oauthError ?? 'OAuth cancelled');
   }
 
-  // Exchange authorization code for tokens
   const tokenRes = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
