@@ -157,11 +157,15 @@ export const WhoopDashboard: React.FC = () => {
   }, [user?.id]);
 
   const fetchAll = useCallback(async () => {
-    if (!connected) return;
+    if (!connected || !user?.id) return;
     const { start, end } = buildDateRange(TAB_DAYS[tab]);
     setLoading(true);
     setError(null);
     try {
+      // Refresh the token once before parallel calls — refresh tokens are single-use,
+      // so concurrent refreshes would invalidate each other.
+      await whoopService.getStoredToken(user.id);
+
       const [rec, slp, stps] = await Promise.all([
         whoopService.fetchRecovery(start, end),
         whoopService.fetchSleep(start, end),
@@ -175,7 +179,7 @@ export const WhoopDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [connected, tab]);
+  }, [connected, tab, user?.id]);
 
   useEffect(() => { void fetchAll(); }, [fetchAll]);
 

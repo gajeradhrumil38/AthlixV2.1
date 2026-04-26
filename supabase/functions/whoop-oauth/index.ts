@@ -127,6 +127,12 @@ Deno.serve(async (req: Request) => {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
+      // WHOOP returns 404 for list endpoints when no records exist in the period
+      // (rather than an empty records array). Normalise to empty so UI shows "no data".
+      if (whoopRes.status === 404) {
+        return json({ records: [], next_token: null, values: [] });
+      }
+
       const data = await whoopRes.json().catch(() => ({}));
       return json(data, whoopRes.status);
     }
