@@ -283,6 +283,9 @@ export const Settings: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [nameChanged, setNameChanged] = useState(false);
   const [metricsChanged, setMetricsChanged] = useState(false);
+  const [defaultView, setDefaultView] = useState<'Day' | 'Week'>(
+    () => (localStorage.getItem('defaultView') as 'Day' | 'Week') || 'Week'
+  );
 
   useEffect(() => {
     setDraftProfile(profile);
@@ -479,6 +482,23 @@ export const Settings: React.FC = () => {
             value={draftProfile?.theme_preference || 'dark'}
             onChange={handleThemeChange}
             disabled={saving}
+          />
+        </Row>
+
+        {/* Default view */}
+        <Row>
+          <RowLabel
+            icon={<LayoutDashboard className="w-4 h-4" />}
+            title="Default View"
+            subtitle="Starting tab on the home screen"
+          />
+          <SegmentControl
+            options={['Day', 'Week']}
+            value={defaultView}
+            onChange={(v) => {
+              localStorage.setItem('defaultView', v);
+              setDefaultView(v as 'Day' | 'Week');
+            }}
           />
         </Row>
 

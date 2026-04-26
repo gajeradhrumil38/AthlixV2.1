@@ -28,6 +28,7 @@ export const Layout: React.FC = () => {
   );
   const [tappedTab, setTappedTab] = useState<string | null>(null);
   const isImmersiveRoute = location.pathname === '/log';
+  const isHomeRoute = location.pathname === '/';
   const swipeStartRef = useRef<{ x: number; y: number; ts: number } | null>(null);
   const tapTimerRef = useRef<number | null>(null);
 
@@ -140,7 +141,7 @@ export const Layout: React.FC = () => {
       </aside>
 
       {/* ── Mobile top header ─────────────────────────── */}
-      {!isImmersiveRoute && (
+      {!isImmersiveRoute && !isHomeRoute && (
         <header
           className="md:hidden fixed top-0 left-0 right-0 z-[90]"
           style={{
@@ -186,14 +187,16 @@ export const Layout: React.FC = () => {
         className={`flex-1 flex flex-col h-full relative overflow-y-auto ${
           isImmersiveRoute
             ? ''
-            : 'pt-[calc(54px+env(safe-area-inset-top))] pb-[calc(72px+env(safe-area-inset-bottom))] md:pt-0 md:pb-0'
+            : isHomeRoute
+              ? 'pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0'
+              : 'pt-[calc(54px+env(safe-area-inset-top))] pb-[calc(72px+env(safe-area-inset-bottom))] md:pt-0 md:pb-0'
         }`}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
         <div
           className={`flex-1 w-full ${
-            isImmersiveRoute
+            isImmersiveRoute || isHomeRoute
               ? ''
               : 'px-3 pt-4 pb-6 sm:px-5 md:px-8 md:pt-8 md:pb-8'
           }`}
