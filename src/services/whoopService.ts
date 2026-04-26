@@ -7,7 +7,8 @@ const EDGE_FN = 'https://mrntwydykqsdawpklumf.supabase.co/functions/v1';
 const WHOOP_CLIENT_ID = 'd00b485b-7052-4a22-ad29-c57ab43f0817';
 const WHOOP_REDIRECT_URI = `${EDGE_FN}/whoop-oauth`;
 const WHOOP_AUTH_URL = 'https://api.prod.whoop.com/oauth/oauth2/auth';
-const WHOOP_SCOPES = 'read:recovery read:cycles read:sleep read:workout read:profile read:body_measurement';
+// offline is required to receive a refresh_token (per WHOOP docs)
+const WHOOP_SCOPES = 'offline read:recovery read:cycles read:sleep read:workout read:profile read:body_measurement';
 
 
 // Session-level cache — invalidated on page reload
@@ -65,9 +66,11 @@ async function fetchAllPages<T>(
 export const whoopService = {
   // ── OAuth helpers ──────────────────────────────────────────
 
-  /** Build the WHOOP OAuth authorization URL — redirect the browser to this. */
+  /** Build the WHOOP OAuth authorization URL. Opens in a popup — postMessages result back. */
   buildAuthUrl(userId: string): string {
-    const state = btoa(JSON.stringify({ userId, returnUrl: window.location.href }));
+    // Callback page is /#/whoop/callback — it sends postMessage then closes the popup
+    const callbackPage = `${window.location.origin}/#/whoop/callback`;
+    const state = btoa(JSON.stringify({ userId, returnUrl: callbackPage }));
     const params = new URLSearchParams({
       client_id: WHOOP_CLIENT_ID,
       redirect_uri: WHOOP_REDIRECT_URI,
@@ -121,6 +124,17 @@ export const whoopService = {
       .single();
 
     return data ? { connected: true, connectedAt: data.created_at as string } : { connected: false };
+  },
+
+  /** Validate a personal access token then store it (fallback for when OAuth popup fails). */
+  async connect(userId: string, token: string): Promise<void> {
+    await whoopFetch(token, '/v1/user/profile/basic');
+    await supabase.from('whoop_tokens').upsert({
+      user_id: userId,
+      access_token: token,
+      refresh_token: null,
+      expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    });
   },
 
   /** Remove the stored WHOOP token for a user. */

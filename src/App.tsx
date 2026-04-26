@@ -19,6 +19,7 @@ import { Settings } from './legacy-pages/Settings';
 import { Progress } from './legacy-pages/Progress';
 
 import { DashboardLayoutEditor } from './legacy-pages/DashboardLayoutEditor';
+import { WhoopCallback } from './legacy-pages/WhoopCallback';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -44,6 +45,7 @@ export default function App() {
           <HashRouter>
             <Routes>
               <Route path="/auth" element={<Auth />} />
+              <Route path="/whoop/callback" element={<WhoopCallback />} />
               <Route path="/privacy" element={<RedirectToStatic path={`${staticBase}privacy.html`} />} />
               <Route path="/terms" element={<RedirectToStatic path={`${staticBase}terms.html`} />} />
               <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>

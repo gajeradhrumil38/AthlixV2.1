@@ -5,7 +5,7 @@ import {
   Moon, Scale, Activity, LogOut, LayoutDashboard,
   ChevronRight, Trash2, Dumbbell, User, Save, Loader2, CheckCircle, XCircle,
 } from 'lucide-react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { convertWeight, type WeightUnit } from '../lib/units';
 import { whoopService } from '../services/whoopService';
 
@@ -13,8 +13,11 @@ import { whoopService } from '../services/whoopService';
 const WhoopConnect: React.FC<{ userId: string }> = ({ userId }) => {
   const [status, setStatus] = useState<'loading' | 'connected' | 'disconnected'>('loading');
   const [connectedAt, setConnectedAt] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
-  const [, setSearchParams] = useSearchParams();
+  const [showTokenFallback, setShowTokenFallback] = useState(false);
+  const [tokenDraft, setTokenDraft] = useState('');
+  const [validating, setValidating] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -24,33 +27,73 @@ const WhoopConnect: React.FC<{ userId: string }> = ({ userId }) => {
     });
   }, [userId]);
 
-  // Handle OAuth redirect result (?whoop=connected or ?whoop=error in hash search)
-  useEffect(() => {
-    const hash = window.location.hash; // e.g. "#/settings?whoop=connected"
-    const qIdx = hash.indexOf('?');
-    if (qIdx === -1) return;
-    const params = new URLSearchParams(hash.slice(qIdx + 1));
-    const result = params.get('whoop');
-    const msg = params.get('msg');
-    if (!result) return;
-
-    if (result === 'connected') {
-      toast.success('WHOOP connected successfully');
-      setStatus('connected');
-      whoopService.getConnectionInfo(userId).then((info) => {
-        if (info?.connectedAt) setConnectedAt(info.connectedAt);
-      });
-    } else if (result === 'error') {
-      toast.error(msg ? decodeURIComponent(msg) : 'WHOOP connection failed');
-      setStatus('disconnected');
-    }
-    // Clear the search params from the hash so toast won't re-fire on refresh
-    setSearchParams({}, { replace: true });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const markConnected = () => {
+    setStatus('connected');
+    setConnecting(false);
+    whoopService.getConnectionInfo(userId).then((info) => {
+      if (info?.connectedAt) setConnectedAt(info.connectedAt);
+    });
+  };
 
   const handleConnect = () => {
-    window.location.href = whoopService.buildAuthUrl(userId);
+    const authUrl = whoopService.buildAuthUrl(userId);
+    const features = 'popup=yes,width=520,height=680,left=200,top=80';
+    const popup = window.open(authUrl, 'whoop-auth', features);
+
+    if (!popup || popup.closed) {
+      // Popup was blocked — fall back to full-page redirect
+      window.location.href = authUrl;
+      return;
+    }
+
+    setConnecting(true);
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as { type?: string; result?: string; msg?: string };
+      if (data?.type !== 'whoop-oauth') return;
+      window.removeEventListener('message', onMessage);
+      clearInterval(pollClosed);
+
+      if (data.result === 'connected') {
+        toast.success('WHOOP connected!');
+        markConnected();
+      } else {
+        const msg = data.msg ? decodeURIComponent(data.msg) : 'WHOOP connection failed';
+        toast.error(msg);
+        setConnecting(false);
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+
+    // Clean up if user manually closes the popup
+    const pollClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(pollClosed);
+        window.removeEventListener('message', onMessage);
+        setConnecting(false);
+      }
+    }, 600);
+  };
+
+  // Fallback: paste access token directly (for when OAuth popup can't reach id.whoop.com)
+  const handleTokenConnect = async () => {
+    const t = tokenDraft.trim();
+    if (!t) return;
+    setValidating(true);
+    try {
+      await whoopService.connect(userId, t);
+      setTokenDraft('');
+      setShowTokenFallback(false);
+      toast.success('WHOOP connected');
+      markConnected();
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      toast.error(e?.status === 401 ? 'Invalid token — check your access token' : (e?.message ?? 'Could not connect'));
+    } finally {
+      setValidating(false);
+    }
   };
 
   const handleDisconnect = async () => {
@@ -92,14 +135,58 @@ const WhoopConnect: React.FC<{ userId: string }> = ({ userId }) => {
           <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
             Connect your WHOOP account to sync Recovery, Sleep, Heart Rate, Steps &amp; Strain.
           </p>
+
+          {/* Primary: OAuth popup */}
           <button
             type="button"
             onClick={handleConnect}
-            className="w-full h-10 rounded-xl bg-[var(--accent)] text-black text-[13px] font-bold flex items-center justify-center gap-2 transition-opacity"
+            disabled={connecting}
+            className="w-full h-10 rounded-xl bg-[var(--accent)] text-black text-[13px] font-bold flex items-center justify-center gap-2 disabled:opacity-60 transition-opacity"
           >
-            <Activity className="w-4 h-4" />
-            Connect with WHOOP
+            {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+            {connecting ? 'Waiting for WHOOP login…' : 'Connect with WHOOP'}
           </button>
+
+          {/* Fallback: manual token */}
+          <button
+            type="button"
+            onClick={() => setShowTokenFallback((v) => !v)}
+            className="w-full text-[11px] text-center"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            {showTokenFallback ? 'Hide manual option ↑' : 'OAuth not working? Use access token instead ↓'}
+          </button>
+
+          {showTokenFallback && (
+            <div className="space-y-2">
+              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                Get a token from{' '}
+                <a href="https://developer.whoop.com" target="_blank" rel="noreferrer"
+                  className="underline" style={{ color: 'var(--accent)' }}>
+                  developer.whoop.com
+                </a>
+                {' '}→ your app → <strong>Test</strong> tab → generate token.
+              </p>
+              <input
+                type="password"
+                placeholder="Paste access token"
+                value={tokenDraft}
+                onChange={(e) => setTokenDraft(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void handleTokenConnect()}
+                className="w-full h-10 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-xl px-3.5 text-[14px] text-[var(--text-primary)] outline-none focus:border-[var(--accent)]/60 transition-colors"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => void handleTokenConnect()}
+                disabled={validating || !tokenDraft.trim()}
+                className="w-full h-9 rounded-xl border border-[var(--accent)]/40 text-[var(--accent)] text-[12px] font-bold flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
+              >
+                {validating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                {validating ? 'Validating…' : 'Connect with token'}
+              </button>
+            </div>
+          )}
         </>
       )}
 
