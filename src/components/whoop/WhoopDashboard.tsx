@@ -230,7 +230,7 @@ export const WhoopDashboard: React.FC = () => {
 
   const hrv = todayRec?.hrv_rmssd_milli ?? null;
   const rhr = todayRec?.resting_heart_rate ?? null;
-  const inBedHours = todaySleep ? (todaySleep.total_in_bed_duration_milli / 3_600_000).toFixed(1) : null;
+  const inBedHours = todaySleep ? (todaySleep.total_in_bed_time_milli / 3_600_000).toFixed(1) : null;
   const strain = todayStep?.strain_score ?? null;
 
   // Week/month: compute averages for sub-stats

@@ -3,6 +3,7 @@ export interface WhoopRecovery {
   recovery_score: number;
   hrv_rmssd_milli: number;
   resting_heart_rate: number;
+  spo2_percentage?: number;
   skin_temp_celsius?: number;
 }
 
@@ -10,8 +11,9 @@ export interface WhoopSleep {
   date: string;
   sleep_performance_percentage: number;
   sleep_efficiency_percentage: number;
-  total_in_bed_duration_milli: number;
-  total_slow_wave_sleep_duration_milli?: number;
+  total_in_bed_time_milli: number;
+  total_slow_wave_sleep_time_milli?: number;
+  total_rem_sleep_time_milli?: number;
 }
 
 export interface WhoopHeartRate {
@@ -24,4 +26,6 @@ export interface WhoopCycle {
   estimated_steps: number;
   raw_kilojoules: number;
   strain_score?: number;
+  average_heart_rate?: number;
+  max_heart_rate?: number;
 }

@@ -135,7 +135,7 @@ export const whoopService = {
   /** Validate a personal access token then store it (fallback for when OAuth popup fails). */
   async connect(userId: string, token: string): Promise<void> {
     // Validate by calling WHOOP directly (not proxied — just for the initial token check)
-    const res = await fetch(`${BASE}/v1/user/profile/basic`, {
+    const res = await fetch(`${BASE}/v2/user/profile/basic`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error('Invalid token');
@@ -157,7 +157,7 @@ export const whoopService = {
 
   /** Validates token — throws on 401/other errors */
   async validateToken(token: string): Promise<{ user_id: number; email: string; first_name: string; last_name: string }> {
-    const res = await fetch(`${BASE}/v1/user/profile/basic`, {
+    const res = await fetch(`${BASE}/v2/user/profile/basic`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error('Invalid token');
@@ -170,10 +170,9 @@ export const whoopService = {
     const cached = getCached<WhoopRecovery[]>(key);
     if (cached) return cached;
 
-    // No date filter → fetch most recent scored records (descending order from WHOOP)
     const path = startDate && endDate
-      ? `/v1/recovery?start=${startDate}&end=${endDate}&limit=25`
-      : `/v1/recovery?limit=10`;
+      ? `/v2/recovery?start=${startDate}&end=${endDate}&limit=25`
+      : `/v2/recovery?limit=10`;
 
     const records = await fetchAllPages<WhoopRecovery>(path, (body) =>
       ((body.records as Record<string, unknown>[]) || [])
@@ -183,6 +182,7 @@ export const whoopService = {
           recovery_score: (r.score as Record<string, number>)?.recovery_score ?? 0,
           hrv_rmssd_milli: (r.score as Record<string, number>)?.hrv_rmssd_milli ?? 0,
           resting_heart_rate: (r.score as Record<string, number>)?.resting_heart_rate ?? 0,
+          spo2_percentage: (r.score as Record<string, number>)?.spo2_percentage,
           skin_temp_celsius: (r.score as Record<string, number>)?.skin_temp_celsius,
         })),
     );
@@ -198,40 +198,26 @@ export const whoopService = {
     if (cached) return cached;
 
     const path = startDate && endDate
-      ? `/v1/activity/sleep?start=${startDate}&end=${endDate}&limit=25`
-      : `/v1/activity/sleep?limit=10`;
+      ? `/v2/activity/sleep?start=${startDate}&end=${endDate}&limit=25`
+      : `/v2/activity/sleep?limit=10`;
 
     const records = await fetchAllPages<WhoopSleep>(path, (body) =>
       ((body.records as Record<string, unknown>[]) || [])
         .filter((r) => !r.nap && (r.score_state === 'SCORED' || r.score_state === 'PENDING_SCORE'))
         .map((r) => {
           const score = r.score as Record<string, unknown>;
+          // WHOOP API v2 uses _time_milli (not _duration_milli)
           const stages = score?.stage_summary as Record<string, number> | undefined;
           return {
             date: format(new Date(r.start as string), 'yyyy-MM-dd'),
             sleep_performance_percentage: (score?.sleep_performance_percentage as number) ?? 0,
             sleep_efficiency_percentage: (score?.sleep_efficiency_percentage as number) ?? 0,
-            total_in_bed_duration_milli: stages?.total_in_bed_duration_milli ?? 0,
-            total_slow_wave_sleep_duration_milli: stages?.total_slow_wave_sleep_duration_milli,
+            total_in_bed_time_milli: stages?.total_in_bed_time_milli ?? 0,
+            total_slow_wave_sleep_time_milli: stages?.total_slow_wave_sleep_time_milli,
+            total_rem_sleep_time_milli: stages?.total_rem_sleep_time_milli,
           };
         }),
     );
-
-    setCache(key, records);
-    return records;
-  },
-
-  async fetchHeartRate(startDate: string, endDate: string): Promise<WhoopHeartRate[]> {
-    const key = cacheKey('hr', startDate, endDate);
-    const cached = getCached<WhoopHeartRate[]>(key);
-    if (cached) return cached;
-
-    const path = `/v1/metrics/heart_rate?start=${startDate}&end=${endDate}&step=60`;
-    const body = await whoopFetch<Record<string, unknown>>(path);
-    const records: WhoopHeartRate[] = ((body.values as Record<string, unknown>[]) || []).map((v) => ({
-      timestamp: v.time as string,
-      heart_rate_bpm: v.data as number,
-    }));
 
     setCache(key, records);
     return records;
@@ -243,8 +229,9 @@ export const whoopService = {
     if (cached) return cached;
 
     const path = startDate && endDate
-      ? `/v1/cycle?start=${startDate}&end=${endDate}&limit=25`
-      : `/v1/cycle?limit=5`;
+      ? `/v2/cycle?start=${startDate}&end=${endDate}&limit=25`
+      : `/v2/cycle?limit=5`;
+
     const records = await fetchAllPages<WhoopCycle>(path, (body) =>
       ((body.records as Record<string, unknown>[]) || []).map((r) => {
         const score = r.score as Record<string, number> | undefined;
@@ -254,6 +241,8 @@ export const whoopService = {
           estimated_steps: Math.round(kj * 23.9),
           raw_kilojoules: kj,
           strain_score: score?.strain,
+          average_heart_rate: score?.average_heart_rate,
+          max_heart_rate: score?.max_heart_rate,
         };
       }),
     );

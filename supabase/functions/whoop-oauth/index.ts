@@ -8,7 +8,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const REDIRECT_URI = `${SUPABASE_URL}/functions/v1/whoop-oauth`;
 const TOKEN_URL = 'https://api.prod.whoop.com/oauth/oauth2/token';
-const PROFILE_URL = 'https://api.prod.whoop.com/developer/v1/user/profile/basic';
+const PROFILE_URL = 'https://api.prod.whoop.com/developer/v2/user/profile/basic';
 const WHOOP_API_BASE = 'https://api.prod.whoop.com/developer';
 
 const cors = {
