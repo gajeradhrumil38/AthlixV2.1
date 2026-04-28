@@ -397,6 +397,19 @@ export const Home: React.FC = () => {
       .sort((a, b) => b.volume - a.volume);
   }, [muscleMapData, viewMode]);
 
+  // Map date string → workouts for that day (used in week view day-by-day list)
+  const weekWorkoutsByDate = useMemo(() => {
+    const map = new Map<string, { title: string; muscleGroups: string[] }[]>();
+    rangeWorkouts.forEach((w) => {
+      if (!map.has(w.date)) map.set(w.date, []);
+      const groups = Array.from(
+        new Set((w.exercises || []).map((e: any) => e.muscle_group).filter(Boolean))
+      ) as string[];
+      map.get(w.date)!.push({ title: w.title || 'Workout', muscleGroups: groups });
+    });
+    return map;
+  }, [rangeWorkouts]);
+
   const muscleMapTitle = useMemo(() => {
     if (viewMode === 'Day') {
       return isSameDay(currentDate, new Date()) ? "Today's Muscles" : `${format(currentDate, 'MMM d')} Muscles`;
@@ -566,88 +579,166 @@ export const Home: React.FC = () => {
     ),
     train_next: (
       <div key="train_next" className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-[14px] p-3 h-full flex flex-col">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-[10px] uppercase tracking-[0.8px] text-[var(--text-secondary)] font-semibold">
-            {rangeTitle}
-          </div>
-          <button
-            onClick={handleWorkoutEntry}
-            className="text-[10px] font-semibold text-[var(--accent)] hover:opacity-80"
-          >
-            {viewMode === 'Day' && rangeExercises.length > 0 ? 'Edit' : 'Start'}
-          </button>
-        </div>
-        {viewMode === 'Day' ? (
-          rangeExercises.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              {dayExerciseStats.slice(0, 4).map((ex) => {
-                const maxVolume = Math.max(dayExerciseStats[0]?.volume || 0, 1);
-                const pct = Math.min((ex.volume / maxVolume) * 100, 100);
-                return (
-                  <div key={ex.name} className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
-                      <span className="truncate">{ex.name}</span>
-                      <span className="text-[9px] text-[var(--text-secondary)]">{ex.sets} sets</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-[var(--bg-elevated)] rounded-full overflow-hidden">
-                      <motion.div
-                        className="h-full rounded-full"
-                        style={{ backgroundColor: 'var(--accent)' }}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${pct}%` }}
-                        transition={{ duration: 0.8 }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
-              <div className="text-[11px] text-[var(--text-secondary)]">No exercises logged today.</div>
-              <button
-                onClick={handleWorkoutEntry}
-                className="px-3 py-1.5 bg-[var(--accent)] text-black text-[10px] font-bold rounded-lg"
-              >
-                Start Workout
-              </button>
-            </div>
-          )
-        ) : muscleLoadStats.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {muscleLoadStats.slice(0, 4).map((ex) => {
-              const maxVolume = Math.max(muscleLoadStats[0]?.volume || 0, 1);
-              const pct = Math.min((ex.volume / maxVolume) * 100, 100);
-              return (
-                <div key={ex.name} className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
-                    <span className="truncate">{ex.name}</span>
-                    <span className="text-[9px] text-[var(--text-secondary)]">{ex.volume.toFixed(0)} {displayUnit}</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-[var(--bg-elevated)] rounded-full overflow-hidden">
-                    <motion.div
-                      className="h-full rounded-full"
-                      style={{ backgroundColor: 'var(--accent)' }}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${pct}%` }}
-                      transition={{ duration: 0.8 }}
-                    />
-                  </div>
+
+        {/* ── DAY VIEW ── */}
+        {viewMode === 'Day' && (() => {
+          const hasExercises = rangeExercises.length > 0;
+          return (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-[10px] uppercase tracking-[0.8px] text-[var(--text-secondary)] font-semibold">{rangeTitle}</div>
+                <button onClick={handleWorkoutEntry} className="text-[10px] font-semibold text-[var(--accent)] hover:opacity-80">
+                  {hasExercises ? 'Edit' : 'Start'}
+                </button>
+              </div>
+              {hasExercises ? (
+                <div className="flex flex-col gap-2">
+                  {dayExerciseStats.slice(0, 4).map((ex) => {
+                    const maxVolume = Math.max(dayExerciseStats[0]?.volume || 0, 1);
+                    const pct = Math.min((ex.volume / maxVolume) * 100, 100);
+                    return (
+                      <div key={ex.name} className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                          <span className="truncate">{ex.name}</span>
+                          <span className="text-[9px]">{ex.sets} sets</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-[var(--bg-elevated)] rounded-full overflow-hidden">
+                          <motion.div className="h-full rounded-full" style={{ backgroundColor: 'var(--accent)' }}
+                            initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8 }} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
-            <div className="text-[11px] text-[var(--text-secondary)]">No training data for this range.</div>
-            <button
-              onClick={handleWorkoutEntry}
-              className="px-3 py-1.5 bg-[var(--accent)] text-black text-[10px] font-bold rounded-lg"
-            >
-              Log Workout
-            </button>
-          </div>
-        )}
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
+                  <div className="text-[11px] text-[var(--text-secondary)]">No exercises logged.</div>
+                  <button onClick={handleWorkoutEntry} className="px-3 py-1.5 bg-[var(--accent)] text-black text-[10px] font-bold rounded-lg">Start Workout</button>
+                </div>
+              )}
+            </>
+          );
+        })()}
+
+        {/* ── WEEK VIEW — day-by-day editable list ── */}
+        {viewMode === 'Week' && (() => {
+          const todayStr = format(new Date(), 'yyyy-MM-dd');
+          return (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] uppercase tracking-[0.8px] text-[var(--text-secondary)] font-semibold">{rangeTitle}</div>
+                <button
+                  onClick={() => navigate(`/log?date=${encodeURIComponent(todayStr)}`)}
+                  className="text-[10px] font-semibold text-[var(--accent)] hover:opacity-80"
+                >
+                  + Log Today
+                </button>
+              </div>
+              <div className="flex flex-col divide-y divide-[var(--border)]">
+                {weekDays.map((day) => {
+                  const dayWorkouts = weekWorkoutsByDate.get(day.dateStr) || [];
+                  const trained = dayWorkouts.length > 0;
+                  const isToday = day.dateStr === todayStr;
+                  const isFuture = isAfter(day.date, new Date()) && !isToday;
+                  const groups = Array.from(new Set(dayWorkouts.flatMap(w => w.muscleGroups))).slice(0, 3);
+
+                  return (
+                    <button
+                      key={day.dateStr}
+                      type="button"
+                      disabled={isFuture}
+                      onClick={() => navigate(`/log?date=${encodeURIComponent(day.dateStr)}`)}
+                      className="flex items-center gap-2.5 py-2 text-left w-full disabled:opacity-30 transition-opacity"
+                    >
+                      {/* Day label */}
+                      <div className="flex flex-col items-center w-7 shrink-0">
+                        <span className="text-[9px] font-semibold uppercase" style={{ color: isToday ? 'var(--accent)' : 'var(--text-muted)' }}>
+                          {day.dayName}
+                        </span>
+                        <span className="text-[12px] font-bold" style={{ color: isToday ? 'var(--accent)' : trained ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                          {day.dayNum}
+                        </span>
+                      </div>
+
+                      {/* Status dot */}
+                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{
+                        background: trained ? 'var(--accent)' : isToday ? 'rgba(200,255,0,0.3)' : 'var(--text-muted)',
+                        boxShadow: trained ? '0 0 6px rgba(200,255,0,0.5)' : 'none',
+                      }} />
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        {trained ? (
+                          <div className="flex flex-wrap gap-1">
+                            {groups.map(g => (
+                              <span key={g} className="text-[9px] font-medium px-1.5 py-0.5 rounded-full"
+                                style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
+                                {g}
+                              </span>
+                            ))}
+                            {dayWorkouts.flatMap(w => w.muscleGroups).length > 3 && (
+                              <span className="text-[9px] text-[var(--text-muted)]">+{dayWorkouts.flatMap(w => w.muscleGroups).length - 3}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[10px]" style={{ color: isToday ? 'var(--accent)' : 'var(--text-muted)' }}>
+                            {isToday ? 'Tap to log' : isFuture ? '' : 'Rest'}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Arrow */}
+                      {!isFuture && (
+                        <ChevronRight className="w-3 h-3 shrink-0" style={{ color: trained ? 'var(--accent)' : 'var(--text-muted)' }} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
+
+        {/* ── MONTH VIEW ── */}
+        {viewMode === 'Month' && (() => {
+          const todayStr = format(new Date(), 'yyyy-MM-dd');
+          return (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-[10px] uppercase tracking-[0.8px] text-[var(--text-secondary)] font-semibold">{rangeTitle}</div>
+                <button onClick={() => navigate(`/log?date=${encodeURIComponent(todayStr)}`)} className="text-[10px] font-semibold text-[var(--accent)] hover:opacity-80">
+                  Log Today
+                </button>
+              </div>
+              {muscleLoadStats.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {muscleLoadStats.slice(0, 4).map((ex) => {
+                    const maxVolume = Math.max(muscleLoadStats[0]?.volume || 0, 1);
+                    const pct = Math.min((ex.volume / maxVolume) * 100, 100);
+                    return (
+                      <div key={ex.name} className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                          <span className="truncate">{ex.name}</span>
+                          <span className="text-[9px]">{ex.volume.toFixed(0)} {displayUnit}</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-[var(--bg-elevated)] rounded-full overflow-hidden">
+                          <motion.div className="h-full rounded-full" style={{ backgroundColor: 'var(--accent)' }}
+                            initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8 }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
+                  <div className="text-[11px] text-[var(--text-secondary)]">No training data this month.</div>
+                  <button onClick={() => navigate(`/log?date=${encodeURIComponent(todayStr)}`)} className="px-3 py-1.5 bg-[var(--accent)] text-black text-[10px] font-bold rounded-lg">Log Workout</button>
+                </div>
+              )}
+            </>
+          );
+        })()}
+
       </div>
     ),
     pr_banner: alert ? (
