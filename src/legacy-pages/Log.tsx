@@ -246,8 +246,10 @@ export const Log: React.FC = () => {
       })
         .then((results) => {
           if (cancelled) return;
-          const saved = results[0] as (typeof results[0] & { exercises?: LocalExercise[] }) | undefined;
-          const savedRows = saved?.exercises || [];
+          // Merge exercises from ALL workouts on this date so home-card and edit view stay in sync
+          const allSaved = results as (typeof results[0] & { exercises?: LocalExercise[] })[];
+          const saved = allSaved[0];
+          const savedRows = allSaved.flatMap((w) => w.exercises || []);
           const savedDistanceRow = [...savedRows]
             .sort((a, b) => a.order_index - b.order_index)
             .find((ex) => {

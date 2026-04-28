@@ -399,6 +399,18 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
     haptics.tick();
   };
 
+  const handleRemoveExercise = useCallback((index: number) => {
+    setWorkout((prev) => {
+      if (!prev) return null;
+      const next = prev.exercises.filter((_, i) => i !== index);
+      return { ...prev, exercises: next };
+    });
+    // If we removed the current detail-view exercise, go back to list
+    setActiveIndex((prev) => Math.min(prev, Math.max(0, workout.exercises.length - 2)));
+    setViewMode('list');
+    haptics.tick();
+  }, [setWorkout, workout.exercises.length]);
+
   const handleDialConfirm = (value: number) => {
     if (!dialPicker) return;
     updateSetField(dialPicker.setId, dialPicker.field, value);
@@ -588,32 +600,42 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                 {workout.exercises.map((ex, i) => {
                   const doneCount = ex.sets.filter((s) => s.done).length;
                   return (
-                    <button
-                      key={ex.id}
-                      type="button"
-                      onClick={() => { setActiveIndex(i); setViewMode('detail'); }}
-                      className="flex items-center gap-3 p-3 rounded-xl border text-left w-full transition-colors"
-                      style={{ background: 'var(--bg-surface)', borderColor: 'rgba(255,255,255,0.07)' }}
-                    >
-                      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-white/10 bg-white/[0.03]">
-                        <Activity className="w-4 h-4 text-[var(--text-muted)]" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate leading-none mb-1">{ex.name}</p>
-                        <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-[0.08em]">
-                          {ex.muscleGroup || 'Exercise'} · {ex.sets.length} set{ex.sets.length !== 1 ? 's' : ''}
-                        </p>
-                      </div>
-                      {doneCount > 0 && (
-                        <span
-                          className="inline-flex h-5 items-center px-1.5 rounded border text-[10px] font-semibold shrink-0"
-                          style={{ background: 'rgba(200,255,0,0.1)', borderColor: 'rgba(200,255,0,0.2)', color: 'var(--accent)' }}
-                        >
-                          {doneCount}/{ex.sets.length}
-                        </span>
-                      )}
-                      <ChevronRight className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-                    </button>
+                    <div key={ex.id} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setActiveIndex(i); setViewMode('detail'); }}
+                        className="flex flex-1 items-center gap-3 p-3 rounded-xl border text-left transition-colors min-w-0"
+                        style={{ background: 'var(--bg-surface)', borderColor: 'rgba(255,255,255,0.07)' }}
+                      >
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-white/10 bg-white/[0.03]">
+                          <Activity className="w-4 h-4 text-[var(--text-muted)]" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate leading-none mb-1">{ex.name}</p>
+                          <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-[0.08em]">
+                            {ex.muscleGroup || 'Exercise'} · {ex.sets.length} set{ex.sets.length !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                        {doneCount > 0 && (
+                          <span
+                            className="inline-flex h-5 items-center px-1.5 rounded border text-[10px] font-semibold shrink-0"
+                            style={{ background: 'rgba(200,255,0,0.1)', borderColor: 'rgba(200,255,0,0.2)', color: 'var(--accent)' }}
+                          >
+                            {doneCount}/{ex.sets.length}
+                          </span>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveExercise(i)}
+                        className="flex h-9 w-9 items-center justify-center rounded-xl shrink-0 transition-colors"
+                        style={{ color: 'rgba(248,113,113,0.5)' }}
+                        aria-label={`Remove ${ex.name}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -632,13 +654,24 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                 transition={{ duration: 0.16, ease: 'easeOut' }}
               >
                 {/* Exercise name header */}
-                <div className="shrink-0 px-4 py-3 border-b border-white/5">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1.5">
-                    {currentExercise.muscleGroup || 'Exercise'}
-                  </p>
-                  <p className="text-[22px] font-bold text-[var(--text-primary)] tracking-tight leading-none">
-                    {currentExercise.name}
-                  </p>
+                <div className="shrink-0 px-4 py-3 border-b border-white/5 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1.5">
+                      {currentExercise.muscleGroup || 'Exercise'}
+                    </p>
+                    <p className="text-[22px] font-bold text-[var(--text-primary)] tracking-tight leading-none truncate">
+                      {currentExercise.name}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveExercise(activeIndex)}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0 transition-colors mt-0.5"
+                    style={{ color: 'rgba(248,113,113,0.6)', background: 'rgba(248,113,113,0.08)' }}
+                    aria-label="Remove exercise"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
                 <ExerciseContent
                   exercise={currentExercise}
