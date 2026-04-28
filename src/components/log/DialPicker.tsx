@@ -324,25 +324,28 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, format, initialIndex,
           overscrollBehavior: 'contain',
         }}
       >
-        {values.map((value, index) => (
-          <div
-            key={`${value}-${index}`}
-            className={`font-victory relative flex w-full items-center justify-center text-center tabular-nums leading-none select-none ${
-              index === selectedIndex
-                ? 'font-bold text-[var(--accent)]'
-                : 'font-normal text-[var(--text-muted)]'
-            }`}
-            style={{
-              height: `${ITEM_HEIGHT}px`,
-              scrollSnapAlign: 'center',
-              fontSize: index === selectedIndex ? '32px' : '24px',
-              opacity: index === selectedIndex ? 1 : Math.max(0.25, 1 - Math.abs(index - selectedIndex) * 0.25),
-              transition: 'font-size 0.12s ease, color 0.12s ease, opacity 0.12s ease',
-            }}
-          >
-            {format(value)}
-          </div>
-        ))}
+        {values.map((value, index) => {
+          const dist = Math.abs(index - selectedIndex);
+          return (
+            <div
+              key={`${value}-${index}`}
+              className={`font-victory relative flex w-full items-center justify-center text-center tabular-nums leading-none select-none ${
+                index === selectedIndex ? 'font-bold' : 'font-normal'
+              }`}
+              style={{
+                height: `${ITEM_HEIGHT}px`,
+                scrollSnapAlign: 'center',
+                fontSize: index === selectedIndex ? '30px' : dist === 1 ? '22px' : '19px',
+                color: index === selectedIndex
+                  ? 'var(--text-primary)'
+                  : `rgba(134,146,164,${Math.max(0.18, 0.55 - dist * 0.18)})`,
+                transition: 'font-size 0.12s ease, color 0.12s ease',
+              }}
+            >
+              {format(value)}
+            </div>
+          );
+        })}
       </div>
 
       {unitLabel && (
@@ -354,9 +357,15 @@ const WheelColumn: React.FC<WheelColumnProps> = ({ values, format, initialIndex,
         </div>
       )}
 
-      {/* Fade overlays matching the container background */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[72px] bg-gradient-to-b from-[var(--bg-elevated)] to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[72px] bg-gradient-to-t from-[var(--bg-elevated)] to-transparent" />
+      {/* Fade overlays — height matches VIEW_PADDING so no out-of-bounds values leak */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0"
+        style={{ height: VIEW_PADDING + 4, background: `linear-gradient(to bottom, var(--bg-elevated) 55%, transparent)` }}
+      />
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0"
+        style={{ height: VIEW_PADDING + 4, background: `linear-gradient(to top, var(--bg-elevated) 55%, transparent)` }}
+      />
     </div>
   );
 };
@@ -431,17 +440,17 @@ export const DialPicker: React.FC<DialPickerProps> = ({
         <div className="mx-auto mb-5 h-[3px] w-9 rounded-full bg-white/15" />
 
         {/* Header: label + live value + dismiss */}
-        <div className="mb-5 flex items-start justify-between">
+        <div className="mb-4 flex items-start justify-between">
           <div>
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--text-muted)]">
               {title}
             </p>
-            <div className="flex items-baseline gap-2">
-              <span className="font-victory tabular-nums leading-none text-[var(--text-primary)]" style={{ fontSize: '48px', fontWeight: 700 }}>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-victory tabular-nums leading-none text-[var(--text-primary)]" style={{ fontSize: '42px', fontWeight: 700 }}>
                 {liveDisplay}
               </span>
               {liveUnit && (
-                <span className="font-victory text-[18px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">
+                <span className="font-victory text-[15px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.12em]">
                   {liveUnit}
                 </span>
               )}
@@ -450,10 +459,10 @@ export const DialPicker: React.FC<DialPickerProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="mt-1 flex h-8 w-8 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors active:bg-white/8"
+            className="mt-1 flex h-7 w-7 items-center justify-center rounded-full text-[var(--text-muted)]"
             style={{ background: 'var(--bg-elevated)' }}
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
 
@@ -484,17 +493,50 @@ export const DialPicker: React.FC<DialPickerProps> = ({
             </div>
           ))}
 
-          {/* Selection highlight rail */}
+          {/* Selection zone — neutral tint + two hairline rules */}
           <div
-            className="pointer-events-none absolute inset-x-3 top-1/2 -translate-y-1/2"
-            style={{
-              height: `${ITEM_HEIGHT}px`,
-              borderRadius: '10px',
-              background: 'rgba(200,255,0,0.06)',
-              border: '1px solid rgba(200,255,0,0.18)',
-              boxShadow: '0 0 12px rgba(200,255,0,0.08)',
-            }}
-          />
+            className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2"
+            style={{ height: `${ITEM_HEIGHT}px` }}
+          >
+            {/* faint fill */}
+            <div className="absolute inset-0" style={{ background: 'rgba(255,255,255,0.035)' }} />
+            {/* top rule */}
+            <div
+              className="absolute inset-x-0 top-0 h-px"
+              style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.18) 20%, rgba(255,255,255,0.18) 80%, transparent 100%)' }}
+            />
+            {/* bottom rule */}
+            <div
+              className="absolute inset-x-0 bottom-0 h-px"
+              style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.18) 20%, rgba(255,255,255,0.18) 80%, transparent 100%)' }}
+            />
+          </div>
+
+          {/* Tick marks — left and right edges */}
+          {[...Array(9)].map((_, i) => (
+            <div
+              key={i}
+              className="pointer-events-none absolute left-0"
+              style={{
+                top: `${(i + 0.5) * (VIEW_HEIGHT / 9)}px`,
+                width: i === 4 ? '10px' : '5px',
+                height: '1px',
+                background: i === 4 ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.09)',
+              }}
+            />
+          ))}
+          {[...Array(9)].map((_, i) => (
+            <div
+              key={i}
+              className="pointer-events-none absolute right-0"
+              style={{
+                top: `${(i + 0.5) * (VIEW_HEIGHT / 9)}px`,
+                width: i === 4 ? '10px' : '5px',
+                height: '1px',
+                background: i === 4 ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.09)',
+              }}
+            />
+          ))}
         </div>
 
         {/* Confirm button */}
