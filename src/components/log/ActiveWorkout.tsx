@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Activity, ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Pause, Play, Plus, Trash2 } from 'lucide-react';
+import { Activity, ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Pause, Play, Plus, Trash2, Weight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { WorkoutState, ExerciseEntry, Set } from '../../legacy-pages/Log';
 import { ExerciseContent } from './ExerciseContent';
@@ -399,6 +399,19 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
     haptics.tick();
   };
 
+  const handleToggleOptionalWeight = useCallback((index: number) => {
+    setWorkout((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        exercises: prev.exercises.map((ex, i) =>
+          i === index ? { ...ex, optionalWeight: !ex.optionalWeight } : ex
+        ),
+      };
+    });
+    haptics.tick();
+  }, [setWorkout]);
+
   const handleRemoveExercise = useCallback((index: number) => {
     setWorkout((prev) => {
       if (!prev) return null;
@@ -663,18 +676,38 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                       {currentExercise.name}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveExercise(activeIndex)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0 transition-colors mt-0.5"
-                    style={{ color: 'rgba(248,113,113,0.6)', background: 'rgba(248,113,113,0.08)' }}
-                    aria-label="Remove exercise"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                    {/* Weight toggle: only shown for reps-only exercises */}
+                    {resolveExerciseInputType(currentExercise.name) === 'reps_only' && (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleOptionalWeight(activeIndex)}
+                        className="flex h-8 items-center gap-1.5 px-2.5 rounded-lg shrink-0 transition-colors text-[10px] font-bold uppercase tracking-wide"
+                        style={{
+                          background: currentExercise.optionalWeight ? 'rgba(200,255,0,0.12)' : 'var(--bg-elevated)',
+                          color: currentExercise.optionalWeight ? 'var(--accent)' : 'var(--text-muted)',
+                          border: `1px solid ${currentExercise.optionalWeight ? 'rgba(200,255,0,0.3)' : 'var(--border)'}`,
+                        }}
+                        aria-label="Toggle weight tracking"
+                      >
+                        <Weight className="w-3 h-3" />
+                        {currentExercise.optionalWeight ? 'Weighted' : '+ Weight'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveExercise(activeIndex)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0 transition-colors"
+                      style={{ color: 'rgba(248,113,113,0.6)', background: 'rgba(248,113,113,0.08)' }}
+                      aria-label="Remove exercise"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <ExerciseContent
                   exercise={currentExercise}
+                  optionalWeight={currentExercise.optionalWeight}
                   weightUnit={weightUnit}
                   distanceUnit={distanceUnit}
                   bodyWeightForMath={bodyWeightForMath}

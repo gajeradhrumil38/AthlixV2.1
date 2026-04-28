@@ -20,6 +20,7 @@ const MUSCLE_GROUPS = [
   { id: 'Legs' },
   { id: 'Core' },
   { id: 'Cardio' },
+  { id: 'Flexibility' },
 ];
 
 export const ExercisePicker: React.FC<ExercisePickerProps> = ({ isOpen, onClose, onSelect }) => {

@@ -23,6 +23,8 @@ export interface ExerciseEntry {
   muscleGroup: string;
   exercise_db_id?: string;
   sets: Set[];
+  /** true when user opts into tracking weight for a normally reps-only exercise */
+  optionalWeight?: boolean;
   lastSession?: {
     date: string;
     sets: number;
@@ -291,7 +293,14 @@ export const Log: React.FC = () => {
               });
             });
 
-          const preloaded = Array.from(map.values());
+          // Infer optionalWeight: if a reps_only exercise was saved with weight, user had it enabled
+          const preloaded = Array.from(map.values()).map((entry) => {
+            if (resolveExerciseInputType(entry.name) === 'reps_only') {
+              const hasWeight = entry.sets.some((s) => Number(s.weight || 0) > 0);
+              if (hasWeight) return { ...entry, optionalWeight: true };
+            }
+            return entry;
+          });
           const state = createWorkoutState(
             preloaded,
             saved?.title ?? undefined,

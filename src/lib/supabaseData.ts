@@ -167,6 +167,51 @@ const DEFAULT_EXERCISES: Record<string, string[]> = {
     'Running (Outdoor)',
     'Walking',
   ],
+  Flexibility: [
+    // Yoga flows
+    'Sun Salutation',
+    'Vinyasa Flow',
+    'Yin Yoga',
+    'Power Yoga',
+    'Yoga',
+    // Standing poses
+    'Warrior I',
+    'Warrior II',
+    'Warrior III',
+    'Triangle Pose',
+    'Tree Pose',
+    'Chair Pose',
+    'Mountain Pose',
+    'Eagle Pose',
+    // Forward folds & backbends
+    'Downward Dog',
+    'Upward Dog',
+    'Cobra Pose',
+    'Camel Pose',
+    'Wheel Pose',
+    'Bridge Pose',
+    'Bow Pose',
+    // Seated & floor
+    'Pigeon Pose',
+    'Seated Forward Fold',
+    'Butterfly Stretch',
+    'Supine Twist',
+    'Child\'s Pose',
+    'Happy Baby',
+    'Legs Up the Wall',
+    'Corpse Pose',
+    // Stretching & mobility
+    'Hip Flexor Stretch',
+    'Hamstring Stretch',
+    'Quad Stretch',
+    'Chest Opener',
+    'Shoulder Stretch',
+    'Thoracic Rotation',
+    'Cat Cow',
+    'World\'s Greatest Stretch',
+    'Foam Rolling',
+    'Meditation',
+  ],
 };
 
 let currentUserCache: LocalUser | null = null;

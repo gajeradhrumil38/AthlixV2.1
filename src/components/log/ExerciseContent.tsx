@@ -15,6 +15,7 @@ import {
 
 interface ExerciseContentProps {
   exercise: ExerciseEntry;
+  optionalWeight?: boolean;
   weightUnit?: WeightUnit;
   distanceUnit?: DistanceUnit;
   bodyWeightForMath?: number | null;
@@ -42,6 +43,7 @@ const getFieldBinding = (type: ReturnType<typeof resolveExerciseInputType>) => {
 export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
   const {
     exercise,
+    optionalWeight = false,
     weightUnit = 'kg',
     distanceUnit = 'km',
     bodyWeightForMath = null,
@@ -54,7 +56,12 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
     onOpenDial,
   } = props;
 
-  const exerciseType = useMemo(() => resolveExerciseInputType(exercise.name), [exercise.name]);
+  // When user opts into weight tracking for a normally reps-only exercise, treat it as weight_reps
+  const exerciseType = useMemo(() => {
+    const base = resolveExerciseInputType(exercise.name);
+    if (optionalWeight && base === 'reps_only') return 'weight_reps' as const;
+    return base;
+  }, [exercise.name, optionalWeight]);
   const inputLabels = useMemo(
     () => getInputLabels(exerciseType, { weightUnit, distanceUnit }),
     [distanceUnit, exerciseType, weightUnit],
