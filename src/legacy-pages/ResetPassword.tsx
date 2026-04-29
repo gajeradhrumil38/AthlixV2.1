@@ -42,7 +42,14 @@ export const ResetPassword: React.FC = () => {
     try {
       await updatePassword(password);
       setDone(true);
-      setTimeout(() => clearPasswordRecovery(), 2200);
+      // Wait for success animation, then clear recovery mode → AppRoutes renders
+      // the normal route tree. Since user is already authenticated, ProtectedRoute
+      // will show the dashboard directly.
+      setTimeout(() => {
+        clearPasswordRecovery();
+        // Belt-and-suspenders: also push to root hash so HashRouter lands on home
+        window.location.hash = '#/';
+      }, 2000);
     } catch (err: any) {
       setError(err?.message || 'Failed to update password.');
     } finally {

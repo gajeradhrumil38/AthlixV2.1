@@ -400,15 +400,9 @@ const ensureSupabaseAuthInitialized = () => {
   if (!hasSupabaseConfig || authInitialized) return;
   authInitialized = true;
 
-  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
     const nextUser = toLocalUser(session?.user);
     currentUserCache = nextUser;
-
-    if (event === 'PASSWORD_RECOVERY') {
-      // Notify the app that we're in recovery mode BEFORE emitting normal auth change,
-      // so the app can intercept and show the reset-password form instead of home.
-      window.dispatchEvent(new CustomEvent('athlix:password-recovery'));
-    }
 
     if (session?.user) {
       void migrateLegacyDataIfNeeded(session.user.id, session.user.email || null);
@@ -900,10 +894,18 @@ export const getCurrentUserAsync = async (): Promise<LocalUser | null> => {
 
   currentUserCache = toLocalUser(data.user);
   if (data.user) {
-    // Run migration in the background — a failure must never block auth.
     migrateLegacyDataIfNeeded(data.user.id, data.user.email || null).catch((err) => {
       console.warn('Legacy data migration failed (non-fatal):', err);
     });
+
+    // Fire password-recovery event if main.tsx detected a recovery redirect.
+    // We do this here (after confirming the user is authenticated) to avoid
+    // any race with React's useEffect listeners.
+    if (sessionStorage.getItem('athlix:password_recovery') === '1') {
+      sessionStorage.removeItem('athlix:password_recovery');
+      // Small delay so AuthContext listeners are guaranteed to be registered
+      setTimeout(() => window.dispatchEvent(new CustomEvent('athlix:password-recovery')), 50);
+    }
   }
 
   return currentUserCache;

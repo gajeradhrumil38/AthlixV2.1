@@ -14,15 +14,43 @@ import { supabase } from './lib/supabase';
  * entirely and the app renders immediately.
  */
 async function bootstrap() {
+  // ── Step 1: Rescue Supabase auth tokens from the URL hash ───────────────
+  // Supabase email links land as:
+  //   https://app.url/legacy-app/#access_token=XXX&refresh_token=YYY&type=recovery
+  // HashRouter would misinterpret this as a route. We must grab the tokens,
+  // set the session, store the recovery flag, then rewrite the hash to "#/"
+  // before React even touches the URL.
+  const rawHash = window.location.hash.slice(1); // strip leading #
+  if (rawHash.includes('access_token=')) {
+    try {
+      const hp = new URLSearchParams(rawHash);
+      const accessToken = hp.get('access_token');
+      const refreshToken = hp.get('refresh_token');
+      const authType = hp.get('type'); // 'recovery' | 'signup' | 'email_change'
+
+      if (accessToken && refreshToken) {
+        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      }
+
+      if (authType === 'recovery') {
+        sessionStorage.setItem('athlix:password_recovery', '1');
+      }
+    } catch (e) {
+      console.warn('Failed to parse Supabase auth redirect:', e);
+    }
+
+    // Rewrite hash so HashRouter routes to "/" cleanly
+    window.history.replaceState(null, '', window.location.pathname + window.location.search + '#/');
+  }
+
+  // ── Step 2: Iframe session injection (Next.js dashboard embed) ──────────
   const isInIframe = window.self !== window.top;
 
   if (isInIframe) {
     await new Promise<void>((resolve) => {
-      // Fallback: if no message arrives within 1 s, render anyway (e.g. dev)
       const fallback = window.setTimeout(resolve, 1000);
 
       const handler = async (event: MessageEvent) => {
-        // Only accept messages from our own origin
         if (event.origin !== window.location.origin) return;
         if ((event.data as { type?: string })?.type !== 'ATHLIX_SESSION') return;
 
@@ -36,12 +64,7 @@ async function bootstrap() {
         };
 
         if (accessToken && refreshToken) {
-          // Inject the session so createBrowserClient has it before any
-          // getUser() / getSession() calls in the React component tree.
-          await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
+          await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
         }
 
         resolve();
