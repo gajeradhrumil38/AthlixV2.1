@@ -120,6 +120,7 @@ export const AiChat: React.FC = () => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const apiKey = localStorage.getItem(GEMINI_KEY_STORAGE)?.trim() || '';
+  const model = localStorage.getItem(GEMINI_MODEL_STORAGE) || DEFAULT_MODEL;
 
   /* ── Load workout data once chat opens ────────────────────────────── */
   useEffect(() => {
@@ -175,7 +176,7 @@ export const AiChat: React.FC = () => {
 
       try {
         const systemPrompt = buildSystemPrompt(profile, workouts, prs);
-        const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+        const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -211,7 +212,7 @@ export const AiChat: React.FC = () => {
         setLoading(false);
       }
     },
-    [input, loading, apiKey, profile, workouts, prs, messages],
+    [input, loading, apiKey, model, profile, workouts, prs, messages],
   );
 
   const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {

@@ -289,6 +289,9 @@ export const Settings: React.FC = () => {
   const [geminiKey, setGeminiKey] = useState(
     () => localStorage.getItem('athlix:gemini_api_key') || ''
   );
+  const [geminiModel, setGeminiModel] = useState(
+    () => localStorage.getItem('athlix:gemini_model') || 'gemini-1.5-flash'
+  );
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [geminiSaved, setGeminiSaved] = useState(false);
 
@@ -371,6 +374,7 @@ export const Settings: React.FC = () => {
     } else {
       localStorage.removeItem('athlix:gemini_api_key');
     }
+    localStorage.setItem('athlix:gemini_model', geminiModel);
     setGeminiSaved(true);
     setTimeout(() => setGeminiSaved(false), 2000);
   };
@@ -662,6 +666,35 @@ export const Settings: React.FC = () => {
               </p>
             </div>
           </div>
+          {/* Model selector */}
+          <div>
+            <label className="block text-[12px] font-medium text-[var(--text-muted)] mb-1.5">
+              Model
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { id: 'gemini-1.5-flash', label: '1.5 Flash', note: 'Free tier' },
+                { id: 'gemini-1.5-pro', label: '1.5 Pro', note: 'Smarter' },
+                { id: 'gemini-2.0-flash', label: '2.0 Flash', note: 'Paid only' },
+                { id: 'gemini-2.0-flash-lite', label: '2.0 Lite', note: 'Fast' },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setGeminiModel(m.id)}
+                  className="flex flex-col items-start px-3 py-2 rounded-xl border transition-all text-left"
+                  style={{
+                    background: geminiModel === m.id ? 'rgba(124,58,237,0.12)' : 'var(--bg-elevated)',
+                    borderColor: geminiModel === m.id ? 'rgba(124,58,237,0.5)' : 'var(--border)',
+                  }}
+                >
+                  <span className="text-[12px] font-semibold text-[var(--text-primary)]">{m.label}</span>
+                  <span className="text-[10px] text-[var(--text-muted)]">{m.note}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="relative">
             <input
               type={showGeminiKey ? 'text' : 'password'}
