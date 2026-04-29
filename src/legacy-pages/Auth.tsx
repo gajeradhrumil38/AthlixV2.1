@@ -48,12 +48,29 @@ export const Auth: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [alreadyExists, setAlreadyExists] = useState(false);
   const [shakeKey, setShakeKey] = useState(0);
+  const [cooldownSec, setCooldownSec] = useState(0);
+  const cooldownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isSignUp = mode === 'signup';
   const isForgot = mode === 'forgot';
   const strength = getStrength(password);
 
   if (user) return <Navigate to="/" replace />;
+
+  const startCooldown = (seconds: number) => {
+    if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
+    setCooldownSec(seconds);
+    cooldownTimerRef.current = setInterval(() => {
+      setCooldownSec((prev) => {
+        if (prev <= 1) {
+          clearInterval(cooldownTimerRef.current!);
+          cooldownTimerRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   const shake = () => setShakeKey((k) => k + 1);
 
@@ -76,6 +93,7 @@ export const Auth: React.FC = () => {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (cooldownSec > 0) return;
     const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedEmail.includes('@')) { setErr('Enter a valid email address.'); return; }
 
@@ -84,13 +102,29 @@ export const Auth: React.FC = () => {
     setSuccess(null);
     try {
       await sendPasswordResetEmail(trimmedEmail);
-      setSuccess('Reset link sent! Check your email — it may take a minute.');
+      setSuccess('Reset link sent! Check your inbox — it may take a minute.');
+      startCooldown(60);
     } catch (err: any) {
-      setErr(err?.message || 'Failed to send reset email. Try again.');
+      const msg: string = err?.message || '';
+      const lower = msg.toLowerCase();
+      // Supabase rate-limit message: "For security purposes, you can only request this after X seconds."
+      const secMatch = msg.match(/(\d+)\s*second/i);
+      const waitSec = secMatch ? parseInt(secMatch[1], 10) : 60;
+
+      if (lower.includes('security purposes') || lower.includes('rate limit') || lower.includes('too many') || lower.includes('email rate')) {
+        setErr(`Too many requests — please wait ${waitSec}s before trying again.`);
+        startCooldown(waitSec);
+      } else {
+        setErr(msg || 'Could not send reset email. Try again.');
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    return () => { if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current); };
+  }, []);
 
   useEffect(() => {
     setTimeout(() => (isSignUp ? nameRef.current?.focus() : emailRef.current?.focus()), 60);
@@ -529,7 +563,7 @@ export const Auth: React.FC = () => {
             {/* Submit */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (isForgot && cooldownSec > 0)}
               className="relative flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[14px] font-bold transition-all duration-150 disabled:opacity-60 active:scale-[0.98]"
               style={{ background: '#C8FF00', color: '#000' }}
             >
@@ -538,6 +572,8 @@ export const Auth: React.FC = () => {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   {isForgot ? 'Sending…' : isSignUp ? 'Creating account…' : 'Signing in…'}
                 </>
+              ) : isForgot && cooldownSec > 0 ? (
+                `Resend in ${cooldownSec}s`
               ) : isForgot ? (
                 'Send reset link'
               ) : isSignUp ? (
