@@ -400,9 +400,17 @@ const ensureSupabaseAuthInitialized = () => {
   if (!hasSupabaseConfig || authInitialized) return;
   authInitialized = true;
 
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
     const nextUser = toLocalUser(session?.user);
     currentUserCache = nextUser;
+
+    // PKCE flow: Supabase fires PASSWORD_RECOVERY after exchanging the code
+    // from the reset-password email link. Capture it here so the React app
+    // can show the ResetPassword screen instead of the dashboard.
+    if (event === 'PASSWORD_RECOVERY') {
+      sessionStorage.setItem('athlix:password_recovery', '1');
+      window.dispatchEvent(new CustomEvent('athlix:password-recovery'));
+    }
 
     if (session?.user) {
       void migrateLegacyDataIfNeeded(session.user.id, session.user.email || null);
