@@ -176,6 +176,14 @@ export const AiChat: React.FC = () => {
 
       try {
         const systemPrompt = buildSystemPrompt(profile, workouts, prs);
+
+        // Tool format differs between model families:
+        // Gemini 2.x → { google_search: {} }
+        // Gemini 1.5 → { google_search_retrieval: { dynamic_retrieval_config: { mode: "MODE_DYNAMIC" } } }
+        const searchTool = model.startsWith('gemini-2')
+          ? { google_search: {} }
+          : { google_search_retrieval: { dynamic_retrieval_config: { mode: 'MODE_DYNAMIC' } } };
+
         const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -185,14 +193,30 @@ export const AiChat: React.FC = () => {
               role: m.role,
               parts: [{ text: m.text }],
             })),
-            tools: [{ google_search: {} }],
+            tools: [searchTool],
             generationConfig: { temperature: 0.7, maxOutputTokens: 900 },
           }),
         });
 
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err?.error?.message || `Request failed (${res.status})`);
+          const errBody = await res.json().catch(() => ({}));
+          const errMsg: string = errBody?.error?.message || `Request failed (${res.status})`;
+          // Detect billing/quota issues — guide the user to create a free-tier key
+          if (
+            res.status === 429 ||
+            errMsg.includes('quota') ||
+            errMsg.includes('limit: 0') ||
+            errMsg.includes('free_tier')
+          ) {
+            throw new Error(
+              'QUOTA: Your API key\'s project has billing enabled, which sets the free tier limit to 0.\n\n' +
+              'Fix: Go to aistudio.google.com/app/apikey → "Create API key in new project" (no billing) → paste the new key in Settings.',
+            );
+          }
+          if (res.status === 400 && errMsg.includes('API_KEY')) {
+            throw new Error('INVALID_KEY: Your API key is invalid. Check it in Settings.');
+          }
+          throw new Error(errMsg);
         }
 
         const data = await res.json();
@@ -201,11 +225,17 @@ export const AiChat: React.FC = () => {
           '(no response)';
         setMessages((prev) => [...prev, { role: 'model', text: aiText }]);
       } catch (err: any) {
+        const raw: string = err?.message || 'Something went wrong.';
+        const display = raw.startsWith('QUOTA:')
+          ? raw.replace('QUOTA:', '⚠️ Quota issue —')
+          : raw.startsWith('INVALID_KEY:')
+            ? raw.replace('INVALID_KEY:', '🔑 Invalid key —')
+            : `⚠️ ${raw}`;
         setMessages((prev) => [
           ...prev,
           {
             role: 'model',
-            text: `⚠️ ${err?.message || 'Something went wrong. Check your API key in Settings.'}`,
+            text: display,
           },
         ]);
       } finally {
