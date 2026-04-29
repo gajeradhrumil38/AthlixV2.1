@@ -107,15 +107,24 @@ export const Auth: React.FC = () => {
     } catch (err: any) {
       const msg: string = err?.message || '';
       const lower = msg.toLowerCase();
-      // Supabase rate-limit message: "For security purposes, you can only request this after X seconds."
+      const httpStatus: number = err?.status ?? 0;
+      // Supabase rate-limit: status 429, or message contains wait-time hint
       const secMatch = msg.match(/(\d+)\s*second/i);
-      const waitSec = secMatch ? parseInt(secMatch[1], 10) : 60;
+      const waitSec = Math.min(secMatch ? parseInt(secMatch[1], 10) : 60, 3600);
+      const isRateLimit =
+        httpStatus === 429 ||
+        lower.includes('security purposes') ||
+        lower.includes('rate limit') ||
+        lower.includes('too many') ||
+        lower.includes('email rate');
 
-      if (lower.includes('security purposes') || lower.includes('rate limit') || lower.includes('too many') || lower.includes('email rate')) {
-        setErr(`Too many requests — please wait ${waitSec}s before trying again.`);
+      if (isRateLimit) {
+        setErr(`Too many reset attempts. Please wait ${waitSec < 120 ? `${waitSec}s` : `${Math.ceil(waitSec / 60)} min`} before trying again.`);
         startCooldown(waitSec);
+      } else if (msg) {
+        setErr(msg);
       } else {
-        setErr(msg || 'Could not send reset email. Try again.');
+        setErr('Could not send reset email. Check your connection and try again.');
       }
     } finally {
       setLoading(false);

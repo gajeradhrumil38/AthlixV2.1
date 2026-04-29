@@ -1027,7 +1027,13 @@ export const sendPasswordResetEmail = async (email: string): Promise<void> => {
     redirectTo: getAppUrl(),
   });
 
-  if (error) throw normalizeError(error, 'Failed to send reset email.');
+  if (error) {
+    // Preserve the HTTP status so callers can distinguish 429 rate-limit from
+    // other failures — normalizeError wraps into a plain Error which drops it.
+    const e = normalizeError(error, 'Failed to send reset email.') as Error & { status?: number };
+    e.status = (error as any).status ?? (error as any).code;
+    throw e;
+  }
 };
 
 export const updatePassword = async (newPassword: string): Promise<void> => {
