@@ -294,6 +294,10 @@ export const Settings: React.FC = () => {
   );
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [geminiSaved, setGeminiSaved] = useState(false);
+  const [aiUsage, setAiUsage] = useState(() => {
+    const raw = localStorage.getItem('athlix:api_usage');
+    return raw ? JSON.parse(raw) : null;
+  });
 
   useEffect(() => {
     setDraftProfile(profile);
@@ -732,6 +736,61 @@ export const Settings: React.FC = () => {
               Remove key
             </button>
           )}
+
+          {/* Usage stats */}
+          <div
+            className="rounded-xl p-3 space-y-2"
+            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              AI Usage
+            </p>
+            {aiUsage ? (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[18px] font-bold text-[var(--text-primary)]">
+                      {aiUsage.month_tokens.toLocaleString()}
+                    </p>
+                    <p className="text-[10px] text-[var(--text-muted)]">tokens this month</p>
+                  </div>
+                  <div>
+                    <p className="text-[18px] font-bold text-[var(--text-primary)]">
+                      {aiUsage.total_tokens.toLocaleString()}
+                    </p>
+                    <p className="text-[10px] text-[var(--text-muted)]">tokens all time</p>
+                  </div>
+                  <div>
+                    <p className="text-[18px] font-bold text-[var(--text-primary)]">
+                      {aiUsage.month_requests}
+                    </p>
+                    <p className="text-[10px] text-[var(--text-muted)]">requests this month</p>
+                  </div>
+                  <div>
+                    <p className="text-[18px] font-bold text-[var(--text-primary)]">
+                      {aiUsage.total_requests > 0
+                        ? Math.round(aiUsage.total_tokens / aiUsage.total_requests).toLocaleString()
+                        : '—'}
+                    </p>
+                    <p className="text-[10px] text-[var(--text-muted)]">avg tokens/request</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem('athlix:api_usage');
+                    setAiUsage(null);
+                    toast.success('Usage stats reset');
+                  }}
+                  className="w-full text-[11px] text-[var(--text-muted)] hover:text-[var(--red)] transition-colors pt-1"
+                >
+                  Reset stats
+                </button>
+              </>
+            ) : (
+              <p className="text-[12px] text-[var(--text-muted)]">No requests made yet.</p>
+            )}
+          </div>
         </div>
       </SectionCard>
 

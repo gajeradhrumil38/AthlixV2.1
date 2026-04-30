@@ -1,24 +1,55 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, X, Send, Loader2, Settings as SettingsIcon, RotateCcw } from 'lucide-react';
+import { Sparkles, X, Send, Loader2, Settings as SettingsIcon, RotateCcw, Copy, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { format, subDays } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getWorkouts,
   getPersonalRecords,
   type LocalWorkout,
+  type LocalExercise,
   type LocalPersonalRecord,
 } from '../lib/supabaseData';
 
+type WorkoutWithExercises = LocalWorkout & { exercises?: LocalExercise[] };
+
 const GEMINI_KEY_STORAGE = 'athlix:gemini_api_key';
 const GEMINI_MODEL_STORAGE = 'athlix:gemini_model';
+const USAGE_STORAGE = 'athlix:api_usage';
 const DEFAULT_MODEL = 'gemini-2.5-flash'; // free tier: 5 RPM, 250K tokens/min
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+// Max conversation turns sent to API (keeps token usage low while preserving short-term memory)
+const MAX_HISTORY = 12;
 
 interface Message {
   role: 'user' | 'model';
   text: string;
+}
+
+interface ApiUsage {
+  total_tokens: number;
+  total_requests: number;
+  month_tokens: number;
+  month_requests: number;
+  month_key: string; // "YYYY-MM"
+}
+
+function trackTokenUsage(tokens: number): void {
+  const monthKey = new Date().toISOString().slice(0, 7);
+  const raw = localStorage.getItem(USAGE_STORAGE);
+  const prev: ApiUsage = raw
+    ? JSON.parse(raw)
+    : { total_tokens: 0, total_requests: 0, month_tokens: 0, month_requests: 0, month_key: monthKey };
+  const data: ApiUsage = {
+    total_tokens: prev.total_tokens + tokens,
+    total_requests: prev.total_requests + 1,
+    month_tokens: prev.month_key === monthKey ? prev.month_tokens + tokens : tokens,
+    month_requests: prev.month_key === monthKey ? prev.month_requests + 1 : 1,
+    month_key: monthKey,
+  };
+  localStorage.setItem(USAGE_STORAGE, JSON.stringify(data));
 }
 
 /* ── Simple markdown → React (bold, bullets, newlines) ─────────────── */
@@ -49,10 +80,11 @@ function renderText(raw: string) {
 /* ── System prompt builder ──────────────────────────────────────────── */
 function buildSystemPrompt(
   profile: any,
-  workouts: LocalWorkout[],
+  workouts: WorkoutWithExercises[],
   prs: LocalPersonalRecord[],
 ): string {
-  const today = format(new Date(), 'EEEE, MMMM d, yyyy');
+  const now = new Date();
+  const today = format(now, 'EEEE, MMMM d, yyyy');
   const name = profile?.full_name || 'Athlete';
   const weight = profile?.body_weight
     ? `${profile.body_weight} ${profile.body_weight_unit}`
@@ -63,39 +95,75 @@ function buildSystemPrompt(
       : 'not set';
   const unit = profile?.unit_preference || 'kg';
 
-  const workoutLines = workouts
-    .slice(0, 20)
-    .map(
-      (w) =>
-        `  • ${w.date} — ${w.title} (${w.duration_minutes ?? '?'} min)${
-          w.muscle_groups?.length ? ` [${w.muscle_groups.join(', ')}]` : ''
-        }`,
-    )
+  // ── Last 7 workouts with full exercise detail ──
+  const detailedWorkouts = workouts.slice(0, 7).map((w) => {
+    const daysDiff = Math.round(
+      (now.getTime() - new Date(w.date).getTime()) / 86_400_000,
+    );
+    const dayLabel = daysDiff === 0 ? 'Today' : daysDiff === 1 ? 'Yesterday' : `${daysDiff}d ago`;
+    const header = `${w.date} (${dayLabel}) — ${w.title} · ${w.duration_minutes ?? '?'} min`;
+    const exLines = (w.exercises || []).map((ex) => {
+      const wt = ex.weight > 0 ? ` @ ${ex.weight}${ex.unit}` : '';
+      return `    · ${ex.name}: ${ex.sets}×${ex.reps}${wt}`;
+    });
+    return exLines.length
+      ? `  ${header}\n${exLines.join('\n')}`
+      : `  ${header}`;
+  }).join('\n');
+
+  // ── Older workouts (8-20): summary only ──
+  const olderLines = workouts.slice(7, 20).map((w) =>
+    `  ${w.date} — ${w.title}${w.muscle_groups?.length ? ` [${w.muscle_groups.join(', ')}]` : ''}`,
+  ).join('\n');
+
+  // ── Muscle group recovery status ──
+  const muscleLastSeen: Record<string, number> = {}; // group → days ago
+  for (const w of workouts) {
+    const daysAgo = Math.round((now.getTime() - new Date(w.date).getTime()) / 86_400_000);
+    for (const mg of (w.muscle_groups || [])) {
+      const key = mg.toLowerCase();
+      if (muscleLastSeen[key] === undefined || daysAgo < muscleLastSeen[key]) {
+        muscleLastSeen[key] = daysAgo;
+      }
+    }
+  }
+  const recoveryLines = Object.entries(muscleLastSeen)
+    .sort((a, b) => a[1] - b[1])
+    .map(([mg, days]) => {
+      const status = days < 2 ? '⛔ needs rest' : days < 3 ? '⚠️ borderline' : '✅ recovered';
+      return `  ${mg.charAt(0).toUpperCase() + mg.slice(1)}: ${days}d ago ${status}`;
+    })
     .join('\n');
 
+  // ── Personal records ──
   const prLines = prs
-    .slice(0, 25)
-    .map((p) => `  • ${p.exercise_name}: ${p.best_weight}${unit} × ${p.best_reps} reps`)
+    .slice(0, 30)
+    .map((p) => `  ${p.exercise_name}: ${p.best_weight}${unit} × ${p.best_reps} reps (${p.achieved_date})`)
     .join('\n');
 
-  return `You are an AI fitness coach embedded inside the Athlix workout tracking app. Be concise, specific, and motivating. Always use the user's real data when relevant.
+  return `You are an expert AI fitness coach inside the Athlix workout app. Your job is to give ${name} accurate, personalised advice based solely on their real logged data below.
 
-Today: ${today}
-Athlete: ${name}
-Body weight: ${weight} | Height: ${height} | Preferred unit: ${unit}
+TODAY: ${today}
+ATHLETE: ${name} | Weight: ${weight} | Height: ${height} | Unit: ${unit}
 
-RECENT WORKOUTS:
-${workoutLines || '  (no workouts logged yet)'}
+━━ RECENT WORKOUTS (with exercises) ━━
+${detailedWorkouts || '  (no workouts logged yet)'}
+${olderLines ? `\n━━ OLDER SESSIONS ━━\n${olderLines}` : ''}
 
-PERSONAL RECORDS:
+━━ MUSCLE GROUP RECOVERY ━━
+${recoveryLines || '  (no data yet)'}
+
+━━ PERSONAL RECORDS ━━
 ${prLines || '  (no records yet)'}
 
-Instructions:
-- Reference the user's actual workouts and PRs when answering
-- Recommend today's training based on what muscle groups they recently hit
-- For general fitness/nutrition science questions, use your Google Search tool to give up-to-date info
-- Keep replies under 300 words unless asked for more detail
-- Use ${unit} for weight references`;
+COACHING RULES:
+- Always reference the user's actual exercises, weights, sets, and reps — never invent data
+- For "what should I train today": use the recovery status above; never recommend a muscle group with ⛔
+- For progress questions: compare current weights to PRs; note any plateaus or improvements
+- For exercise advice or science questions: use Google Search for up-to-date info
+- Keep responses under 250 words unless asked for a detailed plan
+- Format workout suggestions as:  Exercise: X sets × Y reps @ Zkg
+- Be direct and motivating; skip filler phrases`;
 }
 
 /* ── Suggested prompts shown on empty chat ──────────────────────────── */
@@ -114,8 +182,9 @@ export const AiChat: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [dataReady, setDataReady] = useState(false);
-  const [workouts, setWorkouts] = useState<LocalWorkout[]>([]);
+  const [workouts, setWorkouts] = useState<WorkoutWithExercises[]>([]);
   const [prs, setPrs] = useState<LocalPersonalRecord[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -127,9 +196,9 @@ export const AiChat: React.FC = () => {
     if (!open || dataReady || !user?.id) return;
     const load = async () => {
       try {
-        const startDate = format(subDays(new Date(), 60), 'yyyy-MM-dd');
+        const startDate = format(subDays(new Date(), 90), 'yyyy-MM-dd');
         const [ws, ps] = await Promise.all([
-          getWorkouts(user.id, { startDate, limit: 20 }),
+          getWorkouts(user.id, { startDate, limit: 20, includeExercises: true }),
           getPersonalRecords(user.id),
         ]);
         setWorkouts(ws || []);
@@ -185,12 +254,15 @@ export const AiChat: React.FC = () => {
           ? { google_search: {} }
           : { google_search_retrieval: { dynamic_retrieval_config: { mode: 'MODE_DYNAMIC' } } };
 
+        // Only send the last MAX_HISTORY messages to keep prompt tokens low
+        const trimmedHistory = history.slice(-MAX_HISTORY);
+
         const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             system_instruction: { parts: [{ text: systemPrompt }] },
-            contents: history.map((m) => ({
+            contents: trimmedHistory.map((m) => ({
               role: m.role,
               parts: [{ text: m.text }],
             })),
@@ -224,6 +296,7 @@ export const AiChat: React.FC = () => {
         const aiText =
           data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ||
           '(no response)';
+        trackTokenUsage(data?.usageMetadata?.totalTokenCount ?? 0);
         setMessages((prev) => [...prev, { role: 'model', text: aiText }]);
       } catch (err: any) {
         const raw: string = err?.message || 'Something went wrong.';
@@ -251,6 +324,14 @@ export const AiChat: React.FC = () => {
       e.preventDefault();
       send();
     }
+  };
+
+  const handleCopy = (text: string, idx: number) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedIdx(idx);
+      toast.success('Copied!');
+      setTimeout(() => setCopiedIdx(null), 2000);
+    });
   };
 
   /* ── FAB button (mobile only, sits left of the + FAB) ───────────── */
@@ -305,6 +386,7 @@ export const AiChat: React.FC = () => {
               messages={messages}
               input={input}
               loading={loading}
+              copiedIdx={copiedIdx}
               inputRef={inputRef}
               bottomRef={bottomRef}
               onInput={setInput}
@@ -314,6 +396,7 @@ export const AiChat: React.FC = () => {
               onClose={close}
               onGoSettings={() => { close(); navigate('/settings'); }}
               onClear={() => setMessages([])}
+              onCopy={handleCopy}
             />
           </motion.div>
 
@@ -340,6 +423,7 @@ export const AiChat: React.FC = () => {
               messages={messages}
               input={input}
               loading={loading}
+              copiedIdx={copiedIdx}
               inputRef={inputRef}
               bottomRef={bottomRef}
               onInput={setInput}
@@ -349,6 +433,7 @@ export const AiChat: React.FC = () => {
               onClose={close}
               onGoSettings={() => { close(); navigate('/settings'); }}
               onClear={() => setMessages([])}
+              onCopy={handleCopy}
             />
           </motion.div>
         </>
@@ -370,6 +455,7 @@ interface ChatContentProps {
   messages: Message[];
   input: string;
   loading: boolean;
+  copiedIdx: number | null;
   inputRef: React.RefObject<HTMLInputElement>;
   bottomRef: React.RefObject<HTMLDivElement>;
   onInput: (v: string) => void;
@@ -379,13 +465,14 @@ interface ChatContentProps {
   onClose: () => void;
   onGoSettings: () => void;
   onClear: () => void;
+  onCopy: (text: string, idx: number) => void;
 }
 
 const ChatContent: React.FC<ChatContentProps> = ({
-  apiKey, messages, input, loading,
+  apiKey, messages, input, loading, copiedIdx,
   inputRef, bottomRef,
   onInput, onKey, onSend, onSuggest,
-  onClose, onGoSettings, onClear,
+  onClose, onGoSettings, onClear, onCopy,
 }) => (
   <>
     {/* Header */}
@@ -489,17 +576,32 @@ const ChatContent: React.FC<ChatContentProps> = ({
                   <Sparkles className="w-3 h-3 text-white" />
                 </div>
               )}
-              <div
-                className="max-w-[82%] px-3.5 py-2.5 text-[13px] leading-relaxed"
-                style={{
-                  background: m.role === 'user' ? 'var(--accent)' : 'var(--bg-elevated)',
-                  color: m.role === 'user' ? '#000' : 'var(--text-primary)',
-                  borderRadius:
-                    m.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                  border: m.role === 'model' ? '1px solid var(--border)' : 'none',
-                }}
-              >
-                {renderText(m.text)}
+              <div className="max-w-[82%] flex flex-col gap-1">
+                <div
+                  className="px-3.5 py-2.5 text-[13px] leading-relaxed"
+                  style={{
+                    background: m.role === 'user' ? 'var(--accent)' : 'var(--bg-elevated)',
+                    color: m.role === 'user' ? '#000' : 'var(--text-primary)',
+                    borderRadius:
+                      m.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                    border: m.role === 'model' ? '1px solid var(--border)' : 'none',
+                  }}
+                >
+                  {renderText(m.text)}
+                </div>
+                {m.role === 'model' && (
+                  <button
+                    onClick={() => onCopy(m.text, i)}
+                    title="Copy response"
+                    className="self-start flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] transition-colors"
+                    style={{ color: copiedIdx === i ? 'var(--accent)' : 'var(--text-muted)' }}
+                  >
+                    {copiedIdx === i
+                      ? <><Check className="w-3 h-3" /> Copied</>
+                      : <><Copy className="w-3 h-3" /> Copy</>
+                    }
+                  </button>
+                )}
               </div>
             </div>
           ))}
