@@ -268,7 +268,6 @@ export const ActiveRun: React.FC = () => {
   const {
     isRunning, isPaused, path, currentPosition,
     totalDistance, elapsedTime, pace, error, errorCode,
-    splits,
     startRun, pauseRun, resumeRun, stopRun,
   } = useRunTracking();
 
@@ -758,11 +757,11 @@ export const ActiveRun: React.FC = () => {
 
       {/* ── Bottom panel ── */}
       <div
-        className="absolute bottom-0 left-0 right-0 flex flex-col px-4 pt-6"
+        className="absolute bottom-0 left-0 right-0 flex flex-col px-4 pt-4"
         style={{
           zIndex: 50,
           paddingBottom: 'max(24px, env(safe-area-inset-bottom))',
-          background: 'linear-gradient(to top, #0d0f14 0%, #0d0f14 60%, rgba(13,15,20,0.85) 80%, transparent 100%)',
+          background: 'linear-gradient(to top, #0d0f14 0%, #0d0f14 42%, rgba(13,15,20,0.80) 65%, transparent 100%)',
         }}
       >
         <AnimatePresence mode="wait">
@@ -888,11 +887,6 @@ export const ActiveRun: React.FC = () => {
               exit={{ opacity: 0 }}
               className="flex flex-col gap-2"
             >
-              {/* DISTANCE label */}
-              <span className="text-[11px] font-black uppercase tracking-[0.18em] text-center" style={{ color: 'var(--accent)', letterSpacing: '1.8px' }}>
-                DISTANCE
-              </span>
-
               {/* Hero number */}
               <div className="flex items-baseline justify-center gap-2">
                 <span className="font-victory leading-none tabular-nums text-white" style={{ fontSize: 96 }}>
@@ -928,72 +922,6 @@ export const ActiveRun: React.FC = () => {
                 </div>
               </div>
 
-              {/* Splits card */}
-              {(splits.length > 0 || isRunning) && (
-                <div className="rounded-2xl p-3" style={glassCardStyle}>
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/35">SPLITS · /KM</span>
-                    {splits.length > 1 && (() => {
-                      const last2 = splits.slice(-2);
-                      const improving = last2[1].pace < last2[0].pace;
-                      const diff = Math.abs(last2[1].pace - last2[0].pace);
-                      return (
-                        <span className="text-[9px] font-bold" style={{ color: improving ? 'var(--accent)' : 'rgba(255,100,100,0.8)' }}>
-                          {improving ? '↓' : '↑'} {diff.toFixed(1)}s vs avg
-                        </span>
-                      );
-                    })()}
-                  </div>
-                  <div className="flex items-end gap-1.5" style={{ height: 40 }}>
-                    {/* Completed splits */}
-                    {splits.map((split, idx) => {
-                      const allPaces = splits.map((s) => s.pace);
-                      const minP = Math.min(...allPaces);
-                      const maxP = Math.max(...allPaces);
-                      const range = maxP - minP || 1;
-                      const barH = Math.max(6, Math.round(((maxP - split.pace) / range) * 28 + 8));
-                      return (
-                        <div
-                          key={idx}
-                          style={{
-                            width: 12,
-                            height: barH,
-                            borderRadius: 3,
-                            background: 'rgba(200,255,0,0.5)',
-                            alignSelf: 'flex-end',
-                          }}
-                        />
-                      );
-                    })}
-                    {/* Current km in-progress bar */}
-                    <div
-                      style={{
-                        width: 12,
-                        height: 20,
-                        borderRadius: 3,
-                        background: 'var(--accent)',
-                        boxShadow: '0 0 8px rgba(200,255,0,0.7)',
-                        alignSelf: 'flex-end',
-                      }}
-                    />
-                    {/* Future ghost bars (max show 3) */}
-                    {[0, 1, 2].map((i) => (
-                      <div
-                        key={`future-${i}`}
-                        style={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: 3,
-                          background: 'transparent',
-                          border: '1px dashed rgba(255,255,255,0.15)',
-                          alignSelf: 'flex-end',
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Alerts */}
               {needsInternet && (
                 <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-semibold text-amber-200" style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)' }}>
@@ -1027,9 +955,6 @@ export const ActiveRun: React.FC = () => {
                 </button>
               </div>
 
-              <p className="text-center text-[10px] font-semibold text-white/25">
-                GPS continues while Chrome is open in background
-              </p>
             </motion.div>
           )}
 

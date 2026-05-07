@@ -174,15 +174,6 @@ const WeekBarChart: React.FC<{ dayKms: number[] }> = ({ dayKms }) => {
   );
 };
 
-// ── Glass card style ──────────────────────────────────────────────────────────
-const glassCardStyle: React.CSSProperties = {
-  background: 'rgba(20,20,20,0.72)',
-  backdropFilter: 'blur(14px)',
-  WebkitBackdropFilter: 'blur(14px)',
-  border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 16,
-};
-
 // ── Component ────────────────────────────────────────────────────────────────
 
 type RunTab = 'all' | 'outdoor' | 'treadmill';
@@ -599,7 +590,7 @@ export const RunHistory: React.FC = () => {
                 className="absolute inset-0"
                 style={{
                   background:
-                    'linear-gradient(to bottom, rgba(13,15,20,0.08) 0%, rgba(13,15,20,0.18) 28%, rgba(13,15,20,0.72) 52%, rgba(13,15,20,0.97) 66%, #0d0f14 78%)',
+                    'linear-gradient(to bottom, rgba(13,15,20,0.04) 0%, rgba(13,15,20,0.08) 35%, rgba(13,15,20,0.55) 58%, rgba(13,15,20,0.92) 72%, #0d0f14 82%)',
                 }}
               />
 
@@ -700,101 +691,44 @@ export const RunHistory: React.FC = () => {
                   </span>
                 </motion.div>
 
-                {/* 4-stat grid */}
+                {/* 4-stat row — floats on gradient, no card */}
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.26 }}
-                  className="w-full rounded-2xl p-4"
-                  style={glassCardStyle}
+                  className="w-full grid grid-cols-4 gap-0"
                 >
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-0.5">
+                  {[
+                    { icon: <Clock className="h-2.5 w-2.5 text-white/25" />, label: 'TIME', value: formatDuration(selected.duration), sub: null },
+                    { icon: <Zap className="h-2.5 w-2.5 text-white/25" />, label: 'PACE', value: selected.pace > 0 ? formatPace(paceDisplay(selected.pace)) : '--:--', sub: `/${distanceUnit}` },
+                    { icon: <Flame className="h-2.5 w-2.5 text-white/25" />, label: 'CAL', value: String(cal), sub: null },
+                    { icon: null, label: 'EFFORT', value: null, sub: null },
+                  ].map((stat, i) => (
+                    <div
+                      key={i}
+                      className="flex flex-col items-center gap-0.5 py-2"
+                      style={{
+                        borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.07)' : 'none',
+                      }}
+                    >
                       <div className="flex items-center gap-1">
-                        <Clock className="h-2.5 w-2.5 text-white/25" />
-                        <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/25">Time</span>
+                        {stat.icon}
+                        <span className="text-[8px] font-black uppercase tracking-[0.18em] text-white/30">{stat.label}</span>
                       </div>
-                      <span className="font-victory text-[24px] font-black tabular-nums leading-none text-white">
-                        {formatDuration(selected.duration)}
-                      </span>
+                      {stat.value !== null ? (
+                        <>
+                          <span className="font-victory text-[22px] font-black tabular-nums leading-none text-white">{stat.value}</span>
+                          {stat.sub && <span className="text-[9px] font-bold text-white/20">{stat.sub}</span>}
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <EffortBars effort={effort} />
+                          <span className="text-[11px] font-black text-white/40">{effort}/5</span>
+                        </div>
+                      )}
                     </div>
-
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-1">
-                        <Zap className="h-2.5 w-2.5 text-white/25" />
-                        <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/25">Avg Pace</span>
-                      </div>
-                      <span className="font-victory text-[24px] font-black tabular-nums leading-none text-white">
-                        {selected.pace > 0 ? formatPace(paceDisplay(selected.pace)) : '--:--'}
-                      </span>
-                      <span className="text-[9px] font-bold text-white/20">/{distanceUnit}</span>
-                    </div>
-
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-1">
-                        <Flame className="h-2.5 w-2.5 text-white/25" />
-                        <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/25">Cal</span>
-                      </div>
-                      <span className="font-victory text-[24px] font-black tabular-nums leading-none text-white">{cal}</span>
-                    </div>
-
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/25">Effort</span>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <EffortBars effort={effort} />
-                        <span className="text-[12px] font-black text-white/40">{effort}/5</span>
-                      </div>
-                    </div>
-                  </div>
+                  ))}
                 </motion.div>
-
-                {/* Splits list */}
-                {selected.splits && selected.splits.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.36 }}
-                    className="w-full rounded-2xl p-4"
-                    style={glassCardStyle}
-                  >
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="text-[9px] font-black uppercase tracking-[0.22em] text-white/35">SPLITS · /{distanceUnit}</span>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {(() => {
-                        const paces = selected.splits!.map((s) => s.pace);
-                        const bestSplitPace = Math.min(...paces);
-                        return selected.splits!.map((split, sidx) => {
-                          const barPct = bestSplitPace > 0 ? Math.min(1, bestSplitPace / split.pace) : 0.5;
-                          const isBest = split.pace === bestSplitPace;
-                          const isFast = split.pace <= bestSplitPace * 1.05;
-                          return (
-                            <div key={sidx} className="flex items-center gap-3">
-                              <span className="w-5 text-right text-[10px] font-black text-white/30">{sidx + 1}</span>
-                              <div className="flex-1 h-[5px] rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                                <div
-                                  className="h-full rounded-full transition-all"
-                                  style={{
-                                    width: `${barPct * 100}%`,
-                                    background: isBest
-                                      ? 'var(--accent)'
-                                      : isFast
-                                      ? 'rgba(200,255,0,0.55)'
-                                      : 'rgba(255,255,255,0.2)',
-                                    boxShadow: isBest ? '0 0 8px rgba(200,255,0,0.5)' : 'none',
-                                  }}
-                                />
-                              </div>
-                              <span className="w-12 text-right text-[11px] font-black tabular-nums text-white">
-                                {formatPace(paceDisplay(split.pace))}
-                              </span>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                  </motion.div>
-                )}
 
                 <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
