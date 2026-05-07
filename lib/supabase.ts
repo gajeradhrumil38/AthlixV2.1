@@ -14,6 +14,14 @@ export const getPublicSupabaseEnv = () => {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
   if (!url || !publicKey) {
+    // During SSR / static-page generation the NEXT_PUBLIC_* vars may not be
+    // injected yet (they're baked into the client bundle at build time).
+    // Return inert placeholders so module initialisation never throws on the
+    // server — all real Supabase calls happen in useEffect / event handlers
+    // which only run in the browser where the real values are available.
+    if (typeof window === 'undefined') {
+      return { url: 'https://placeholder.supabase.co', publicKey: 'placeholder-anon-key' };
+    }
     throw new Error(MISSING_SUPABASE_ENV_MESSAGE);
   }
 
