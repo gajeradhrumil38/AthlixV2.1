@@ -3,21 +3,26 @@ import { NextResponse, type NextRequest } from 'next/server';
 import type { Database } from '@/lib/database.types';
 
 const protectedRoutes = ['/dashboard', '/onboarding'];
-const DEFAULT_SUPABASE_URL = 'https://mrntwydykqsdawpklumf.supabase.co';
-const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_h8Mv7ku_c2I9XIS1tzarYQ_ozj9Dkxw';
 
 export async function middleware(request: NextRequest) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabasePublicKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!supabaseUrl || !supabasePublicKey) {
+    return NextResponse.json(
+      { error: 'Server is missing required Supabase environment variables.' },
+      { status: 500 },
+    );
+  }
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
-  const supabasePublicKey =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    DEFAULT_SUPABASE_PUBLISHABLE_KEY;
   const pathname = request.nextUrl.pathname;
   const requiresAuth = protectedRoutes.some((route) => pathname.startsWith(route));
 

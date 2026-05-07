@@ -2,31 +2,28 @@ import { createBrowserClient, createServerClient } from '@supabase/ssr';
 import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 
-const DEFAULT_SUPABASE_URL = 'https://mrntwydykqsdawpklumf.supabase.co';
-const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_h8Mv7ku_c2I9XIS1tzarYQ_ozj9Dkxw';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
-const supabasePublicKey =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  DEFAULT_SUPABASE_PUBLISHABLE_KEY;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const getServerSupabaseEnv = () => {
-  return {
-    url: supabaseUrl,
-    publicKey: supabasePublicKey,
-  };
+const MISSING_SUPABASE_ENV_MESSAGE =
+  'Missing Supabase public env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY).';
+
+export const getPublicSupabaseEnv = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const publicKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!url || !publicKey) {
+    throw new Error(MISSING_SUPABASE_ENV_MESSAGE);
+  }
+
+  return { url, publicKey };
 };
 
 export function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    DEFAULT_SUPABASE_PUBLISHABLE_KEY;
+  const { url, publicKey } = getPublicSupabaseEnv();
 
-  return createBrowserClient<Database>(url, key, {
+  return createBrowserClient<Database>(url, publicKey, {
     auth: {
       flowType: 'pkce',
       autoRefreshToken: true,
@@ -47,13 +44,9 @@ export const createBrowserSupabaseClient = createClient;
  * the code_verifier cookie doesn't travel with the user.)
  */
 export function createPasswordResetClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    DEFAULT_SUPABASE_PUBLISHABLE_KEY;
+  const { url, publicKey } = getPublicSupabaseEnv();
 
-  return createBrowserClient<Database>(url, key, {
+  return createBrowserClient<Database>(url, publicKey, {
     auth: {
       flowType: 'implicit',
       autoRefreshToken: false,
@@ -65,7 +58,7 @@ export function createPasswordResetClient() {
 export async function createServerSupabaseClient() {
   const { cookies } = await import('next/headers');
   const cookieStore = cookies();
-  const env = getServerSupabaseEnv();
+  const env = getPublicSupabaseEnv();
 
   return createServerClient<Database>(env.url, env.publicKey, {
     cookies: {
@@ -94,7 +87,7 @@ export async function createServerSupabaseClient() {
 export async function createRouteHandlerSupabaseClient() {
   const { cookies } = await import('next/headers');
   const cookieStore = cookies();
-  const env = getServerSupabaseEnv();
+  const env = getPublicSupabaseEnv();
 
   return createServerClient<Database>(env.url, env.publicKey, {
     cookies: {
@@ -121,7 +114,7 @@ export function createServiceRoleSupabaseClient() {
     throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY');
   }
 
-  const env = getServerSupabaseEnv();
+  const env = getPublicSupabaseEnv();
 
   return createSupabaseAdminClient<Database>(env.url, supabaseServiceRoleKey, {
     auth: {
