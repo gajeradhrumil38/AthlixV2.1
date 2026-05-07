@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Square, MapPin, AlertCircle, ChevronLeft, LocateOff, Play, Pause,
-  Home, History, Target, Layers, Lock, Share2, Flame, Clock, Zap,
+  Home, History, Target, Layers, Lock, Share2, Flame, Clock, Zap, Pencil,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -199,34 +199,100 @@ const GOAL_CARDS: { key: GoalType; label: string; sub: string }[] = [
   { key: 'pace',  label: '5:30',  sub: 'Pace' },
 ];
 
-/* ── Sparkline SVG for splits ───────────────────────────────────── */
-const SplitSparkline: React.FC<{ splits: { km: number; pace: number }[] }> = ({ splits }) => {
-  if (splits.length === 0) return null;
-  const paces = splits.map((s) => s.pace);
-  const minP = Math.min(...paces);
-  const maxP = Math.max(...paces);
-  const range = maxP - minP || 1;
-  const W = 80; const H = 36; const barW = Math.max(4, Math.floor(W / paces.length) - 2);
+/* ── Goal option lists ──────────────────────────────────────────── */
+const DIST_OPTIONS_MI = [1, 1.5, 2, 2.5, 3, 3.1, 4, 5, 6, 6.2, 8, 10, 13.1, 26.2];
+const DIST_OPTIONS_KM = [1, 2, 3, 5, 6, 8, 10, 15, 21.1, 42.2];
+const TIME_OPTIONS    = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 75, 90, 120];
+const PACE_OPTIONS    = ['4:00','4:30','5:00','5:30','6:00','6:30','7:00','7:30','8:00','8:30','9:00','9:30','10:00','11:00','12:00'];
+
+/* ── Drum-roll scroll picker ────────────────────────────────────── */
+const ITEM_H = 50;
+const VISIBLE = 5;
+
+const ScrollPicker: React.FC<{
+  options: string[];
+  index: number;
+  onChange: (i: number) => void;
+  unit?: string;
+}> = ({ options, index, onChange, unit }) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const settling = React.useRef(false);
+
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    settling.current = true;
+    el.scrollTop = index * ITEM_H;
+    settling.current = false;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleScroll = React.useCallback(() => {
+    if (settling.current) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const raw = Math.round(el.scrollTop / ITEM_H);
+    const clamped = Math.max(0, Math.min(options.length - 1, raw));
+    if (clamped !== index) onChange(clamped);
+  }, [index, onChange, options.length]);
+
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
-      {paces.map((p, i) => {
-        const barH = Math.max(4, Math.round(((maxP - p) / range) * (H - 6) + 4));
-        const x = i * (W / paces.length);
-        const y = H - barH;
-        return (
-          <rect
-            key={i}
-            x={x + 1}
-            y={y}
-            width={barW}
-            height={barH}
-            rx={2}
-            fill="var(--accent)"
-            opacity={0.7}
-          />
-        );
-      })}
-    </svg>
+    <div style={{ position: 'relative', height: ITEM_H * VISIBLE, overflow: 'hidden', borderRadius: 14 }}>
+      {/* Center highlight band */}
+      <div style={{
+        position: 'absolute', top: ITEM_H * 2, left: 8, right: 8, height: ITEM_H,
+        background: 'rgba(200,255,0,0.07)',
+        border: '1px solid rgba(200,255,0,0.22)',
+        borderRadius: 10, pointerEvents: 'none', zIndex: 1,
+      }} />
+      {/* Top + bottom fade */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2,
+        background: 'linear-gradient(to bottom, #161a22 0%, transparent 38%, transparent 62%, #161a22 100%)' }} />
+      {/* Scrollable list */}
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        style={{
+          height: '100%', overflowY: 'scroll', overflowX: 'hidden',
+          scrollSnapType: 'y mandatory', scrollbarWidth: 'none',
+          paddingTop: ITEM_H * 2, paddingBottom: ITEM_H * 2,
+          boxSizing: 'content-box',
+        }}
+      >
+        {options.map((opt, i) => {
+          const active = i === index;
+          return (
+            <div
+              key={i}
+              onClick={() => {
+                onChange(i);
+                settling.current = true;
+                containerRef.current?.scrollTo({ top: i * ITEM_H, behavior: 'smooth' });
+                setTimeout(() => { settling.current = false; }, 400);
+              }}
+              style={{
+                height: ITEM_H, scrollSnapAlign: 'start',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                gap: 5, cursor: 'pointer', userSelect: 'none',
+              }}
+            >
+              <span style={{
+                fontFamily: "'Victory Striker Sans', 'DM Sans', sans-serif",
+                fontSize: active ? 28 : 18, fontWeight: 900, letterSpacing: '0.02em',
+                color: active ? '#ffffff' : 'rgba(255,255,255,0.2)',
+                transition: 'font-size 0.12s ease, color 0.12s ease',
+              }}>
+                {opt}
+              </span>
+              {active && unit && (
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(200,255,0,0.75)', marginTop: 2 }}>
+                  {unit}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 };
 
@@ -258,9 +324,15 @@ export const ActiveRun: React.FC = () => {
   } = useRunTracking();
 
   const [distanceUnit] = useState<'km' | 'mi'>(() => {
-    try { const s = localStorage.getItem('athlix_distance_unit'); return s === 'mi' ? 'mi' : 'km'; }
-    catch { return 'km'; }
+    try { const s = localStorage.getItem('athlix_distance_unit'); return s === 'mi' ? 'mi' : 'mi'; }
+    catch { return 'mi'; }
   });
+
+  const distOpts = distanceUnit === 'mi' ? DIST_OPTIONS_MI : DIST_OPTIONS_KM;
+  const [goalDistIdx,  setGoalDistIdx]  = useState(() => distanceUnit === 'mi' ? 5 : 3); // 3.1 mi / 5 km
+  const [goalTimeIdx,  setGoalTimeIdx]  = useState(4); // 30 min
+  const [goalPaceIdx,  setGoalPaceIdx]  = useState(7); // 7:30
+  const [editingGoal,  setEditingGoal]  = useState<GoalType | null>(null);
 
   const displayDistance = useMemo(
     () => (distanceUnit === 'mi' ? totalDistance * 0.621371 : totalDistance),
@@ -310,21 +382,28 @@ export const ActiveRun: React.FC = () => {
   const isPermDenied = errorCode === 1;
   const isAcquiring = isRunning && !currentPosition;
 
-  const goalProgress = useMemo(() => {
-    if (activeGoal === '5k') return Math.min(1, totalDistance / 5);
-    if (activeGoal === '30min') return Math.min(1, elapsedTime / (30 * 60 * 1000));
-    return 0;
-  }, [activeGoal, totalDistance, elapsedTime]);
+  const goalDistKm = distanceUnit === 'mi'
+    ? distOpts[goalDistIdx] / 0.621371
+    : distOpts[goalDistIdx];
+  const goalMinutes = TIME_OPTIONS[goalTimeIdx];
 
-  const goalLabel = activeGoal === '5k' ? '5 KM GOAL'
-    : activeGoal === '30min' ? '30 MIN GOAL'
-    : activeGoal === 'pace' ? 'PACE GOAL'
+  const goalProgress = useMemo(() => {
+    if (activeGoal === '5k') return Math.min(1, totalDistance / goalDistKm);
+    if (activeGoal === '30min') return Math.min(1, elapsedTime / (goalMinutes * 60 * 1000));
+    return 0;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGoal, totalDistance, elapsedTime, goalDistKm, goalMinutes]);
+
+  const goalDistDisplay = `${distOpts[goalDistIdx]} ${distanceUnit.toUpperCase()}`;
+  const goalLabel = activeGoal === '5k' ? `${goalDistDisplay} GOAL`
+    : activeGoal === '30min' ? `${goalMinutes} MIN GOAL`
+    : activeGoal === 'pace' ? `PACE GOAL`
     : 'OPEN RUN';
 
   const goalProgressText = activeGoal === '5k'
-    ? `${totalDistance.toFixed(2)} / 5 KM`
+    ? `${displayDistance.toFixed(2)} / ${distOpts[goalDistIdx]} ${distanceUnit.toUpperCase()}`
     : activeGoal === '30min'
-    ? `${formatDuration(elapsedTime)} / 30:00`
+    ? `${formatDuration(elapsedTime)} / ${goalMinutes}:00`
     : '';
 
   const handleStop = async () => {
@@ -773,10 +852,16 @@ export const ActiveRun: React.FC = () => {
                   <span className="text-[9px] font-black uppercase tracking-[0.18em] text-white/35">GOAL</span>
                   <div className="h-3 w-px bg-white/10" />
                   <span className="font-victory text-[17px] font-black leading-none text-white">
-                    {GOAL_CARDS.find((g) => g.key === activeGoal)?.label}
+                    {activeGoal === '5k'    ? `${distOpts[goalDistIdx]} ${distanceUnit.toUpperCase()}`
+                   : activeGoal === '30min' ? `${TIME_OPTIONS[goalTimeIdx]} MIN`
+                   : activeGoal === 'pace'  ? PACE_OPTIONS[goalPaceIdx]
+                   : 'OPEN'}
                   </span>
                   <span className="text-[11px] font-semibold text-white/35">
-                    {GOAL_CARDS.find((g) => g.key === activeGoal)?.sub}
+                    {activeGoal === '5k'    ? 'Distance'
+                   : activeGoal === '30min' ? 'Time'
+                   : activeGoal === 'pace'  ? `/${distanceUnit}`
+                   : 'Free run'}
                   </span>
                 </div>
                 <span className="text-[11px] font-black tracking-[0.1em]" style={{ color: 'var(--accent)' }}>
@@ -1050,40 +1135,136 @@ export const ActiveRun: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-2.5">
-                {GOAL_CARDS.map(({ key, label, sub }) => {
+                {GOAL_CARDS.map(({ key }) => {
                   const active = activeGoal === key;
+                  const canEdit = key !== 'open';
+                  const dynLabel = key === '5k'    ? `${distOpts[goalDistIdx]}`
+                                 : key === '30min' ? `${TIME_OPTIONS[goalTimeIdx]}`
+                                 : key === 'pace'  ? PACE_OPTIONS[goalPaceIdx]
+                                 : 'Open';
+                  const dynSub   = key === '5k'    ? distanceUnit.toUpperCase()
+                                 : key === '30min' ? 'min'
+                                 : key === 'pace'  ? `/${distanceUnit}`
+                                 : 'Free run';
                   return (
-                    <button
+                    <div
                       key={key}
-                      onClick={() => { setActiveGoal(key); setShowGoalPicker(false); }}
-                      className="flex flex-col items-center rounded-2xl py-4 transition-all active:scale-95"
+                      className="relative rounded-2xl overflow-hidden"
                       style={{
                         background: active ? 'rgba(200,255,0,0.09)' : 'rgba(255,255,255,0.04)',
                         border: active ? '1.5px solid var(--accent)' : '1px solid rgba(255,255,255,0.08)',
                       }}
                     >
-                      <span
-                        className="font-victory text-[26px] font-black leading-none"
-                        style={{ color: active ? 'var(--accent)' : 'white' }}
+                      <button
+                        onClick={() => { setActiveGoal(key); setShowGoalPicker(false); }}
+                        className="w-full flex flex-col items-center pt-4 pb-3 px-2 transition-all active:scale-95"
                       >
-                        {label}
-                      </span>
-                      <span className="mt-1 text-[10px] font-semibold text-white/35">{sub}</span>
-                      {active && (
                         <span
-                          className="mt-2 rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-black"
-                          style={{ background: 'var(--accent)' }}
+                          className="font-victory text-[26px] font-black leading-none"
+                          style={{ color: active ? 'var(--accent)' : 'white' }}
                         >
-                          SELECTED
+                          {dynLabel}
                         </span>
+                        <span className="mt-0.5 text-[11px] font-semibold text-white/35">{dynSub}</span>
+                        {active && (
+                          <span
+                            className="mt-2 rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-black"
+                            style={{ background: 'var(--accent)' }}
+                          >
+                            SELECTED
+                          </span>
+                        )}
+                      </button>
+                      {canEdit && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditingGoal(key); }}
+                          className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full transition-all active:scale-90"
+                          style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
+                        >
+                          <Pencil className="h-3 w-3 text-white/40" />
+                        </button>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
             </motion.div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      {/* ── Goal edit dial sheet ── */}
+      <AnimatePresence>
+        {editingGoal && (() => {
+          const titles: Record<GoalType, string> = { '5k': 'Distance Goal', '30min': 'Time Goal', 'pace': 'Pace Goal', open: '' };
+          const isDistance = editingGoal === '5k';
+          const isTime     = editingGoal === '30min';
+          const isPace     = editingGoal === 'pace';
+
+          const opts    = isDistance ? distOpts.map(String)
+                        : isTime     ? TIME_OPTIONS.map(String)
+                        : PACE_OPTIONS;
+          const curIdx  = isDistance ? goalDistIdx : isTime ? goalTimeIdx : goalPaceIdx;
+          const setIdx  = isDistance ? setGoalDistIdx : isTime ? setGoalTimeIdx : setGoalPaceIdx;
+          const pickerUnit = isDistance ? distanceUnit.toUpperCase()
+                           : isTime     ? 'min'
+                           : `/${distanceUnit}`;
+
+          return (
+            <motion.div
+              key="editDial"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="fixed inset-0 z-[70] flex items-end justify-center"
+              style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }}
+              onClick={() => setEditingGoal(null)}
+            >
+              <motion.div
+                initial={{ y: 80, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 80, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 340, damping: 30 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-sm rounded-t-3xl p-5 flex flex-col gap-4"
+                style={{
+                  background: '#161a22',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  paddingBottom: 'max(28px, env(safe-area-inset-bottom))',
+                }}
+              >
+                <div className="mx-auto h-1 w-10 rounded-full bg-white/15" />
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] font-black uppercase tracking-[0.18em] text-white">
+                    {titles[editingGoal]}
+                  </span>
+                  <span className="text-[11px] font-semibold text-white/30">
+                    {isDistance && `${distOpts[curIdx]} ${distanceUnit}`}
+                    {isTime && `${TIME_OPTIONS[curIdx]} min`}
+                    {isPace && PACE_OPTIONS[curIdx]}
+                  </span>
+                </div>
+
+                <ScrollPicker
+                  options={opts}
+                  index={curIdx}
+                  onChange={setIdx}
+                  unit={pickerUnit}
+                />
+
+                <button
+                  onClick={() => setEditingGoal(null)}
+                  className="h-13 w-full rounded-full font-victory text-[15px] font-black tracking-[0.18em] text-black transition-all active:scale-[0.97]"
+                  style={{ background: 'var(--accent)', height: 52 }}
+                >
+                  DONE
+                </button>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
       </AnimatePresence>
 
       {/* ── GPS / network errors ── */}
