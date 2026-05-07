@@ -27,24 +27,7 @@ const makeRateLimitResponse = (retryAfterSeconds: number) =>
     },
   );
 
-const hasValidSameOrigin = (request: Request) => {
-  const originHeader = request.headers.get('origin');
-  if (!originHeader) return true;
-
-  try {
-    const requestHost = new URL(request.url).host;
-    const originHost = new URL(originHeader).host;
-    return requestHost === originHost;
-  } catch {
-    return false;
-  }
-};
-
 export async function POST(request: Request) {
-  if (!hasValidSameOrigin(request)) {
-    return NextResponse.json({ error: 'Invalid origin' }, { status: 403 });
-  }
-
   let parsedBody: z.infer<typeof loginSchema>;
   try {
     parsedBody = loginSchema.parse(await request.json());

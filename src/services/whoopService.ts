@@ -2,23 +2,12 @@ import { format } from 'date-fns';
 import type { WhoopRecovery, WhoopSleep, WhoopCycle } from '../types/whoop';
 import { supabase } from '../lib/supabase';
 
-const env = import.meta.env as Record<string, string | undefined>;
-const supabaseUrl = env.VITE_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || '';
-const EDGE_FN = supabaseUrl ? `${supabaseUrl}/functions/v1` : '';
+const EDGE_FN = 'https://mrntwydykqsdawpklumf.supabase.co/functions/v1';
 const BASE = 'https://api.prod.whoop.com/developer';
-const WHOOP_CLIENT_ID =
-  env.VITE_WHOOP_CLIENT_ID ||
-  env.NEXT_PUBLIC_WHOOP_CLIENT_ID ||
-  'd00b485b-7052-4a22-ad29-c57ab43f0817';
+const WHOOP_CLIENT_ID = 'd00b485b-7052-4a22-ad29-c57ab43f0817';
+const WHOOP_REDIRECT_URI = `${EDGE_FN}/whoop-oauth`;
 const WHOOP_AUTH_URL = 'https://api.prod.whoop.com/oauth/oauth2/auth';
 const WHOOP_SCOPES = 'offline read:recovery read:cycles read:sleep read:workout read:profile read:body_measurement';
-
-const getWhoopEdgeFunctionBase = () => {
-  if (!EDGE_FN) {
-    throw new Error('Missing Supabase URL env vars required for WHOOP integration.');
-  }
-  return EDGE_FN;
-};
 
 // ── localStorage cache (survives page reload) ──────────────────
 const LS_PREFIX = 'whoop_cache:';
@@ -109,12 +98,11 @@ export const whoopService = {
   // ── OAuth helpers ──────────────────────────────────────────
 
   buildAuthUrl(userId: string): string {
-    const whoopRedirectUri = `${getWhoopEdgeFunctionBase()}/whoop-oauth`;
     const callbackPage = `${window.location.origin}/#/whoop/callback`;
     const state = btoa(JSON.stringify({ userId, returnUrl: callbackPage }));
     const params = new URLSearchParams({
       client_id: WHOOP_CLIENT_ID,
-      redirect_uri: whoopRedirectUri,
+      redirect_uri: WHOOP_REDIRECT_URI,
       response_type: 'code',
       scope: WHOOP_SCOPES,
       state,
@@ -138,8 +126,7 @@ export const whoopService = {
     const jwt = await getJwt();
     if (!jwt) return data.access_token as string;
 
-    const whoopEdgeBase = getWhoopEdgeFunctionBase();
-    const res = await fetch(`${whoopEdgeBase}/whoop-oauth`, {
+    const res = await fetch(`${EDGE_FN}/whoop-oauth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
       body: JSON.stringify({ action: 'refresh' }),
@@ -196,8 +183,7 @@ export const whoopService = {
 
     // 2. Single batch call to edge function (which has its own 15-min DB cache)
     const jwt = await getJwt();
-    const whoopEdgeBase = getWhoopEdgeFunctionBase();
-    const res = await fetch(`${whoopEdgeBase}/whoop-oauth`, {
+    const res = await fetch(`${EDGE_FN}/whoop-oauth`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -13,11 +13,8 @@ Athlix is a mobile-first, tablet-friendly personal gym activity tracker built wi
 ### 2. Environment Variables
 1. In your AI Studio environment, open the **Secrets** panel (or `.env` file if running locally).
 2. Add the following environment variables:
-   - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase Project URL
-   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or `NEXT_PUBLIC_SUPABASE_ANON_KEY`): Your Supabase public client key
-   - `VITE_SUPABASE_URL`: Same Supabase Project URL for the legacy bundle
-   - `VITE_SUPABASE_PUBLISHABLE_KEY` (or `VITE_SUPABASE_ANON_KEY`): Same public client key for the legacy bundle
-   - `SUPABASE_SERVICE_ROLE_KEY`: Server-only key used by trusted backend contexts only (never expose to browser)
+   - `VITE_SUPABASE_URL`: Your Supabase Project URL
+   - `VITE_SUPABASE_ANON_KEY`: Your Supabase Project API Key (anon/public)
 
 ### 3. Running the App
 The app should automatically build and run in the AI Studio environment. If running locally:

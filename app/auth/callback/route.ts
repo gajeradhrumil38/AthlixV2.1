@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
+
+const DEFAULT_SUPABASE_URL = 'https://mrntwydykqsdawpklumf.supabase.co';
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_h8Mv7ku_c2I9XIS1tzarYQ_ozj9Dkxw';
 type OtpType =
   | 'signup'
   | 'invite'
@@ -41,14 +44,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/login?error=link_expired', request.url));
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
   const supabaseKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    return NextResponse.redirect(new URL('/login?error=server_misconfigured', request.url));
-  }
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    DEFAULT_SUPABASE_PUBLISHABLE_KEY;
 
   // Collect cookies that Supabase sets during the exchange so we can
   // forward them to the redirect response. Using NextResponse.next() as
