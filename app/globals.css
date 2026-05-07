@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+@theme {
+  --radius-xs: 0.5rem;
+  --radius-sm: 0.75rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 1.75rem;
+  --radius-4xl: 2rem;
+}
+
 /* ─── Design tokens ──────────────────────────────────────── */
 :root {
   color-scheme: dark;
@@ -13,6 +24,15 @@
   --color-brand-muted:        #888888;
   --color-error:              #ff4d4d;
   --color-success:            #4dff91;
+
+  /* iOS-inspired geometry + control physics */
+  --ios-radius-sm: 12px;
+  --ios-radius-md: 16px;
+  --ios-radius-lg: 20px;
+  --ios-radius-pill: 999px;
+  --ios-control-height: 50px;
+  --ios-surface-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  --ios-press-scale: 0.985;
 }
 
 /* ─── Base ───────────────────────────────────────────────── */
@@ -28,6 +48,14 @@ html, body {
 
 * { box-sizing: border-box; }
 
+:where(button, [type='button'], [type='submit'], [type='reset']) {
+  transition: transform 0.14s ease, filter 0.14s ease, box-shadow 0.2s ease;
+}
+
+:where(button:not(:disabled), [type='button']:not(:disabled), [type='submit']:not(:disabled), [type='reset']:not(:disabled)):active {
+  transform: translateY(1px) scale(var(--ios-press-scale));
+}
+
 /* ─── Scrollbars ─────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -37,20 +65,23 @@ html, body {
 /* ─── Global form elements ───────────────────────────────── */
 .brand-input {
   width: 100%;
-  height: 48px;
-  padding: 0 14px;
-  background: #1e1e1e;
+  height: var(--ios-control-height);
+  padding: 0 16px;
+  background: color-mix(in srgb, #1e1e1e 86%, #ffffff 14%);
   border: 1px solid var(--color-brand-border);
-  border-radius: 8px;
+  border-radius: var(--ios-radius-md);
   color: var(--color-brand-text);
   font-family: inherit;
   font-size: 15px;
   outline: none;
-  transition: border-color 0.15s;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: border-color 0.15s, box-shadow 0.2s ease, background 0.2s ease;
 }
 .brand-input:focus {
   border-color: var(--color-brand-accent);
-  box-shadow: 0 0 0 3px rgba(200,255,0,0.12);
+  box-shadow:
+    0 0 0 3px rgba(200,255,0,0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .brand-input::placeholder { color: var(--color-brand-muted); }
 
@@ -66,23 +97,24 @@ html, body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 44px;
+  gap: 9px;
+  min-height: var(--ios-control-height);
   padding: 0 20px;
-  border-radius: 8px;
+  border-radius: var(--ios-radius-md);
   font-family: inherit;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
-  border: none;
+  transition: background 0.15s, opacity 0.15s, box-shadow 0.2s ease;
+  border: 1px solid transparent;
+  box-shadow: var(--ios-surface-shadow);
 }
 .brand-btn-primary {
   width: 100%;
-  height: 48px;
+  height: var(--ios-control-height);
   background: var(--color-brand-accent);
   color: #000;
-  font-weight: 600;
+  border-color: color-mix(in srgb, var(--color-brand-accent) 70%, #ffffff 30%);
 }
 .brand-btn-primary:hover:not(:disabled) { background: var(--color-brand-accent-hover); }
 .brand-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
