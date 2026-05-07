@@ -4,6 +4,11 @@ import App from './App.tsx';
 import './index.css';
 import 'leaflet/dist/leaflet.css';
 import { supabase } from './lib/supabase';
+import { applyTheme } from './theme/colors';
+
+// Apply the colour palette as CSS custom properties before first render.
+// To change any colour, edit src/theme/colors.ts — no other file needed.
+applyTheme();
 
 /**
  * Bootstrap: if running inside the Next.js /dashboard iframe, wait for the

@@ -23,30 +23,42 @@
 
 @layer base {
   :root {
-    /* ── Base backgrounds ─────────────────────────── */
-    --bg-base:       #0a0c10;   /* near-black app background    */
-    --bg-surface:    #121720;   /* card / sheet surface         */
-    --bg-elevated:   #1a2030;   /* elevated surface / input bg  */
-    --bg-hover:      #1e2638;   /* hover state                  */
-    --border:        #1e2638;   /* default border               */
-    --border-subtle: #121720;   /* subtle dividers              */
+    /*
+     * ⚠️  DO NOT EDIT COLOURS HERE.
+     *
+     *  All colours are defined in  src/theme/colors.ts
+     *  applyTheme() (called in main.tsx) writes them as CSS
+     *  custom properties at runtime, overriding these values.
+     *
+     *  These entries exist only as a paint-flash fallback before
+     *  JavaScript runs. Keep them in sync with colors.ts, but
+     *  always make changes there — not here.
+     */
 
-    /* ── Text ────────────────────────────────────── */
+    /* ── Backgrounds ──────────────────────────────── */
+    --bg-base:       #0a0c10;
+    --bg-surface:    #121720;
+    --bg-elevated:   #1a2030;
+    --bg-hover:      #1e2638;
+    --border:        #1e2638;
+    --border-subtle: #121720;
+
+    /* ── Text ─────────────────────────────────────── */
     --text-primary:   #e8edf3;
     --text-secondary: #8692a4;
     --text-muted:     #3a4a60;
 
-    /* ── Primary accent — lime green ─────────────── */
+    /* ── Accent ───────────────────────────────────── */
     --accent:       #C8FF00;
     --accent-dim:   rgba(200, 255, 0, 0.12);
     --accent-glow:  rgba(200, 255, 0, 0.30);
 
-    /* ── Metric ring colors ───────────────────────── */
-    --ring-volume:    #4FC3F7;   /* blue   — volume   */
-    --ring-recovery:  #FFD54F;   /* yellow — recovery */
-    --ring-strain:    #C8FF00;   /* lime   — strain   */
+    /* ── Metric rings ─────────────────────────────── */
+    --ring-volume:    #4FC3F7;
+    --ring-recovery:  #FFD54F;
+    --ring-strain:    #C8FF00;
 
-    /* ── Muscle group colors ─────────────────────── */
+    /* ── Muscle groups ────────────────────────────── */
     --chest:      #F09595;
     --back:       #5DCAA5;
     --legs:       #EF9F27;
@@ -63,7 +75,12 @@
     --pr-gold:  #FAC775;
     --purple:   #a78bfa;
 
-    /* iOS-inspired geometry + interaction */
+    /* ── Special UI ───────────────────────────────── */
+    --heart-rate:       #19CCF0;
+    --ai-gradient-from: #7c3aed;
+    --ai-gradient-to:   #2563eb;
+
+    /* ── Layout / geometry (not colours) ─────────── */
     --ios-radius-sm: 12px;
     --ios-radius-md: 16px;
     --ios-radius-lg: 20px;
