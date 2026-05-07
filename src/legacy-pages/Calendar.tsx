@@ -98,6 +98,24 @@ const getWorkoutVolume = (workout: any, targetUnit: WeightUnit = 'kg') =>
 const getWorkoutAccent = (workout: any) =>
   muscleColor((workout.muscle_groups || [])[0]);
 
+const getMuscleBarSegments = (workouts: any[]): [string, number][] => {
+  const coverage = new Map<string, number>();
+  workouts.forEach((workout) => {
+    const exs: any[] = workout.exercises || [];
+    let counted = false;
+    exs.forEach((ex) => {
+      const mg = (ex.muscle_group || '').trim();
+      if (mg) { coverage.set(mg, (coverage.get(mg) || 0) + 1); counted = true; }
+    });
+    if (!counted) {
+      (workout.muscle_groups || []).forEach((mg: string) => {
+        if (mg) coverage.set(mg, (coverage.get(mg) || 0) + 1);
+      });
+    }
+  });
+  return Array.from(coverage.entries()).sort((a, b) => b[1] - a[1]);
+};
+
 const isGenericWorkoutTitle = (title?: string | null) => {
   if (!title) return true;
   const normalized = title.trim().toLowerCase();
@@ -499,7 +517,7 @@ export const Calendar: React.FC = () => {
           onPointerCancel={handleTouchEnd}
           className={`group relative min-h-[116px] min-w-0 overflow-hidden rounded-2xl border px-2 py-2 text-left transition-all ${
             isSelected
-              ? 'border-[var(--accent)]/55 bg-[linear-gradient(180deg,var(--bg-surface)_0%,rgba(15,24,35,1)_100%)] shadow-[0_0_0_1px_rgba(200,255,0,0.10)]'
+              ? 'border-[var(--accent)]/55 bg-[linear-gradient(180deg,#1c1c1c_0%,#141414_100%)] shadow-[0_0_0_1px_rgba(200,255,0,0.08)]'
               : 'border-white/6 bg-[linear-gradient(180deg,#181818_0%,#141414_100%)] hover:border-white/12 hover:bg-white/[0.03]'
           } ${isOutsideMonth ? 'opacity-40' : ''}`}
         >
@@ -555,7 +573,7 @@ export const Calendar: React.FC = () => {
         onPointerCancel={handleTouchEnd}
         className={`group min-h-[132px] rounded-2xl border p-3 text-left transition-all ${
           isSelected
-            ? 'border-[var(--accent)]/45 bg-[linear-gradient(180deg,rgba(18,37,50,0.96)_0%,rgba(16,25,35,1)_100%)] shadow-[0_0_0_1px_rgba(200,255,0,0.08)]'
+            ? 'border-[var(--accent)]/55 bg-[linear-gradient(180deg,#1c1c1c_0%,#141414_100%)] shadow-[0_0_0_1px_rgba(200,255,0,0.08)]'
             : 'border-white/6 bg-[linear-gradient(180deg,#181818_0%,#141414_100%)] hover:border-white/12 hover:bg-white/[0.03]'
         } ${isOutsideMonth ? 'opacity-45' : ''} ${compact ? 'min-h-[116px]' : ''}`}
       >
@@ -583,25 +601,29 @@ export const Calendar: React.FC = () => {
 
           {dayWorkouts.length > 0 ? (
             <div className="mt-auto space-y-2">
-              <div className="flex items-center gap-1.5">
-                {dayWorkouts.slice(0, 4).map((workout) => (
-                  <div
-                    key={workout.id}
-                    className="h-2 flex-1 rounded-full"
-                    style={{ backgroundColor: getWorkoutAccent(workout) }}
-                  />
-                ))}
-              </div>
-                <div className="grid grid-cols-2 gap-2 text-[10px] text-[#9EABBB]">
-                  <div>
-                    <div className="font-semibold text-white">{daySummary.totalDuration}m</div>
-                    <div>Duration</div>
+              {/* Muscle-coverage bar — proportional segments per muscle group */}
+              {(() => {
+                const segs = getMuscleBarSegments(dayWorkouts);
+                return segs.length > 0 ? (
+                  <div className="flex h-2 w-full overflow-hidden rounded-full" style={{ gap: '2px' }}>
+                    {segs.map(([muscle, count]) => (
+                      <div key={muscle} style={{ flex: count, backgroundColor: muscleColor(muscle), borderRadius: '9999px' }} />
+                    ))}
                   </div>
-                  <div className="text-right">
-                    <div className="font-semibold text-white">{daySummary.exerciseCount}</div>
-                    <div>Exercises</div>
-                  </div>
+                ) : (
+                  <div className="h-2 w-full rounded-full" style={{ backgroundColor: getWorkoutAccent(dayWorkouts[0]) }} />
+                );
+              })()}
+              <div className="grid grid-cols-2 gap-2 text-[10px] text-[#9EABBB]">
+                <div>
+                  <div className="font-semibold text-[var(--text-primary)]">{daySummary.totalDuration}m</div>
+                  <div>Duration</div>
                 </div>
+                <div className="text-right">
+                  <div className="font-semibold text-[var(--text-primary)]">{daySummary.exerciseCount}</div>
+                  <div>Exercises</div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="mt-auto rounded-xl border border-dashed border-white/8 bg-black/10 px-3 py-3 text-center text-[11px] text-[var(--text-muted)]">
