@@ -49,6 +49,10 @@ const STAT_INFO: Record<string, { title: string; desc: string }> = {
     title: 'Strain Score',
     desc: 'A measure of cardiovascular load on a 0–21 scale. Higher strain means more stress on your body. Balance strain with recovery for optimal performance.',
   },
+  STEPS: {
+    title: 'Estimated Steps',
+    desc: 'Steps estimated from energy expenditure (kilojoules) recorded by WHOOP. Day view shows today\'s count; Week/Month shows the total for the selected period.',
+  },
 };
 
 // ── Circular ring gauge ────────────────────────────────────────
@@ -258,6 +262,16 @@ export const WhoopDashboard: React.FC = () => {
   const avgStrain = tab !== 'day' ? numAvg(steps.filter((s) => s.strain_score != null).map((s) => s.strain_score!)) : null;
   const lastDate = recovery[0]?.date ? format(new Date(recovery[0].date), 'MMM d') : null;
 
+  const todayStepCount = tab === 'day' ? (todayStep?.estimated_steps ?? null) : null;
+  const periodStepTotal = tab !== 'day' && steps.length > 0
+    ? steps.reduce((sum, c) => sum + c.estimated_steps, 0)
+    : null;
+  const fmtSteps = (n: number | null) => {
+    if (n == null) return '—';
+    if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+    return `${n}`;
+  };
+
   const hasSubStats = tab === 'day'
     ? (hrv != null || rhr != null || inBedHours != null || strain != null)
     : (avgRecovery != null || avgHrv != null || avgRhr != null || avgSleep != null || avgStrain != null);
@@ -363,6 +377,7 @@ export const WhoopDashboard: React.FC = () => {
               {rhr != null && <Stat label="RHR" value={`${rhr}bpm`} color="#f87171" onInfo={() => setActiveInfo('RHR')} />}
               {inBedHours && <Stat label="In Bed" value={`${inBedHours}h`} color="#60a5fa" onInfo={() => setActiveInfo('IN BED')} />}
               {strain != null && <Stat label="Strain" value={strain.toFixed(1)} color="#C8FF00" onInfo={() => setActiveInfo('STRAIN')} />}
+              {todayStepCount != null && <Stat label="Steps" value={fmtSteps(todayStepCount)} color="#4FC3F7" onInfo={() => setActiveInfo('STEPS')} />}
             </div>
           ) : (
             <div className="flex gap-2">
@@ -370,6 +385,7 @@ export const WhoopDashboard: React.FC = () => {
               {avgRhr != null && <Stat label="Avg RHR" value={`${Math.round(avgRhr)}`} color="#f87171" onInfo={() => setActiveInfo('RHR')} />}
               {avgSleep != null && <Stat label="Avg Sleep" value={`${Math.round(avgSleep)}%`} color="#60a5fa" onInfo={() => setActiveInfo('IN BED')} />}
               {avgStrain != null && <Stat label="Avg Strain" value={avgStrain.toFixed(1)} color="#C8FF00" onInfo={() => setActiveInfo('STRAIN')} />}
+              {periodStepTotal != null && <Stat label="Steps" value={fmtSteps(periodStepTotal)} color="#4FC3F7" onInfo={() => setActiveInfo('STEPS')} />}
             </div>
           )}
         </div>
