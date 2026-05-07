@@ -14,6 +14,7 @@ export interface RunSummary {
   duration: number;
   pace: number;
   timestamp: number;
+  splits: { km: number; pace: number }[];
 }
 
 interface UseRunTrackingReturn {
@@ -24,6 +25,7 @@ interface UseRunTrackingReturn {
   totalDistance: number;
   elapsedTime: number;
   pace: number;
+  splits: { km: number; pace: number }[];
   error: string | null;
   errorCode: number | null;
   startRun: () => void;
@@ -39,12 +41,23 @@ export const useRunTracking = (): UseRunTrackingReturn => {
   const [isPaused, setIsPaused] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [totalDistance, setTotalDistance] = useState(0);
+  const [splits, setSplits] = useState<{ km: number; pace: number }[]>([]);
+
   const timerRef = useRef<number | null>(null);
   const pathRef = useRef<GpsPoint[]>([]);
   const distanceRef = useRef(0);
   const skipNextDeltaRef = useRef(false);
   const lastPathSyncAtRef = useRef(0);
   const kalmanRef = useRef(new GpsKalmanFilter());
+
+  // Mirror elapsed time in a ref so position effect can read current value without stale closure
+  const elapsedTimeRef = useRef(0);
+
+  // Splits tracking refs
+  const splitsRef = useRef<{ km: number; pace: number }[]>([]);
+  const nextSplitKmRef = useRef(1.0);
+  const splitStartTimeRef = useRef(0);
+  const splitStartDistRef = useRef(0);
 
   const clearTimer = () => {
     if (timerRef.current !== null) {
@@ -56,7 +69,11 @@ export const useRunTracking = (): UseRunTrackingReturn => {
   const startTimer = () => {
     clearTimer();
     timerRef.current = window.setInterval(() => {
-      setElapsedTime((prev) => prev + 1000);
+      setElapsedTime((prev) => {
+        const next = prev + 1000;
+        elapsedTimeRef.current = next;
+        return next;
+      });
     }, 1000);
   };
 
@@ -73,9 +90,18 @@ export const useRunTracking = (): UseRunTrackingReturn => {
     skipNextDeltaRef.current = false;
     lastPathSyncAtRef.current = 0;
     kalmanRef.current.reset();
+
+    // Reset splits
+    splitsRef.current = [];
+    nextSplitKmRef.current = 1.0;
+    splitStartTimeRef.current = 0;
+    splitStartDistRef.current = 0;
+    elapsedTimeRef.current = 0;
+
     setPath([]);
     setTotalDistance(0);
     setElapsedTime(0);
+    setSplits([]);
     setIsRunning(true);
     setIsPaused(false);
     startTimer();
@@ -100,12 +126,13 @@ export const useRunTracking = (): UseRunTrackingReturn => {
     const summary: RunSummary = {
       path: pathRef.current,
       distance: distanceRef.current,
-      duration: elapsedTime,
-      pace: calculatePace(distanceRef.current, elapsedTime),
+      duration: elapsedTimeRef.current,
+      pace: calculatePace(distanceRef.current, elapsedTimeRef.current),
       timestamp: Date.now(),
+      splits: splitsRef.current,
     };
     return summary;
-  }, [elapsedTime, stopTracking]);
+  }, [stopTracking]);
 
   // Track new GPS position → append to path
   useEffect(() => {
@@ -139,6 +166,20 @@ export const useRunTracking = (): UseRunTrackingReturn => {
 
         distanceRef.current += delta;
         setTotalDistance(distanceRef.current);
+
+        // Check for km splits
+        while (distanceRef.current >= nextSplitKmRef.current) {
+          const splitDuration = elapsedTimeRef.current - splitStartTimeRef.current;
+          const splitDist = nextSplitKmRef.current - splitStartDistRef.current;
+          const splitPace = calculatePace(splitDist, splitDuration);
+          const newSplit = { km: nextSplitKmRef.current, pace: splitPace };
+          splitsRef.current = [...splitsRef.current, newSplit];
+          setSplits([...splitsRef.current]);
+
+          splitStartTimeRef.current = elapsedTimeRef.current;
+          splitStartDistRef.current = nextSplitKmRef.current;
+          nextSplitKmRef.current += 1.0;
+        }
       }
     }
 
@@ -175,6 +216,7 @@ export const useRunTracking = (): UseRunTrackingReturn => {
     totalDistance,
     elapsedTime,
     pace: totalDistance > 0 ? calculatePace(totalDistance, elapsedTime) : 0,
+    splits,
     error,
     errorCode,
     startRun,

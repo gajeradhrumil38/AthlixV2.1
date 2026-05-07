@@ -7,6 +7,7 @@ export interface SavedRun {
   duration: number;
   pace: number;
   timestamp: number;
+  splits?: { km: number; pace: number }[];
 }
 
 const KEY = 'athlix:runs';
@@ -45,7 +46,7 @@ const sanitizeRun = (run: unknown): SavedRun | null => {
     .filter((point): point is GpsPoint => point !== null)
     .slice(-MAX_STORED_PATH_POINTS);
 
-  return {
+  const result: SavedRun = {
     id: maybeRun.id,
     path,
     distance: maybeRun.distance,
@@ -53,6 +54,14 @@ const sanitizeRun = (run: unknown): SavedRun | null => {
     pace: maybeRun.pace,
     timestamp: maybeRun.timestamp,
   };
+
+  if (Array.isArray(maybeRun.splits)) {
+    result.splits = (maybeRun.splits as { km: number; pace: number }[]).filter(
+      (s) => isFiniteNumber(s.km) && isFiniteNumber(s.pace),
+    );
+  }
+
+  return result;
 };
 
 const normalizeRuns = (rawRuns: unknown): SavedRun[] => {
@@ -82,6 +91,7 @@ export const saveRun = (runData: Omit<SavedRun, 'id'>): SavedRun => {
     duration: Number.isFinite(runData.duration) && runData.duration > 0 ? runData.duration : 0,
     pace: Number.isFinite(runData.pace) && runData.pace > 0 ? runData.pace : 0,
     timestamp: Number.isFinite(runData.timestamp) && runData.timestamp > 0 ? runData.timestamp : Date.now(),
+    splits: runData.splits,
   };
 
   runs.push(saved);
