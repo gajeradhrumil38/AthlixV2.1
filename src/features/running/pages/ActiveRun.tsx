@@ -1016,6 +1016,76 @@ export const ActiveRun: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {/* ── Goal picker bottom sheet ── */}
+      <AnimatePresence>
+        {showGoalPicker && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-[60] flex items-end justify-center"
+            style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)' }}
+            onClick={() => setShowGoalPicker(false)}
+          >
+            <motion.div
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 60, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 340, damping: 30 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-t-3xl p-5 flex flex-col gap-4"
+              style={{
+                background: '#161a22',
+                border: '1px solid rgba(255,255,255,0.08)',
+                paddingBottom: 'max(28px, env(safe-area-inset-bottom))',
+              }}
+            >
+              {/* Handle */}
+              <div className="mx-auto h-1 w-10 rounded-full bg-white/15" />
+
+              <div className="flex items-center gap-2 mb-1">
+                <Target className="h-4 w-4" style={{ color: 'var(--accent)' }} />
+                <span className="text-[13px] font-black uppercase tracking-[0.18em] text-white">Choose Goal</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                {GOAL_CARDS.map(({ key, label, sub }) => {
+                  const active = activeGoal === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => { setActiveGoal(key); setShowGoalPicker(false); }}
+                      className="flex flex-col items-center rounded-2xl py-4 transition-all active:scale-95"
+                      style={{
+                        background: active ? 'rgba(200,255,0,0.09)' : 'rgba(255,255,255,0.04)',
+                        border: active ? '1.5px solid var(--accent)' : '1px solid rgba(255,255,255,0.08)',
+                      }}
+                    >
+                      <span
+                        className="font-victory text-[26px] font-black leading-none"
+                        style={{ color: active ? 'var(--accent)' : 'white' }}
+                      >
+                        {label}
+                      </span>
+                      <span className="mt-1 text-[10px] font-semibold text-white/35">{sub}</span>
+                      {active && (
+                        <span
+                          className="mt-2 rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-black"
+                          style={{ background: 'var(--accent)' }}
+                        >
+                          SELECTED
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── GPS / network errors ── */}
       <AnimatePresence>
         {error && !isPermDenied && (
