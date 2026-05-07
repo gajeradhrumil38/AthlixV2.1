@@ -77,7 +77,7 @@ export const WeeklyRing: React.FC<WeeklyRingProps> = ({ trainedDays, goalDays, d
       </div>
 
       {balanceWarning && (
-        <div className="mt-3 w-full bg-[#1a1200] border border-[var(--pr-gold)]/30 rounded-md px-2 py-1 text-center">
+        <div className="mt-3 w-full bg-[#1a1200] border border-[var(--pr-gold)]/30 rounded-lg px-2 py-1 text-center">
           <span className="text-[9px] text-[var(--pr-gold)] inline-flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {balanceWarning}</span>
         </div>
       )}

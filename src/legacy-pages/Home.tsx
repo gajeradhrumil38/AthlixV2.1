@@ -574,7 +574,7 @@ export const Home: React.FC = () => {
       </div>
     ),
     weekly_goal: (
-      <div key="weekly_goal" className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-[14px] p-[10px_8px] h-full flex flex-col justify-between">
+      <div key="weekly_goal" className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-[10px_8px] h-full flex flex-col justify-between">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-[9px] uppercase tracking-[1.5px] text-[var(--text-secondary)] font-bold">WEEKLY GOAL</h3>
           <button
@@ -593,7 +593,7 @@ export const Home: React.FC = () => {
       </div>
     ),
     train_next: (
-      <div key="train_next" className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-[14px] p-3 h-full flex flex-col">
+      <div key="train_next" className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-3 h-full flex flex-col">
 
         {/* ── DAY VIEW ── */}
         {viewMode === 'Day' && (() => {
@@ -628,7 +628,7 @@ export const Home: React.FC = () => {
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
                   <div className="text-[11px] text-[var(--text-secondary)]">No exercises logged.</div>
-                  <button onClick={handleWorkoutEntry} className="px-3 py-1.5 bg-[var(--accent)] text-black text-[10px] font-bold rounded-lg">Start Workout</button>
+                  <button onClick={handleWorkoutEntry} className="px-3 py-1.5 bg-[var(--accent)] text-black text-[10px] font-bold rounded-xl">Start Workout</button>
                 </div>
               )}
             </>
@@ -747,7 +747,7 @@ export const Home: React.FC = () => {
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
                   <div className="text-[11px] text-[var(--text-secondary)]">No training data this month.</div>
-                  <button onClick={() => navigate(`/log?date=${encodeURIComponent(todayStr)}`)} className="px-3 py-1.5 bg-[var(--accent)] text-black text-[10px] font-bold rounded-lg">Log Workout</button>
+                  <button onClick={() => navigate(`/log?date=${encodeURIComponent(todayStr)}`)} className="px-3 py-1.5 bg-[var(--accent)] text-black text-[10px] font-bold rounded-xl">Log Workout</button>
                 </div>
               )}
             </>
@@ -763,7 +763,7 @@ export const Home: React.FC = () => {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
-          className="w-full border rounded-[10px] p-2.5 flex items-center gap-2.5 animate-card-enter shadow-sm"
+          className="w-full border rounded-xl p-2.5 flex items-center gap-2.5 animate-card-enter shadow-sm"
           style={{ 
             animationDelay: '180ms',
             backgroundColor: `color-mix(in srgb, ${alert.color} 10%, var(--bg-surface))`,
@@ -801,7 +801,7 @@ export const Home: React.FC = () => {
                 </p>
               </div>
             </div>
-            <button onClick={() => navigate('/timeline')} className="p-1.5 text-[var(--accent)] hover:bg-[var(--accent-dim)] rounded-md transition-colors">
+            <button onClick={() => navigate('/timeline')} className="p-1.5 text-[var(--accent)] hover:bg-[var(--accent-dim)] rounded-lg transition-colors">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -816,7 +816,7 @@ export const Home: React.FC = () => {
             </div>
             <button
               onClick={handleWorkoutEntry}
-              className="px-3 py-1 bg-[var(--accent-dim)] text-[var(--accent)] text-[10px] font-medium rounded-md border border-[var(--accent)]/30 hover:bg-[var(--accent)] hover:text-black transition-colors"
+              className="px-3 py-1 bg-[var(--accent-dim)] text-[var(--accent)] text-[10px] font-medium rounded-lg border border-[var(--accent)]/30 hover:bg-[var(--accent)] hover:text-black transition-colors"
             >
               Log
             </button>
@@ -863,7 +863,7 @@ export const Home: React.FC = () => {
         <div className="flex justify-between items-center mb-2">
           <h3 className="text-[11px] text-[var(--purple)] font-medium flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Weekly AI Summary</h3>
           {new Date().getDay() === 0 && (
-            <button className="text-[9px] px-2 py-0.5 rounded-md bg-[var(--purple)]/10 text-[var(--purple)] border border-[var(--purple)]/30 hover:bg-[var(--purple)]/20 transition-colors">
+            <button className="text-[9px] px-2 py-0.5 rounded-lg bg-[var(--purple)]/10 text-[var(--purple)] border border-[var(--purple)]/30 hover:bg-[var(--purple)]/20 transition-colors">
               Generate
             </button>
           )}

@@ -99,7 +99,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({ isOpen, onClose,
               ) : (
                 <div className="w-10" /> // Spacer
               )}
-              <h2 className="text-lg font-bold text-white">
+              <h2 className="text-[15px] font-bold text-[var(--text-primary)]">
                 {step === 1 ? 'Select Muscle Group' : selectedGroup}
               </h2>
               <button onClick={onClose} className="p-2 text-gray-400 hover:text-white rounded-full">
@@ -117,14 +117,14 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({ isOpen, onClose,
                         setSelectedGroup(group.id);
                         setStep(2);
                       }}
-                      className="bg-black border border-white/5 p-4 rounded-2xl flex flex-col items-center justify-center space-y-2 hover:border-[var(--accent)]/50 transition-colors"
+                      className="bg-[var(--bg-elevated)] border border-[var(--border)] p-4 rounded-2xl flex flex-col items-center justify-center space-y-2 hover:border-[var(--accent)]/50 transition-colors"
                     >
                       <FitnessBadge
                         name={muscleToGlyph(group.id)}
                         color={MUSCLE_COLORS[group.id] || 'var(--accent)'}
                         size={42}
                       />
-                      <span className="text-white font-medium">{group.id}</span>
+                      <span className="text-[var(--text-primary)] font-medium">{group.id}</span>
                     </button>
                   ))}
                 </div>
@@ -137,7 +137,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({ isOpen, onClose,
                       placeholder="Search exercises..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-black border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-[var(--accent)]"
+                      className="w-full bg-[var(--bg-elevated)] border border-[var(--border)] rounded-xl pl-10 pr-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
                     />
                   </div>
 
@@ -154,9 +154,9 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({ isOpen, onClose,
                             onSelect(ex.name);
                             onClose();
                           }}
-                          className="w-full flex items-center justify-between p-4 bg-black border border-white/5 rounded-xl hover:border-[var(--accent)]/30 transition-colors"
+                          className="w-full flex items-center justify-between p-4 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-xl hover:border-[var(--accent)]/30 transition-colors"
                         >
-                          <span className="text-white font-medium">{ex.name}</span>
+                          <span className="text-[var(--text-primary)] font-medium">{ex.name}</span>
                           <ChevronRight className="w-4 h-4 text-gray-500" />
                         </button>
                       ))}

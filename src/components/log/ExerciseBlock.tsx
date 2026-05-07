@@ -73,7 +73,7 @@ export const ExerciseBlock: React.FC<ExerciseBlockProps> = ({ exercise, onUpdate
     .reduce((acc, s) => acc + (Number(s.weight || 0) * Number(s.reps || 0)), 0);
 
   return (
-    <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-[14px] overflow-hidden">
+    <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
         <div className="flex items-center gap-2">

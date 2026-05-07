@@ -53,7 +53,7 @@ export const RestTimer: React.FC<RestTimerProps> = ({ duration, exerciseName, on
           <button
             key={p}
             onClick={() => setTimeLeft(p)}
-            className={`px-2 py-1 rounded-md text-[9px] font-bold transition-all ${timeLeft === p ? 'bg-[#EF9F27]/15 text-[#EF9F27] border border-[#EF9F27]/40' : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border)]'}`}
+            className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all ${timeLeft === p ? 'bg-[#EF9F27]/15 text-[#EF9F27] border border-[#EF9F27]/40' : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border)]'}`}
           >
             {p/60}m
           </button>
