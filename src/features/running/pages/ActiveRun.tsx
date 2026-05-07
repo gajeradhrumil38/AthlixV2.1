@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Square, MapPin, AlertCircle, ChevronLeft, LocateOff, Play, Pause,
   Home, History, Target, Layers, Lock, Share2, Flame, Clock, Zap,
-  ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -190,19 +189,6 @@ const SlideControl: React.FC<SlideControlProps> = ({ label, icon, onConfirm, dan
   );
 };
 
-/* ── Chevrons row ───────────────────────────────────────────────── */
-const ChevronTriple: React.FC = () => (
-  <div className="flex items-center gap-0">
-    {[0, 1, 2].map((i) => (
-      <ChevronRight
-        key={i}
-        className="h-3.5 w-3.5"
-        style={{ color: 'var(--accent)', opacity: 0.35 + i * 0.3 }}
-      />
-    ))}
-  </div>
-);
-
 /* ── Goal card ──────────────────────────────────────────────────── */
 type GoalType = 'open' | '5k' | '30min' | 'pace';
 
@@ -284,6 +270,7 @@ export const ActiveRun: React.FC = () => {
 
   const [activeGoal, setActiveGoal] = useState<GoalType>('5k');
   const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const [showGoalPicker, setShowGoalPicker] = useState(false);
 
   // Last run stats computed once from storage
   const [lastRun] = useState(() => {
@@ -775,40 +762,27 @@ export const ActiveRun: React.FC = () => {
               exit={{ opacity: 0, y: 4 }}
               className="flex flex-col gap-3"
             >
-              {/* Goal selector label */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Target className="h-3 w-3" style={{ color: 'var(--accent)' }} />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--accent)' }}>TODAY&apos;S GOAL</span>
+              {/* Goal compact row */}
+              <button
+                onClick={() => setShowGoalPicker(true)}
+                className="flex items-center justify-between rounded-2xl px-4 py-3 w-full transition-all active:scale-[0.98]"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Target className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--accent)' }} />
+                  <span className="text-[9px] font-black uppercase tracking-[0.18em] text-white/35">GOAL</span>
+                  <div className="h-3 w-px bg-white/10" />
+                  <span className="font-victory text-[17px] font-black leading-none text-white">
+                    {GOAL_CARDS.find((g) => g.key === activeGoal)?.label}
+                  </span>
+                  <span className="text-[11px] font-semibold text-white/35">
+                    {GOAL_CARDS.find((g) => g.key === activeGoal)?.sub}
+                  </span>
                 </div>
-                <span className="text-[10px] font-semibold text-white/30">Tap to change ›</span>
-              </div>
-
-              {/* Goal cards */}
-              <div className="flex gap-2">
-                {GOAL_CARDS.map(({ key, label, sub }) => {
-                  const active = activeGoal === key;
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => setActiveGoal(key)}
-                      className="flex-1 flex flex-col items-center rounded-xl py-3 transition-all active:scale-95"
-                      style={{
-                        background: active ? 'rgba(200,255,0,0.08)' : 'rgba(255,255,255,0.04)',
-                        border: active ? '1.5px solid var(--accent)' : '1px solid rgba(255,255,255,0.08)',
-                      }}
-                    >
-                      <span
-                        className="font-victory text-[18px] font-black leading-none"
-                        style={{ color: active ? 'var(--accent)' : 'white' }}
-                      >
-                        {label}
-                      </span>
-                      <span className="mt-0.5 text-[9px] font-semibold text-white/30 text-center leading-tight">{sub}</span>
-                    </button>
-                  );
-                })}
-              </div>
+                <span className="text-[11px] font-black tracking-[0.1em]" style={{ color: 'var(--accent)' }}>
+                  Change ›
+                </span>
+              </button>
 
               {/* Quick stats 3-grid */}
               <div className="grid grid-cols-3 rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
@@ -853,12 +827,7 @@ export const ActiveRun: React.FC = () => {
               {/* Slide to start */}
               <SlideControl
                 label="SLIDE TO START RUN"
-                icon={
-                  <div className="flex items-center gap-0.5">
-                    <Play className="h-4 w-4 fill-black text-black ml-0.5" />
-                    <ChevronTriple />
-                  </div>
-                }
+                icon={<Play className="h-5 w-5 fill-black text-black" />}
                 onConfirm={startRun}
               />
 
@@ -870,11 +839,6 @@ export const ActiveRun: React.FC = () => {
                 <History className="h-3.5 w-3.5" />
                 VIEW RUN HISTORY ›
               </button>
-
-              {/* Footer */}
-              <p className="text-center text-[10px] font-semibold text-white/20">
-                Auto-pause · ON &nbsp;&nbsp; 1 km splits
-              </p>
             </motion.div>
           )}
 
