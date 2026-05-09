@@ -18,7 +18,13 @@ interface Exercise {
   name: string;
   muscleGroup: string;
   exercise_db_id?: string;
-  lastSession?: { weight: number; reps: number; date: string };
+  lastSession?: {
+    weight: number;
+    reps: number;
+    date: string;
+    sets?: number;
+    perSetData?: Array<{ weight: number; reps: number }>;
+  };
   // Populated when this exercise comes from a loaded template
   defaultSets?: number;
   defaultReps?: number;
@@ -136,12 +142,12 @@ const ExerciseRow: React.FC<{
         </div>
       </div>
       {exercise.lastSession && !isSelected && (
-        <div className="hidden sm:flex flex-col items-end shrink-0 pr-1">
-          <span className="text-[11px] tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-            {exercise.lastSession.weight}lbs × {exercise.lastSession.reps}
+        <div className="flex flex-col items-end shrink-0 pr-1 gap-0.5">
+          <span className="text-[11px] font-semibold tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+            {exercise.lastSession.sets ?? 1}×{exercise.lastSession.weight}lb
           </span>
           <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-            {exercise.lastSession.date}
+            {exercise.lastSession.reps} reps
           </span>
         </div>
       )}
@@ -196,7 +202,13 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
           muscleGroup: ex.muscleGroup,
           exercise_db_id: ex.exercise_db_id || undefined,
           lastSession: ex.lastSession
-            ? { weight: ex.lastSession.weight, reps: ex.lastSession.reps, date: ex.lastSession.date }
+            ? {
+                weight: ex.lastSession.weight,
+                reps: ex.lastSession.reps,
+                date: ex.lastSession.date,
+                sets: ex.lastSession.sets,
+                perSetData: ex.lastSession.perSetData,
+              }
             : undefined,
         })),
       );

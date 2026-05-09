@@ -346,21 +346,34 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
         const inputType = resolveExerciseInputType(exerciseOption.name);
         const defaults = getDefaultSetValues(inputType);
-        const totalSets = Math.max(1, Math.min(20, Number(summary?.sets || 1)));
+        const perSetData = summary?.perSetData;
+        const totalSets = Math.max(1, Math.min(20, Number(summary?.sets || 3)));
         const seedWeight = Number(summary?.weight ?? defaults.weight);
         const seedReps = Number(summary?.reps ?? defaults.reps);
+
+        const buildSets = perSetData && perSetData.length > 0
+          ? perSetData.map((s: { weight: number; reps: number }) => ({
+              id: createSetId(),
+              weight: s.weight,
+              reps: s.reps,
+              done: false,
+              planned_weight: s.weight,
+              planned_reps: s.reps,
+            }))
+          : Array.from({ length: totalSets }, () => ({
+              id: createSetId(),
+              weight: seedWeight,
+              reps: seedReps,
+              done: false,
+              ...(summary ? { planned_weight: seedWeight, planned_reps: seedReps } : {}),
+            }));
 
         const nextExercise: ExerciseEntry = {
           id: createSetId(),
           name: exerciseOption.name,
           muscleGroup: exerciseOption.muscleGroup,
           exercise_db_id: exerciseOption.exercise_db_id,
-          sets: Array.from({ length: totalSets }, () => ({
-            id: createSetId(),
-            weight: seedWeight,
-            reps: seedReps,
-            done: false,
-          })),
+          sets: buildSets,
           lastSession: summary
             ? {
                 date: summary.date,

@@ -1743,6 +1743,7 @@ export const getLastExerciseSession = async (userId: string, exerciseName: strin
       reps: lastRow.reps,
       weight: lastRow.weight,
       totalVolume,
+      perSetData: sessionRows.map((r) => ({ weight: r.weight, reps: r.reps })),
     },
   };
 };

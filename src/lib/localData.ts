@@ -108,6 +108,7 @@ export interface LocalExerciseSessionSummary {
     reps: number;
     weight: number;
     totalVolume: number;
+    perSetData?: Array<{ weight: number; reps: number }>;
   };
 }
 
