@@ -89,7 +89,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({ isOpen, onClose,
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed bottom-0 left-0 right-0 h-[80vh] bg-[#1A1A1A] rounded-t-3xl border-t border-white/10 z-50 flex flex-col"
+            className="fixed bottom-0 left-0 right-0 h-[80vh] bg-[var(--bg-surface)] rounded-t-3xl border-t border-[var(--border)] z-50 flex flex-col"
           >
             <div className="p-4 flex justify-between items-center border-b border-white/5">
               {step === 2 ? (

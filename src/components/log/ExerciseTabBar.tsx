@@ -52,12 +52,12 @@ export const ExerciseTabBar: React.FC<ExerciseTabBarProps> = ({
             >
               <span 
                 className={`text-[9px] font-semibold uppercase tracking-wider ${
-                  isActive ? 'text-[#DFE8F2]' : 'text-[#7D91A7]'
+                  isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'
                 }`}
               >
                 {ex.name.length > 12 ? ex.name.substring(0, 10) + '..' : ex.name}
               </span>
-              <span className="mt-0.5 text-[7px] font-semibold tracking-[0.5px] text-[#6D8299]">
+              <span className="mt-0.5 text-[7px] font-semibold tracking-[0.5px] text-[var(--text-muted)]">
                 {doneSets}/{totalSets} SETS
               </span>
             </button>
@@ -68,7 +68,7 @@ export const ExerciseTabBar: React.FC<ExerciseTabBarProps> = ({
       {showAddButton && (
         <button 
           onClick={onAddExercise}
-          className="ml-2 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[#B6C5D6] transition-transform active:scale-90"
+          className="ml-2 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] transition-transform active:scale-90"
         >
           <Plus className="w-4 h-4" />
         </button>

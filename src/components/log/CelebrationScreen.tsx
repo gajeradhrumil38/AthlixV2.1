@@ -41,13 +41,13 @@ export const CelebrationScreen: React.FC<CelebrationScreenProps> = ({ onClose })
         initial={{ scale: 0.5, rotate: -20 }}
         animate={{ scale: 1, rotate: 0 }}
         transition={{ type: 'spring', damping: 15, stiffness: 200 }}
-        className="w-32 h-32 bg-[#EF9F27]/20 rounded-full flex items-center justify-center mb-8 relative"
+        className="w-32 h-32 bg-[var(--pr-gold)]/20 rounded-full flex items-center justify-center mb-8 relative"
       >
-        <Trophy className="w-16 h-16 text-[#EF9F27]" />
+        <Trophy className="w-16 h-16 text-[var(--pr-gold)]" />
         <motion.div 
           animate={{ rotate: 360 }}
           transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
-          className="absolute inset-0 border-2 border-dashed border-[#EF9F27]/30 rounded-full"
+          className="absolute inset-0 border-2 border-dashed border-[var(--pr-gold)]/30 rounded-full"
         />
       </motion.div>
 

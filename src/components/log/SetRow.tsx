@@ -26,7 +26,7 @@ const ValueBox: React.FC<{
   return (
     <button
       onClick={onTap}
-      className="relative flex h-[82px] w-full flex-col items-center justify-center gap-[3px] overflow-hidden rounded-lg border text-center transition-all active:scale-[0.97]"
+      className="relative flex h-[82px] w-full flex-col items-center justify-center gap-[3px] overflow-hidden rounded-xl border text-center transition-all active:scale-[0.97]"
       style={{
         background: 'var(--bg-base)',
         borderColor: isDone ? 'rgba(200,255,0,0.12)' : 'var(--border)',
@@ -54,7 +54,7 @@ export const SetRow: React.FC<SetRowProps> = ({
 }) => {
   return (
     <div
-      className="relative overflow-hidden rounded-lg border transition-all duration-200"
+      className="relative overflow-hidden rounded-2xl border transition-all duration-200"
       style={{
         background: 'var(--bg-base)',
         borderColor: set.done ? 'rgba(200,255,0,0.12)' : 'var(--border)',
@@ -73,7 +73,7 @@ export const SetRow: React.FC<SetRowProps> = ({
       <div className="flex items-center justify-between px-4 pt-3 pb-2 pl-5">
         <div className="flex items-center gap-2">
           <div
-            className="rounded-md px-2 py-[3px] text-[10px] font-bold tracking-[0.14em] uppercase transition-colors duration-200"
+            className="rounded-lg px-2 py-[3px] text-[10px] font-bold tracking-[0.14em] uppercase transition-colors duration-200"
             style={
               set.done
                 ? { border: '1px solid rgba(200,255,0,0.28)', color: 'var(--accent)', background: 'transparent' }

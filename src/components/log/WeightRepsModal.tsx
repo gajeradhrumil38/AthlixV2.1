@@ -155,7 +155,7 @@ export const WeightRepsModal: React.FC<WeightRepsModalProps> = ({
                   {weightUnit === 'kg' ? '20kg Bar +' : '45lb Bar +'}
                 </div>
                 {plates.map((p, i) => (
-                  <div key={i} className="px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--accent)]/20 rounded-md text-[10px] font-bold text-[var(--accent)]">
+                  <div key={i} className="px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--accent)]/20 rounded-lg text-[10px] font-bold text-[var(--accent)]">
                     {p}{weightUnit}
                   </div>
                 ))}

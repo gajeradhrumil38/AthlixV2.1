@@ -88,10 +88,10 @@ export const ExerciseBlock: React.FC<ExerciseBlockProps> = ({ exercise, onUpdate
                 initial={{ opacity: 0, scale: 0.5 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.5 }}
-                className="flex items-center gap-1 px-2 py-0.5 bg-[#EF9F27]/20 rounded-full"
+                className="flex items-center gap-1 px-2 py-0.5 bg-[var(--pr-gold)]/20 rounded-full"
               >
-                <Trophy className="w-3 h-3 text-[#EF9F27]" />
-                <span className="text-[9px] font-bold text-[#EF9F27]">NEW PR!</span>
+                <Trophy className="w-3 h-3 text-[var(--pr-gold)]" />
+                <span className="text-[9px] font-bold text-[var(--pr-gold)]">NEW PR!</span>
               </motion.div>
             )}
           </AnimatePresence>

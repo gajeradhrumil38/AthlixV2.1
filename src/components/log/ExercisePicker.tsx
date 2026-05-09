@@ -94,7 +94,7 @@ const InitialBadge: React.FC<{ label: string; colorVar?: string; size?: 'sm' | '
   const isSmall = size === 'sm';
   return (
     <div
-      className={`${isSmall ? 'h-10 w-10 rounded-[12px] text-[15px]' : 'h-11 w-11 rounded-[13px] text-[16px]'} flex items-center justify-center border font-bold uppercase shrink-0`}
+      className={`${isSmall ? 'h-10 w-10 rounded-xl text-[15px]' : 'h-11 w-11 rounded-xl text-[16px]'} flex items-center justify-center border font-bold uppercase shrink-0`}
       style={{
         background: `color-mix(in srgb, var(${colorVar}) 12%, var(--bg-elevated))`,
         borderColor: `color-mix(in srgb, var(${colorVar}) 26%, transparent)`,

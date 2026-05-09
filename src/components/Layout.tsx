@@ -144,7 +144,7 @@ export const Layout: React.FC = () => {
             className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] transition-all duration-150"
           >
             <span
-              className="flex h-5 w-5 items-center justify-center rounded-md shrink-0"
+              className="flex h-5 w-5 items-center justify-center rounded-lg shrink-0"
               style={{ background: 'linear-gradient(135deg, #7c3aed, #2563eb)' }}
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

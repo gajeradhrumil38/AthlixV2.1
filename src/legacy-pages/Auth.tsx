@@ -199,7 +199,7 @@ export const Auth: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#0a0a0f]">
+    <div className="min-h-screen flex bg-[var(--bg-base)]">
       {/* ── Left panel ─────────────────────────────────────── */}
       <div
         className="hidden lg:flex flex-col justify-between w-[52%] min-h-screen relative overflow-hidden px-12 py-10"
@@ -420,7 +420,7 @@ export const Auth: React.FC = () => {
                     onChange={(e) => { setFullName(e.target.value); if (error) setError(null); }}
                     disabled={loading}
                     placeholder="Dhrumil Gajera"
-                    className="h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-3.5 text-[14px] text-white/90 outline-none placeholder:text-white/20 transition-colors focus:border-[#C8FF00]/60 focus:ring-0 disabled:opacity-50"
+                    className="h-11 w-full rounded-xl border border-white/10 bg-[var(--bg-elevated)] px-3.5 text-[14px] text-white/90 outline-none placeholder:text-white/20 transition-colors focus:border-[var(--accent)]/60 focus:ring-0 disabled:opacity-50"
                     style={inputStyle}
                   />
                 </motion.div>
@@ -443,7 +443,7 @@ export const Auth: React.FC = () => {
                 onBlur={() => setEmail(email.trim().toLowerCase())}
                 disabled={loading}
                 placeholder="you@example.com"
-                className="h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-3.5 text-[14px] text-white/90 outline-none placeholder:text-white/20 transition-colors focus:border-[#C8FF00]/60 focus:ring-0 disabled:opacity-50"
+                className="h-11 w-full rounded-xl border border-white/10 bg-[var(--bg-elevated)] px-3.5 text-[14px] text-white/90 outline-none placeholder:text-white/20 transition-colors focus:border-[var(--accent)]/60 focus:ring-0 disabled:opacity-50"
                 style={inputStyle}
               />
             </div>
@@ -482,7 +482,7 @@ export const Auth: React.FC = () => {
                   onChange={(e) => { setPassword(e.target.value); if (error) setError(null); }}
                   disabled={loading}
                   placeholder="••••••••"
-                  className="h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-3.5 pr-11 text-[14px] text-white/90 outline-none placeholder:text-white/20 transition-colors focus:border-[#C8FF00]/60 focus:ring-0 disabled:opacity-50"
+                  className="h-11 w-full rounded-xl border border-white/10 bg-[var(--bg-elevated)] px-3.5 pr-11 text-[14px] text-white/90 outline-none placeholder:text-white/20 transition-colors focus:border-[var(--accent)]/60 focus:ring-0 disabled:opacity-50"
                   style={inputStyle}
                 />
                 <button
@@ -548,7 +548,7 @@ export const Auth: React.FC = () => {
                       className={`mt-0.5 h-4.5 w-4.5 shrink-0 rounded-[5px] border transition-all duration-150 flex items-center justify-center ${
                         agreed
                           ? 'bg-[#C8FF00] border-[#C8FF00]'
-                          : 'bg-[#111827] border-white/20 group-hover:border-white/40'
+                          : 'bg-[var(--bg-elevated)] border-white/20 group-hover:border-white/40'
                       }`}
                       style={{ minWidth: 18, minHeight: 18 }}
                     >

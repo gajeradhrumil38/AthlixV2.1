@@ -58,7 +58,7 @@ export const ResetPassword: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f] px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-base)] px-4">
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
@@ -111,7 +111,7 @@ export const ResetPassword: React.FC = () => {
                     onChange={(e) => { setPassword(e.target.value); setError(null); }}
                     disabled={loading}
                     placeholder="••••••••"
-                    className="h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-3.5 pr-11 text-[14px] text-white/90 outline-none placeholder:text-white/20 focus:border-[#C8FF00]/60"
+                    className="h-11 w-full rounded-xl border border-white/10 bg-[var(--bg-elevated)] px-3.5 pr-11 text-[14px] text-white/90 outline-none placeholder:text-white/20 focus:border-[var(--accent)]/60"
                     style={inputStyle}
                   />
                   <button
@@ -151,7 +151,7 @@ export const ResetPassword: React.FC = () => {
                   onChange={(e) => { setConfirm(e.target.value); setError(null); }}
                   disabled={loading}
                   placeholder="••••••••"
-                  className="h-11 w-full rounded-xl border border-white/10 bg-[#111827] px-3.5 text-[14px] text-white/90 outline-none placeholder:text-white/20 focus:border-[#C8FF00]/60"
+                  className="h-11 w-full rounded-xl border border-white/10 bg-[var(--bg-elevated)] px-3.5 text-[14px] text-white/90 outline-none placeholder:text-white/20 focus:border-[var(--accent)]/60"
                   style={inputStyle}
                 />
                 {confirm.length > 0 && password !== confirm && (

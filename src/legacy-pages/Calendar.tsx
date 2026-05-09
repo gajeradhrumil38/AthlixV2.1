@@ -645,7 +645,7 @@ export const Calendar: React.FC = () => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="rounded-[24px] border border-white/6 bg-[linear-gradient(180deg,#171717_0%,#121212_100%)] p-5"
+          className="rounded-3xl border border-white/6 bg-[linear-gradient(180deg,#171717_0%,#121212_100%)] p-5"
         >
           <div className="mb-5">
             {/* Date badge + title */}
@@ -775,7 +775,7 @@ export const Calendar: React.FC = () => {
       {/* ── Content ─────────────────────────────────────────── */}
       <div className="space-y-5 px-4 pt-4">
 
-      <section className="overflow-hidden rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,#171717_0%,#111111_100%)]">
+      <section className="overflow-hidden rounded-3xl border border-white/6 bg-[linear-gradient(180deg,#171717_0%,#111111_100%)]">
         <div className="flex items-center justify-between border-b border-white/6 px-5 py-4">
           <button
             onClick={prevPeriod}

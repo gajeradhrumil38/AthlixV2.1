@@ -851,7 +851,7 @@ export const Progress: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`relative flex-1 h-10 rounded-[10px] flex items-center justify-center gap-1.5 text-[11px] font-bold tracking-[0.04em] uppercase transition-all duration-200 ${
+                  className={`relative flex-1 h-10 rounded-xl flex items-center justify-center gap-1.5 text-[11px] font-bold tracking-[0.04em] uppercase transition-all duration-200 ${
                     isActive
                       ? 'bg-[var(--accent)] text-black shadow-[0_4px_14px_rgba(200,255,0,0.35)]'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-white/5'
@@ -868,16 +868,16 @@ export const Progress: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('livehr')}
-              className={`relative flex-shrink-0 w-10 h-10 rounded-[10px] flex items-center justify-center transition-all duration-200 ${
+              className={`relative flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
                 activeTab === 'livehr'
-                  ? 'bg-[#19CCF0] text-black shadow-[0_4px_14px_rgba(25,204,240,0.40)]'
-                  : 'text-[#9AA4B2] hover:text-white hover:bg-white/5'
+                  ? 'bg-[var(--heart-rate)] text-black shadow-[0_4px_14px_rgba(25,204,240,0.40)]'
+                  : 'text-[var(--text-secondary)] hover:text-white hover:bg-white/5'
               }`}
               title="Live Heart Rate"
             >
               {hrConnected && (
                 <motion.span
-                  className="absolute inset-0 rounded-[10px] border border-[#19CCF0]/50"
+                  className="absolute inset-0 rounded-xl border border-[var(--heart-rate)]/50"
                   animate={{ scale: [1, 1.18], opacity: [0.6, 0] }}
                   transition={{ duration: 1.4, repeat: Infinity }}
                 />
@@ -1660,7 +1660,7 @@ export const Progress: React.FC = () => {
                                 key={u}
                                 type="button"
                                 onClick={() => setHeightUnit(u)}
-                                className="px-3 py-1 rounded-md text-[11px] font-black transition-all"
+                                className="px-3 py-1 rounded-lg text-[11px] font-black transition-all"
                                 style={heightUnit === u ? { background: 'var(--accent)', color: '#000' } : { color: 'rgba(255,255,255,0.35)' }}
                               >
                                 {u === 'cm' ? 'CM' : 'FT / IN'}
@@ -1910,10 +1910,10 @@ export const Progress: React.FC = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <Heart className="w-4 h-4 text-[#19CCF0]" />
+                      <Heart className="w-4 h-4 text-[var(--heart-rate)]" />
                       <h2 className="text-[15px] font-bold text-white">Live Heart Rate</h2>
                     </div>
-                    <p className="text-[12px] text-[#8EA0B8]">Real-time wearable broadcast with zone tracking.</p>
+                    <p className="text-[12px] text-[var(--text-secondary)]">Real-time wearable broadcast with zone tracking.</p>
                   </div>
                   {!hrConnected ? (
                     <button
@@ -1922,7 +1922,7 @@ export const Progress: React.FC = () => {
                       title={!supportsWebBluetooth && unsupportedBluetoothHint ? unsupportedBluetoothHint : undefined}
                       className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-bold transition-all ${
                         supportsWebBluetooth
-                          ? 'bg-[#19CCF0] text-black hover:opacity-90 disabled:opacity-50'
+                          ? 'bg-[var(--heart-rate)] text-black hover:opacity-90 disabled:opacity-50'
                           : 'border border-white/15 bg-white/5 text-[#98A6B8] opacity-70'
                       }`}
                     >
@@ -1966,7 +1966,7 @@ export const Progress: React.FC = () => {
                   {/* BPM display */}
                   <div className="flex items-end justify-between mb-6">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#8EA0B8] mb-2">Beats Per Minute</p>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--text-secondary)] mb-2">Beats Per Minute</p>
                       <div className="flex items-end gap-3">
                         <motion.span
                           className="text-[72px] font-black text-white tabular-nums leading-none"
@@ -1999,7 +1999,7 @@ export const Progress: React.FC = () => {
                         </>
                       )}
                       <motion.div
-                        className="relative w-14 h-14 rounded-[18px] flex items-center justify-center border border-[var(--accent)]/25"
+                        className="relative w-14 h-14 rounded-2xl flex items-center justify-center border border-[var(--accent)]/25"
                         style={{ background: 'rgba(200,255,0,0.08)' }}
                         animate={hrConnected ? { scale: [1, 1.06, 1] } : { scale: 1 }}
                         transition={hrConnected ? { duration: 0.9, repeat: Infinity } : { duration: 0.2 }}
@@ -2013,8 +2013,8 @@ export const Progress: React.FC = () => {
                   {/* Intensity bar */}
                   <div className="mb-5">
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8EA0B8]">Intensity</span>
-                      <span className="text-[10px] font-semibold text-[#8EA0B8]">{hrIntensityPercent.toFixed(0)}%</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Intensity</span>
+                      <span className="text-[10px] font-semibold text-[var(--text-secondary)]">{hrIntensityPercent.toFixed(0)}%</span>
                     </div>
                     <div className="h-2 rounded-full overflow-hidden bg-white/8">
                       <motion.div className="h-full rounded-full"
@@ -2032,7 +2032,7 @@ export const Progress: React.FC = () => {
                       { label: 'Min / Max', value: hrSessionMin && hrSessionMax ? `${hrSessionMin} / ${hrSessionMax}` : '--' },
                     ].map(({ label, value }) => (
                       <div key={label} className="rounded-xl bg-white/5 border border-white/8 p-3 text-center">
-                        <p className="text-[10px] text-[#7F8EA3] uppercase tracking-[0.14em] mb-1">{label}</p>
+                        <p className="text-[10px] text-[var(--text-secondary)] uppercase tracking-[0.14em] mb-1">{label}</p>
                         <p className="text-[12px] font-semibold text-white tabular-nums">{value}</p>
                       </div>
                     ))}
@@ -2049,7 +2049,7 @@ export const Progress: React.FC = () => {
                       <div className="text-[14px] font-bold text-white">
                         {heartRateView === 'week' ? 'Weekly HR' : heartRateView === 'month' ? 'Monthly HR' : 'Live Waveform'}
                       </div>
-                      <div className="text-[11px] text-[#8EA0B8] mt-0.5">
+                      <div className="text-[11px] text-[var(--text-secondary)] mt-0.5">
                         {heartRateView === 'week' ? 'Daily avg heart rate this week'
                           : heartRateView === 'month' ? 'Weekly avg heart rate this month'
                           : waveformVisibleActualData.length > 1
@@ -2067,7 +2067,7 @@ export const Progress: React.FC = () => {
                           {HEART_RATE_ZONES[selectedZoneFilter].name}
                         </span>
                       )}
-                      <span className="inline-flex items-center gap-1.5 text-[11px] text-[#8EA0B8]">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
                         <Bluetooth className="w-3.5 h-3.5" />
                         {hrConnected ? (hrDeviceName || 'Connected') : 'Disconnected'}
                       </span>
@@ -2102,10 +2102,10 @@ export const Progress: React.FC = () => {
                 {isLineHeartRateView ? (
                   <>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-[11px] text-[#7F8EA3]">
+                      <p className="text-[11px] text-[var(--text-secondary)]">
                         {heartRateView === 'live' ? 'Drag to pan · pinch to zoom up to 12h' : 'Current day timeline · pinch to zoom'}
                       </p>
-                      <p className="text-[11px] font-medium text-[#9FB2C8]">
+                      <p className="text-[11px] font-medium text-[var(--text-secondary)]">
                         {Math.max(1, Math.round(effectiveWaveformDurationMs / (60 * 1000)))} min window
                       </p>
                     </div>
@@ -2132,8 +2132,8 @@ export const Progress: React.FC = () => {
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                             <XAxis dataKey="ts" type="number" domain={[waveformVisibleStartTs, waveformVisibleEndTs]}
                               tickFormatter={(v: number) => format(new Date(v), 'h:mm a')}
-                              stroke="#748095" tick={{ fill: '#748095', fontSize: 10 }} axisLine={false} tickLine={false} tickMargin={8} minTickGap={34} />
-                            <YAxis stroke="#748095" tick={{ fill: '#748095', fontSize: 10 }} axisLine={false} tickLine={false} width={36}
+                              stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} tickMargin={8} minTickGap={34} />
+                            <YAxis stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={36}
                               domain={[(min: number) => Math.max(0, Math.floor(min - 6)), (max: number) => Math.ceil(max + 6)]} />
                             <Tooltip
                               contentStyle={{ backgroundColor: '#0F1520', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#fff' }}
@@ -2149,7 +2149,7 @@ export const Progress: React.FC = () => {
                           </LineChart>
                         </ResponsiveContainer>
                       ) : (
-                        <div className="h-full flex items-center justify-center text-center text-[13px] text-[#748095]">
+                        <div className="h-full flex items-center justify-center text-center text-[13px] text-[var(--text-muted)]">
                           {hrConnected ? 'Waiting for incoming data…' : supportsWebBluetooth ? 'Connect device to start stream.' : 'Unsupported in this browser.'}
                         </div>
                       )}
@@ -2158,12 +2158,12 @@ export const Progress: React.FC = () => {
                     {/* Zone filter */}
                     <div className="mt-4 rounded-xl border border-white/8 bg-black/15 p-3">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-[11px] text-[#8EA0B8]">Zone filter {waveformHasGapSegments ? '· dashed = no data' : ''}</span>
+                        <span className="text-[11px] text-[var(--text-secondary)]">Zone filter {waveformHasGapSegments ? '· dashed = no data' : ''}</span>
                         <span className="text-[11px]">Now: <span style={{ color: hrZone.color }} className="font-semibold">{hrZone.label}</span></span>
                       </div>
                       <div className="relative">
                         {zoneHintLabel && useCompactZoneLabels && (
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-lg border border-white/20 bg-[#0D1828]/95 text-[11px] font-medium text-[#DCEAFF] whitespace-nowrap z-10">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-lg border border-white/20 bg-[var(--bg-elevated)]/95 text-[11px] font-medium text-[var(--text-primary)] whitespace-nowrap z-10">
                             {zoneHintLabel}
                           </div>
                         )}
@@ -2201,8 +2201,8 @@ export const Progress: React.FC = () => {
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={periodHeartRateBars} margin={{ top: 12, right: 8, left: 0, bottom: 8 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                          <XAxis dataKey="label" stroke="#748095" tick={{ fill: '#9AACC3', fontSize: 11 }} axisLine={false} tickLine={false} />
-                          <YAxis stroke="#748095" tick={{ fill: '#748095', fontSize: 10 }} axisLine={false} tickLine={false} width={34} />
+                          <XAxis dataKey="label" stroke="var(--text-muted)" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                          <YAxis stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={34} />
                           <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }}
                             contentStyle={{ backgroundColor: '#0F1520', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#fff' }}
                             formatter={(value: number, _name: string, payload: any) => [
@@ -2216,7 +2216,7 @@ export const Progress: React.FC = () => {
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="h-full flex items-center justify-center text-[13px] text-[#748095]">
+                      <div className="h-full flex items-center justify-center text-[13px] text-[var(--text-muted)]">
                         No heart-rate history for this {heartRateView}.
                       </div>
                     )}

@@ -107,7 +107,7 @@ export const FinishSheet: React.FC<FinishSheetProps> = ({
               <div className="text-[9px] text-[var(--text-secondary)] uppercase tracking-wider">Total Sets</div>
             </div>
             <div className="p-4 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl">
-              <Trophy className="w-4 h-4 text-[#EF9F27] mb-2" />
+              <Trophy className="w-4 h-4 text-[var(--pr-gold)] mb-2" />
               <div className="font-victory text-[20px] font-extrabold text-[var(--text-primary)] tabular-nums">{prCount}</div>
               <div className="text-[9px] text-[var(--text-secondary)] uppercase tracking-wider">New PRs</div>
             </div>

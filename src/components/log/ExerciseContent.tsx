@@ -121,7 +121,7 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
                     <button
                       key={unit}
                       onClick={() => onWeightUnitChange(unit)}
-                      className={`h-6 min-w-[34px] rounded-md px-2 text-[10px] font-bold uppercase transition-all ${
+                      className={`h-6 min-w-[34px] rounded-lg px-2 text-[10px] font-bold uppercase transition-all ${
                         weightUnit === unit
                           ? 'border border-[var(--accent)]/25 bg-[var(--accent-dim)] text-[var(--accent)]'
                           : 'text-[var(--text-secondary)]'
@@ -138,7 +138,7 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
                     <button
                       key={unit}
                       onClick={() => onDistanceUnitChange(unit)}
-                      className={`h-6 min-w-[34px] rounded-md px-2 text-[10px] font-bold uppercase transition-all ${
+                      className={`h-6 min-w-[34px] rounded-lg px-2 text-[10px] font-bold uppercase transition-all ${
                         distanceUnit === unit
                           ? 'border border-[var(--accent)]/25 bg-[var(--accent-dim)] text-[var(--accent)]'
                           : 'text-[var(--text-secondary)]'

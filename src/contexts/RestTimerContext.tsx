@@ -62,7 +62,7 @@ export const RestTimerProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-[#1A1A1A] border border-[var(--accent)]/30 shadow-[0_0_20px_rgba(200,255,0,0.2)] rounded-full px-4 py-2 flex items-center space-x-3 z-50"
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-[var(--bg-surface)] border border-[var(--accent)]/30 shadow-[0_0_20px_rgba(200,255,0,0.2)] rounded-full px-4 py-2 flex items-center space-x-3 z-50"
           >
             <div className="relative w-6 h-6 flex items-center justify-center">
               <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
