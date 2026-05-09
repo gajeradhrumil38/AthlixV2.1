@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, X, Plus, History, LayoutGrid, ChevronLeft, Layers, Edit2, Trash2, Save } from 'lucide-react';
+import { Search, X, Plus, History, LayoutGrid, ChevronLeft, Layers, Edit2, Trash2, Save, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -106,16 +106,21 @@ const InitialBadge: React.FC<{ label: string; colorVar?: string; size?: 'sm' | '
   );
 };
 
-const ExerciseRow: React.FC<{ exercise: Exercise; onSelect: (exercise: Exercise) => void }> = ({
-  exercise,
-  onSelect,
-}) => {
+const ExerciseRow: React.FC<{
+  exercise: Exercise;
+  isSelected: boolean;
+  onToggle: (exercise: Exercise) => void;
+}> = ({ exercise, isSelected, onToggle }) => {
   const cssVar = MUSCLE_CSS_VAR[exercise.muscleGroup];
   return (
     <button
-      onClick={() => onSelect(exercise)}
-      className="w-full rounded-xl flex items-center gap-3 px-3 py-2.5 text-left active:scale-[0.99] transition-transform"
-      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', minHeight: 60 }}
+      onClick={() => onToggle(exercise)}
+      className="w-full rounded-xl flex items-center gap-3 px-3 py-2.5 text-left active:scale-[0.99] transition-all duration-150"
+      style={{
+        background: isSelected ? 'color-mix(in srgb, var(--accent) 8%, var(--bg-surface))' : 'var(--bg-surface)',
+        border: isSelected ? '1px solid rgba(200,255,0,0.35)' : '1px solid var(--border)',
+        minHeight: 60,
+      }}
     >
       <InitialBadge
         label={exercise.name}
@@ -130,10 +135,10 @@ const ExerciseRow: React.FC<{ exercise: Exercise; onSelect: (exercise: Exercise)
           {exercise.muscleGroup}
         </div>
       </div>
-      {exercise.lastSession && (
+      {exercise.lastSession && !isSelected && (
         <div className="hidden sm:flex flex-col items-end shrink-0 pr-1">
           <span className="text-[11px] tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-            {exercise.lastSession.weight}kg × {exercise.lastSession.reps}
+            {exercise.lastSession.weight}lbs × {exercise.lastSession.reps}
           </span>
           <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
             {exercise.lastSession.date}
@@ -141,10 +146,14 @@ const ExerciseRow: React.FC<{ exercise: Exercise; onSelect: (exercise: Exercise)
         </div>
       )}
       <div
-        className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors"
-        style={{ background: 'var(--accent-dim)', color: 'var(--accent)' }}
+        className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-150"
+        style={
+          isSelected
+            ? { background: 'var(--accent)', color: '#000' }
+            : { background: 'var(--accent-dim)', color: 'var(--accent)' }
+        }
       >
-        <Plus className="w-4 h-4" />
+        {isSelected ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
       </div>
     </button>
   );
@@ -168,6 +177,9 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
   const [recentLibraryExercises, setRecentLibraryExercises] = useState<Exercise[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
+
+  // Multi-select state (keyed by exercise name to handle duplicates across lists)
+  const [selectedMap, setSelectedMap] = useState<Map<string, Exercise>>(new Map());
 
   // Template editor state
   const [editor, setEditor] = useState<EditorState | null>(null);
@@ -255,8 +267,20 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
   const filteredExercises = useMemo(() => libraryExercises, [libraryExercises]);
   const isNestedView = Boolean(search.trim()) || Boolean(selectedMuscle);
 
-  const handleSelect = (exercise: Exercise) => {
-    onSelect(exercise);
+  const handleToggle = (exercise: Exercise) => {
+    setSelectedMap((prev) => {
+      const next = new Map(prev);
+      if (next.has(exercise.name)) {
+        next.delete(exercise.name);
+      } else {
+        next.set(exercise.name, exercise);
+      }
+      return next;
+    });
+  };
+
+  const handleAddSelected = () => {
+    selectedMap.forEach((ex) => onSelect(ex));
     onClose();
   };
 
@@ -606,7 +630,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
               {activeTab === 'recent' && !search && (
                 <div className="flex flex-col gap-2">
                   {(recentExercises.length > 0 ? recentExercises : recentLibraryExercises).map((exercise) => (
-                    <ExerciseRow key={exercise.id} exercise={exercise} onSelect={handleSelect} />
+                    <ExerciseRow key={exercise.id} exercise={exercise} isSelected={selectedMap.has(exercise.name)} onToggle={handleToggle} />
                   ))}
                   {recentExercises.length === 0 && recentLibraryExercises.length === 0 && (
                     <div className="flex flex-col items-center justify-center gap-2 py-16 text-center" style={{ color: 'var(--text-muted)' }}>
@@ -659,7 +683,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
                     {selectedMuscle}
                   </div>
                   {filteredExercises.map((exercise) => (
-                    <ExerciseRow key={exercise.id} exercise={exercise} onSelect={handleSelect} />
+                    <ExerciseRow key={exercise.id} exercise={exercise} isSelected={selectedMap.has(exercise.name)} onToggle={handleToggle} />
                   ))}
                   {filteredExercises.length === 0 && (
                     <div className="py-12 text-center text-[13px]" style={{ color: 'var(--text-muted)' }}>
@@ -673,7 +697,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
               {search && (
                 <div className="flex flex-col gap-2">
                   {filteredExercises.map((exercise) => (
-                    <ExerciseRow key={exercise.id} exercise={exercise} onSelect={handleSelect} />
+                    <ExerciseRow key={exercise.id} exercise={exercise} isSelected={selectedMap.has(exercise.name)} onToggle={handleToggle} />
                   ))}
                   {filteredExercises.length === 0 && (
                     <div className="py-12 text-center text-[13px]" style={{ color: 'var(--text-muted)' }}>
@@ -781,6 +805,23 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
             </>
           )}
         </div>
+
+        {/* ── Multi-select sticky footer ── */}
+        {!editor && selectedMap.size > 0 && (
+          <div
+            className="shrink-0 px-4 pt-3 pb-[max(16px,env(safe-area-inset-bottom))]"
+            style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-surface)' }}
+          >
+            <button
+              onClick={handleAddSelected}
+              className="w-full py-4 rounded-xl text-[14px] font-bold text-black flex items-center justify-center gap-2 active:opacity-90 transition-opacity"
+              style={{ background: 'var(--accent)' }}
+            >
+              <Check className="w-4 h-4" />
+              Add {selectedMap.size} Exercise{selectedMap.size > 1 ? 's' : ''}
+            </button>
+          </div>
+        )}
       </motion.div>
     </div>
   );
