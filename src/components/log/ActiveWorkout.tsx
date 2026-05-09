@@ -35,6 +35,7 @@ interface ActiveWorkoutProps {
   distanceUnit?: DistanceUnit;
   onWeightUnitChange?: (unit: WeightUnit) => void;
   onDistanceUnitChange?: (unit: DistanceUnit) => void;
+  onRequestPlanToday?: () => void;
 }
 
 interface DialPickerState {
@@ -107,6 +108,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   distanceUnit = 'km',
   onWeightUnitChange,
   onDistanceUnitChange,
+  onRequestPlanToday,
 }) => {
   const { user } = useAuth();
   const [activeIndex, setActiveIndex] = useState(0);
@@ -625,22 +627,34 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
         {viewMode === 'list' ? (
           workout.exercises.length === 0 ? (
             /* Empty state */
-            <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
+            <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8 text-center">
               <div className="w-14 h-14 rounded-xl border border-white/10 bg-[var(--bg-surface)] flex items-center justify-center">
                 <Activity className="w-6 h-6 text-[var(--text-muted)]" />
               </div>
               <div>
                 <p className="text-[15px] font-semibold text-[var(--text-primary)] mb-1.5">No exercises yet</p>
-                <p className="text-[13px] text-[var(--text-muted)]">Add your first exercise to start tracking.</p>
+                <p className="text-[13px] text-[var(--text-muted)]">Add exercises or load from your plan.</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowExercisePicker(true)}
-                className="flex h-12 items-center gap-2 rounded-xl bg-[var(--accent)] px-6 text-[14px] font-bold text-black"
-              >
-                <Plus className="w-4 h-4" />
-                Add Exercise
-              </button>
+              <div className="flex flex-col gap-2 w-full max-w-[280px]">
+                <button
+                  type="button"
+                  onClick={() => setShowExercisePicker(true)}
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] text-[14px] font-bold text-black"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Exercise
+                </button>
+                {onRequestPlanToday && (
+                  <button
+                    type="button"
+                    onClick={onRequestPlanToday}
+                    className="btn-glow btn-glow-accent flex h-12 w-full items-center justify-center gap-2 text-[13px] font-semibold text-[var(--text-primary)]"
+                  >
+                    <Bookmark className="w-4 h-4 text-[var(--accent)]" />
+                    My Plans / Create Plan
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             /* Exercise list */

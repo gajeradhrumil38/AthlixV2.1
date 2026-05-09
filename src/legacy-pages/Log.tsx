@@ -466,7 +466,7 @@ export const Log: React.FC = () => {
       </AnimatePresence>
 
       {workout && !showQuickStart && (
-        <ActiveWorkout 
+        <ActiveWorkout
           workout={workout}
           setWorkout={setWorkout}
           onFinish={handleFinish}
@@ -479,6 +479,7 @@ export const Log: React.FC = () => {
           distanceUnit={distanceUnit}
           onWeightUnitChange={handleWeightUnitChange}
           onDistanceUnitChange={handleDistanceUnitChange}
+          onRequestPlanToday={() => setShowPlanToday(true)}
         />
       )}
 
