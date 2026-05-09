@@ -22,7 +22,7 @@ import {
 } from 'date-fns';
 
 import { LineChart, AreaChart, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
-import { Trophy, TrendingUp, Activity, Scale, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Pencil, Heart, Bluetooth, PlugZap, Unplug, Info, Zap, Flame } from 'lucide-react';
+import { Trophy, TrendingUp, Activity, Scale, ChevronLeft, ChevronRight, CalendarDays, Pencil, Heart, Bluetooth, PlugZap, Unplug, Info, Flame } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { ExerciseImage } from '../components/shared/ExerciseImage';
@@ -1070,129 +1070,216 @@ export const Progress: React.FC = () => {
           {/* ════════════════════════════════════════════════
               OVERLOAD
           ════════════════════════════════════════════════ */}
-          {activeTab === 'overload' && (
-            <div className="rounded-2xl border border-white/8 bg-[linear-gradient(160deg,#16191F_0%,#111419_100%)] p-5">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-3">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-muted)] mb-1">Progressive Overload</p>
-                  <p className="text-[13px] text-[var(--text-secondary)]">Track weight progression over time</p>
+          {activeTab === 'overload' && (() => {
+            const weightedNames = Array.from(new Set(
+              exercises.filter(ex => ex.weight > 0).map(ex => ex.name)
+            )).sort();
+            const effectiveExercise = selectedExerciseForOverload || weightedNames[0] || '';
+
+            const buildChartData = (name: string) => {
+              const rawRows = exercises
+                .filter(ex => ex.name === name && ex.weight > 0)
+                .sort((a, b) => (parseDateAtStartOfDay(a.workouts.date)?.getTime() ?? 0) - (parseDateAtStartOfDay(b.workouts.date)?.getTime() ?? 0));
+              const byDate: Record<string, number[]> = {};
+              rawRows.forEach(ex => {
+                if (!byDate[ex.workouts.date]) byDate[ex.workouts.date] = [];
+                byDate[ex.workouts.date].push(ex.weight);
+              });
+              return Object.entries(byDate).map(([date, weights]) => {
+                const sorted = [...weights].sort((a, b) => a - b);
+                return { date, min: sorted[0], max: sorted[sorted.length - 1], range: sorted[sorted.length - 1] - sorted[0], mid: sorted[Math.floor((sorted.length - 1) / 2)] };
+              }).sort((a, b) => a.date > b.date ? 1 : -1);
+            };
+
+            return (
+              <div className="rounded-2xl border border-white/8 bg-[linear-gradient(160deg,#16191F_0%,#111419_100%)] overflow-hidden">
+                {/* Header */}
+                <div className="px-5 pt-5 pb-4 border-b border-white/6">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-muted)]">Progressive Overload</p>
+                    {effectiveExercise && (() => {
+                      const cd = buildChartData(effectiveExercise);
+                      const sessions = cd.length;
+                      return (
+                        <span className="text-[10px] font-semibold text-[var(--text-muted)]">
+                          {sessions} session{sessions !== 1 ? 's' : ''}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <p className="text-[13px] font-semibold text-[var(--text-primary)]">
+                    {effectiveExercise || 'No weighted exercises yet'}
+                  </p>
                 </div>
-                <div className="relative w-full md:w-60">
-                  <select
-                    value={selectedExerciseForOverload}
-                    onChange={(e) => setSelectedExerciseForOverload(e.target.value)}
-                    className="w-full bg-white/5 border border-white/12 rounded-xl px-4 py-2.5 text-[var(--text-primary)] appearance-none focus:outline-none focus:border-[var(--accent)] text-[13px] font-medium transition-colors"
-                  >
-                    {Array.from(new Set(exercises.map(ex => ex.name))).map(name => (
-                      <option key={name as string} value={name as string}>{name as string}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] pointer-events-none" />
+
+                {/* Exercise pill picker */}
+                {weightedNames.length > 0 && (
+                  <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar border-b border-white/6">
+                    {weightedNames.map(name => {
+                      const isActive = name === effectiveExercise;
+                      return (
+                        <button
+                          key={name}
+                          onClick={() => setSelectedExerciseForOverload(name)}
+                          className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all active:scale-95"
+                          style={isActive
+                            ? { background: 'var(--accent)', color: '#000' }
+                            : { background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)', border: '1px solid rgba(255,255,255,0.08)' }
+                          }
+                        >
+                          {name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="p-5">
+                  {weightedNames.length === 0 ? (
+                    /* ── No weighted exercises at all ── */
+                    <div className="py-10 text-center">
+                      <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.15)' }}>
+                        <TrendingUp className="w-6 h-6" style={{ color: 'var(--accent)' }} />
+                      </div>
+                      <p className="text-[15px] font-bold text-[var(--text-primary)] mb-1">Start tracking overload</p>
+                      <p className="text-[12px] text-[var(--text-secondary)] max-w-[220px] mx-auto leading-relaxed">
+                        Log any weighted exercise and it'll appear here as a progression chart.
+                      </p>
+                    </div>
+                  ) : (() => {
+                    const chartData = buildChartData(effectiveExercise);
+                    const firstMax = chartData[0]?.max ?? 0;
+                    const lastMax = chartData[chartData.length - 1]?.max ?? 0;
+                    const percentChange = firstMax > 0 ? ((lastMax - firstMax) / firstMax) * 100 : 0;
+                    const trendColor = percentChange > 0 ? 'var(--accent)' : percentChange < 0 ? 'var(--red)' : 'var(--yellow)';
+                    const firstDate = chartData[0]?.date;
+                    const lastDate = chartData[chartData.length - 1]?.date;
+
+                    if (chartData.length === 0) {
+                      return (
+                        <div className="py-10 text-center">
+                          <p className="text-[14px] font-semibold text-[var(--text-secondary)] mb-1">No weight data</p>
+                          <p className="text-[12px] text-[var(--text-muted)]">Log {effectiveExercise} with a weight to track it.</p>
+                        </div>
+                      );
+                    }
+
+                    if (chartData.length === 1) {
+                      /* ── Single session — show what we have + prompt ── */
+                      return (
+                        <div>
+                          <div className="grid grid-cols-2 gap-3 mb-5">
+                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                              <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-2">First logged</p>
+                              <p className="text-[18px] font-black text-[var(--text-primary)] tabular-nums leading-none">
+                                {firstMax}<span className="text-[12px] font-medium text-[var(--text-muted)] ml-1">{displayUnit}</span>
+                              </p>
+                              <p className="text-[10px] text-[var(--text-muted)] mt-1">{formatStoredDate(firstDate, 'MMM d, yyyy')}</p>
+                            </div>
+                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                              <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-2">Trend</p>
+                              <p className="text-[15px] font-bold text-[var(--text-secondary)] leading-none mt-1">—</p>
+                              <p className="text-[10px] text-[var(--text-muted)] mt-1">Need 2+ sessions</p>
+                            </div>
+                          </div>
+                          {/* Progress toward 2nd session */}
+                          <div className="rounded-xl p-4" style={{ background: 'rgba(200,255,0,0.06)', border: '1px solid rgba(200,255,0,0.15)' }}>
+                            <div className="flex items-center justify-between mb-3">
+                              <p className="text-[12px] font-semibold text-[var(--text-primary)]">Log again to unlock chart</p>
+                              <span className="text-[11px] font-bold" style={{ color: 'var(--accent)' }}>1 / 2</span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                              <div className="h-full rounded-full w-1/2" style={{ background: 'var(--accent)' }} />
+                            </div>
+                            <p className="text-[11px] text-[var(--text-secondary)] mt-2">
+                              1 more {effectiveExercise} session unlocks your progression trend line.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    /* ── Full chart ── */
+                    return (
+                      <>
+                        {/* 3-stat row */}
+                        <div className="grid grid-cols-3 gap-2 mb-5">
+                          <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                            <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1.5">Change</p>
+                            <p className="text-[20px] font-black tabular-nums leading-none" style={{ color: trendColor }}>
+                              {percentChange > 0 ? '+' : ''}{percentChange.toFixed(1)}<span className="text-[11px] font-medium ml-0.5">%</span>
+                            </p>
+                          </div>
+                          <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                            <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1.5">Top Set</p>
+                            <p className="text-[20px] font-black text-[var(--text-primary)] tabular-nums leading-none">
+                              {lastMax}<span className="text-[11px] font-medium text-[var(--text-muted)] ml-0.5">{displayUnit}</span>
+                            </p>
+                          </div>
+                          <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                            <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1.5">Sessions</p>
+                            <p className="text-[20px] font-black text-[var(--text-primary)] tabular-nums leading-none">{chartData.length}</p>
+                          </div>
+                        </div>
+
+                        {/* Date range label */}
+                        <p className="text-[10px] text-[var(--text-muted)] mb-3 px-0.5">
+                          {formatStoredDate(firstDate, 'MMM d')} → {formatStoredDate(lastDate, 'MMM d, yyyy')}
+                        </p>
+
+                        <div className="h-52">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                              <defs>
+                                <linearGradient id="abrBand" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.18} />
+                                  <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.03} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                              <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false}
+                                tickFormatter={(val) => formatStoredDate(val, 'MMM d')} interval="preserveStartEnd" />
+                              <YAxis domain={['auto', 'auto']} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={32} />
+                              <Tooltip content={({ active, payload, label }) => {
+                                if (!active || !payload?.length) return null;
+                                const minV = payload.find(p => p.dataKey === 'min')?.value as number | undefined;
+                                const rangeV = payload.find(p => p.dataKey === 'range')?.value as number | undefined;
+                                const midV = payload.find(p => p.dataKey === 'mid')?.value as number | undefined;
+                                const maxV = minV != null && rangeV != null ? (minV + rangeV).toFixed(1) : '—';
+                                return (
+                                  <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: '8px 12px', fontSize: 12, color: 'var(--text-primary)' }}>
+                                    <p style={{ color: 'var(--text-muted)', marginBottom: 4, fontSize: 10 }}>{formatStoredDate(label, 'EEE, MMM d yyyy')}</p>
+                                    {midV != null && <p style={{ fontWeight: 700 }}>Top set: {midV.toFixed(1)} {displayUnit}</p>}
+                                    {minV != null && rangeV! > 0 && <p style={{ color: 'var(--text-muted)', fontSize: 10, marginTop: 2 }}>Range: {minV.toFixed(1)}–{maxV} {displayUnit}</p>}
+                                  </div>
+                                );
+                              }} />
+                              <Area type="monotone" dataKey="min" stackId="band" fill="transparent" stroke="none" dot={false} legendType="none" isAnimationActive={false} />
+                              <Area type="monotone" dataKey="range" stackId="band" fill="url(#abrBand)" stroke="none" dot={false} legendType="none" />
+                              <Line type="monotone" dataKey="mid" stroke="var(--accent)" strokeWidth={2.5}
+                                dot={{ fill: 'var(--accent)', r: 3.5, strokeWidth: 0 }}
+                                activeDot={{ r: 5.5, fill: 'var(--accent)', stroke: 'var(--bg-elevated)', strokeWidth: 2 }} />
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div className="flex items-center gap-5 mt-3 px-0.5">
+                          <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                            <div className="w-4 h-0.5 rounded-full bg-[var(--accent)]" />
+                            <span>Top set</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                            <div className="w-4 h-2 rounded" style={{ background: 'color-mix(in srgb, var(--accent) 18%, transparent)' }} />
+                            <span>Weight range</span>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
-
-              {selectedExerciseForOverload ? (() => {
-                const rawRows = exercises
-                  .filter(ex => ex.name === selectedExerciseForOverload && ex.weight > 0)
-                  .sort((a, b) => (parseDateAtStartOfDay(a.workouts.date)?.getTime() ?? 0) - (parseDateAtStartOfDay(b.workouts.date)?.getTime() ?? 0));
-                const byDate: Record<string, number[]> = {};
-                rawRows.forEach(ex => {
-                  if (!byDate[ex.workouts.date]) byDate[ex.workouts.date] = [];
-                  byDate[ex.workouts.date].push(ex.weight);
-                });
-                const chartData = Object.entries(byDate).map(([date, weights]) => {
-                  const sorted = [...weights].sort((a, b) => a - b);
-                  const mn = sorted[0];
-                  const mx = sorted[sorted.length - 1];
-                  return { date, min: mn, max: mx, range: mx - mn, mid: sorted[Math.floor((sorted.length - 1) / 2)] };
-                }).sort((a, b) => a.date > b.date ? 1 : -1);
-
-                if (chartData.length < 2) {
-                  return (
-                    <div className="py-14 text-center">
-                      <TrendingUp className="w-10 h-10 mx-auto mb-3 text-[var(--text-muted)] opacity-25" />
-                      <p className="text-[14px] font-semibold text-[var(--text-secondary)]">Not enough data yet</p>
-                      <p className="text-[12px] text-[var(--text-muted)] mt-1">Log this exercise at least twice to see progression.</p>
-                    </div>
-                  );
-                }
-
-                const firstMax = chartData[0].max;
-                const lastMax = chartData[chartData.length - 1].max;
-                const percentChange = firstMax > 0 ? ((lastMax - firstMax) / firstMax) * 100 : 0;
-                const trendColor = percentChange > 0 ? 'var(--accent)' : percentChange < 0 ? 'var(--red)' : 'var(--yellow)';
-
-                return (
-                  <>
-                    <div className="grid grid-cols-2 gap-3 mb-5">
-                      <div className="rounded-xl bg-white/4 border border-white/8 p-4">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-2">Progression</p>
-                        <p className="text-[26px] font-black tabular-nums leading-none" style={{ color: trendColor }}>
-                          {percentChange > 0 ? '+' : ''}{percentChange.toFixed(1)}<span className="text-[14px] font-medium ml-0.5">%</span>
-                        </p>
-                      </div>
-                      <div className="rounded-xl bg-white/4 border border-white/8 p-4 text-right">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-2">Top set</p>
-                        <p className="text-[26px] font-black text-white tabular-nums leading-none">
-                          {lastMax}<span className="text-[13px] font-medium text-[var(--text-muted)] ml-1">{displayUnit}</span>
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="h-60">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                          <defs>
-                            <linearGradient id="abrBand" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.20} />
-                              <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.04} />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-                          <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false}
-                            tickFormatter={(val) => formatStoredDate(val, 'MMM d')} interval="preserveStartEnd" />
-                          <YAxis domain={['auto', 'auto']} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={36} />
-                          <Tooltip content={({ active, payload, label }) => {
-                            if (!active || !payload?.length) return null;
-                            const minV = payload.find(p => p.dataKey === 'min')?.value as number | undefined;
-                            const rangeV = payload.find(p => p.dataKey === 'range')?.value as number | undefined;
-                            const midV = payload.find(p => p.dataKey === 'mid')?.value as number | undefined;
-                            const maxV = minV != null && rangeV != null ? (minV + rangeV).toFixed(1) : '—';
-                            return (
-                              <div style={{ background: '#1A1D24', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '8px 12px', fontSize: 12, color: '#fff' }}>
-                                <p style={{ color: 'var(--text-muted)', marginBottom: 4, fontSize: 11 }}>{formatStoredDate(label, 'EEE, MMM d yyyy')}</p>
-                                {midV != null && <p>Top set: <strong>{midV.toFixed(1)} {displayUnit}</strong></p>}
-                                {minV != null && <p style={{ color: 'var(--text-muted)', fontSize: 11 }}>Range: {minV.toFixed(1)}–{maxV} {displayUnit}</p>}
-                              </div>
-                            );
-                          }} />
-                          <Area type="monotone" dataKey="min" stackId="band" fill="transparent" stroke="none" dot={false} legendType="none" isAnimationActive={false} />
-                          <Area type="monotone" dataKey="range" stackId="band" fill="url(#abrBand)" stroke="none" dot={false} legendType="none" />
-                          <Line type="monotone" dataKey="mid" stroke="var(--accent)" strokeWidth={2.2}
-                            dot={{ fill: 'var(--accent)', r: 3, strokeWidth: 0 }}
-                            activeDot={{ r: 5, fill: 'var(--accent)', stroke: '#111419', strokeWidth: 2 }} />
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="flex items-center gap-5 mt-3 px-1">
-                      <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
-                        <div className="w-4 h-0.5 bg-[var(--accent)]" />
-                        <span>Median set weight</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
-                        <div className="w-4 h-2 rounded-sm" style={{ background: 'color-mix(in srgb, var(--accent) 20%, transparent)' }} />
-                        <span>Min – max band</span>
-                      </div>
-                    </div>
-                  </>
-                );
-              })() : (
-                <div className="py-14 text-center text-[var(--text-muted)]">
-                  <p>Select an exercise to view progression.</p>
-                </div>
-              )}
-            </div>
-          )}
+            );
+          })()}
 
           {/* ════════════════════════════════════════════════
               PERSONAL RECORDS
