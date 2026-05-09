@@ -145,6 +145,7 @@ export const Log: React.FC = () => {
   const showStartSheet = Boolean(profile?.show_start_sheet);
   const searchParams = new URLSearchParams(location.search);
   const forceAddExercise = searchParams.get('add') === '1';
+  const forcePlanToday = searchParams.get('plan') === '1';
   const forcedWorkoutDate = searchParams.get('date');
 
   const [workout, setWorkout] = useState<WorkoutState | null>(null);
@@ -241,6 +242,12 @@ export const Log: React.FC = () => {
       setShowQuickStart(false);
       setOpenPickerOnStart(true);
       writeDraft(initialState);
+      return;
+    }
+
+    if (forcePlanToday) {
+      setShowPlanToday(true);
+      setShowQuickStart(false);
       return;
     }
 

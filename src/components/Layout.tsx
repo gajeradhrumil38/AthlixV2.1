@@ -228,7 +228,7 @@ export const Layout: React.FC = () => {
       {/* ── Floating Action Button ────────────────────── */}
       {!isImmersiveRoute && (
         <NavLink
-          to="/log?add=1"
+          to="/log?plan=1"
           onClick={() => { if (navigator.vibrate) navigator.vibrate(15); }}
           aria-label="Start workout"
           className="md:hidden fixed right-4 w-14 h-14 rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform z-[95]"
