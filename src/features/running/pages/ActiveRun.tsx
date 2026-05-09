@@ -841,71 +841,72 @@ export const ActiveRun: React.FC = () => {
               exit={{ opacity: 0, y: 4 }}
               className="flex flex-col gap-3"
             >
-              {/* Goal compact row */}
-              <button
-                onClick={() => setShowGoalPicker(true)}
-                className="flex items-center justify-between rounded-2xl px-4 py-3 w-full transition-all active:scale-[0.98]"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-              >
-                <div className="flex items-center gap-2.5">
+              {/* Goal row — borderless, tap to change */}
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2">
                   <Target className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--accent)' }} />
-                  <span className="text-[9px] font-black uppercase tracking-[0.18em] text-white/35">GOAL</span>
+                  <span className="text-[9px] font-black uppercase tracking-[0.18em] text-white/30">Goal</span>
                   <div className="h-3 w-px bg-white/10" />
-                  <span className="font-victory text-[17px] font-black leading-none text-white">
+                  <span className="font-victory text-[20px] font-black leading-none text-white">
                     {activeGoal === '5k'    ? `${distOpts[goalDistIdx]} ${distanceUnit.toUpperCase()}`
                    : activeGoal === '30min' ? `${TIME_OPTIONS[goalTimeIdx]} MIN`
                    : activeGoal === 'pace'  ? PACE_OPTIONS[goalPaceIdx]
                    : 'OPEN'}
                   </span>
-                  <span className="text-[11px] font-semibold text-white/35">
+                  <span className="text-[11px] font-medium text-white/30">
                     {activeGoal === '5k'    ? 'Distance'
                    : activeGoal === '30min' ? 'Time'
                    : activeGoal === 'pace'  ? `/${distanceUnit}`
                    : 'Free run'}
                   </span>
                 </div>
-                <span className="text-[11px] font-black tracking-[0.1em]" style={{ color: 'var(--accent)' }}>
+                <button
+                  onClick={() => setShowGoalPicker(true)}
+                  className="text-[11px] font-black tracking-[0.1em] transition-opacity active:opacity-60"
+                  style={{ color: 'var(--accent)' }}
+                >
                   Change ›
-                </span>
-              </button>
+                </button>
+              </div>
 
-              {/* Quick stats 3-grid */}
-              <div className="grid grid-cols-3 rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+              {/* Quick stats — no box, just spaced columns */}
+              <div className="grid grid-cols-3 px-1">
                 {/* Last run */}
-                <div className="flex flex-col items-center py-3 px-2 gap-0.5">
-                  <span className="text-[8px] font-black uppercase tracking-[0.15em] text-white/30">Last Run</span>
+                <div className="flex flex-col items-center gap-1 py-2">
+                  <span className="text-[8px] font-bold uppercase tracking-[0.18em] text-white/25">Last Run</span>
                   {lastRun ? (
                     <>
-                      <span className="font-victory text-[18px] font-black leading-none text-white">
+                      <span className="font-victory text-[22px] font-black leading-none text-white">
                         {(distanceUnit === 'mi' ? lastRun.distance * 0.621371 : lastRun.distance).toFixed(1)}
                       </span>
-                      <span className="text-[8px] font-semibold text-white/25">{distanceUnit}</span>
-                      <span className="text-[8px] font-semibold text-white/20">
+                      <span className="text-[9px] font-semibold text-white/30">{distanceUnit}</span>
+                      <span className="text-[8px] text-white/20">
                         {Math.floor((Date.now() - lastRun.timestamp) / (24 * 60 * 60 * 1000))}d ago
                       </span>
                     </>
                   ) : (
-                    <span className="text-[13px] font-black text-white/20">--</span>
+                    <span className="text-[15px] font-black text-white/15">--</span>
                   )}
                 </div>
 
-                {/* divider */}
-                <div className="flex flex-col items-center py-3 px-2 gap-0.5" style={{ borderLeft: '1px solid rgba(255,255,255,0.07)', borderRight: '1px solid rgba(255,255,255,0.07)' }}>
-                  <span className="text-[8px] font-black uppercase tracking-[0.15em] text-white/30">This Week</span>
-                  <span className="font-victory text-[18px] font-black leading-none text-white">
+                {/* This week — center, highlighted */}
+                <div className="flex flex-col items-center gap-1 py-2" style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+                  <span className="text-[8px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--accent)', opacity: 0.7 }}>This Week</span>
+                  <span className="font-victory text-[22px] font-black leading-none" style={{ color: 'var(--accent)' }}>
                     {(distanceUnit === 'mi' ? weekStats.km * 0.621371 : weekStats.km).toFixed(1)}
                   </span>
-                  <span className="text-[8px] font-semibold text-white/25">{distanceUnit}</span>
-                  <span className="text-[8px] font-semibold text-white/20">{weekStats.count} runs</span>
+                  <span className="text-[9px] font-semibold text-white/30">{distanceUnit}</span>
+                  <span className="text-[8px] text-white/20">{weekStats.count} runs</span>
                 </div>
 
                 {/* Streak */}
-                <div className="flex flex-col items-center py-3 px-2 gap-0.5">
-                  <span className="text-[8px] font-black uppercase tracking-[0.15em] text-white/30">Streak</span>
-                  <span className="font-victory text-[18px] font-black leading-none" style={{ color: streak > 0 ? 'var(--accent)' : 'white' }}>
+                <div className="flex flex-col items-center gap-1 py-2">
+                  <span className="text-[8px] font-bold uppercase tracking-[0.18em] text-white/25">Streak</span>
+                  <span className="font-victory text-[22px] font-black leading-none" style={{ color: streak > 0 ? 'var(--accent)' : 'rgba(255,255,255,0.15)' }}>
                     {streak}
                   </span>
-                  <span className="text-[8px] font-semibold text-white/25">{streak === 1 ? 'day' : 'days'} {streak > 0 ? '🔥' : ''}</span>
+                  <span className="text-[9px] font-semibold text-white/30">{streak === 1 ? 'day' : 'days'}</span>
+                  {streak > 0 && <span className="text-[10px]">🔥</span>}
                 </div>
               </div>
 
