@@ -920,7 +920,7 @@ export const ActiveRun: React.FC = () => {
               {/* View history */}
               <button
                 onClick={() => navigate('/run/history')}
-                className="flex items-center justify-center gap-1.5 py-1 text-[12px] font-bold tracking-[0.12em] text-white/35 transition-all active:text-white/60"
+                className="btn-glow btn-glow-accent w-full py-3 flex items-center justify-center gap-2 text-[12px] font-bold tracking-[0.12em] text-[var(--text-secondary)]"
               >
                 <History className="h-3.5 w-3.5" />
                 VIEW RUN HISTORY ›

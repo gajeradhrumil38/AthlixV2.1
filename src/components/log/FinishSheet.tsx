@@ -157,7 +157,7 @@ export const FinishSheet: React.FC<FinishSheetProps> = ({
               type="button"
               disabled={saving}
               onClick={onAddMore}
-              className="mb-3 w-full py-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] font-semibold text-[14px] disabled:opacity-50"
+              className="btn-glow btn-glow-subtle mb-3 w-full py-3.5 text-[var(--text-primary)] font-semibold text-[14px] disabled:opacity-50"
             >
               Add More Exercise
             </button>

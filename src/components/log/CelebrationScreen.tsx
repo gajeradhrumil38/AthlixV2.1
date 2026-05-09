@@ -98,7 +98,7 @@ export const CelebrationScreen: React.FC<CelebrationScreenProps> = ({ onClose })
         >
           Back to Dashboard <ArrowRight className="w-5 h-5" />
         </button>
-        <button className="w-full py-4 bg-transparent border border-[var(--border)] text-[var(--text-primary)] rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 active:scale-95 transition-transform">
+        <button className="btn-glow w-full py-4 text-[var(--text-primary)] font-bold text-[14px] flex items-center justify-center gap-2">
           <Share2 className="w-4 h-4" /> Share Summary
         </button>
       </div>

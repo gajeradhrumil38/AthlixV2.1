@@ -309,3 +309,63 @@
   color: #000;
   box-shadow: 0 8px 16px rgba(200, 255, 0, 0.2);
 }
+
+/* ── Glow-from-bottom button ─────────────────────────────
+   Secondary action buttons (Share, View History, Add More, etc.)
+   Params via CSS variables:
+     --btn-glow-color  : the glow RGB (default: 37,99,235 = blue)
+   Usage: add class="btn-glow" (blue) or "btn-glow btn-glow-accent" (lime)
+──────────────────────────────────────────────────────── */
+.btn-glow {
+  --btn-glow-color: 37, 99, 235;
+  cursor: pointer;
+  position: relative;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--ios-radius-md);
+  box-shadow: 0 0 0 0 rgba(var(--btn-glow-color), 0);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+  overflow: hidden;
+}
+
+.btn-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse 80% 60% at 50% 110%,
+    rgba(var(--btn-glow-color), 0.32) 0%,
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.btn-glow:hover::after,
+.btn-glow:focus-visible::after {
+  opacity: 1;
+}
+
+.btn-glow:hover,
+.btn-glow:focus-visible {
+  transform: scale(1.02) translateY(-1px);
+  box-shadow: 0 4px 20px rgba(var(--btn-glow-color), 0.18);
+  border-color: rgba(var(--btn-glow-color), 0.35);
+}
+
+.btn-glow:active {
+  transform: scale(0.98);
+  box-shadow: 0 0 0 0 rgba(var(--btn-glow-color), 0);
+}
+
+/* Accent (lime) variant */
+.btn-glow-accent {
+  --btn-glow-color: 200, 255, 0;
+}
+
+/* Subtle variant — less glow, works on top of dark surfaces */
+.btn-glow-subtle {
+  --btn-glow-color: 130, 146, 164;
+}
