@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ClipboardList, ArrowRight, Plus } from 'lucide-react';
+import { ClipboardList, ArrowRight, Plus, CalendarPlus } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import type { ExerciseEntry } from '../../legacy-pages/Log';
 import { FitnessBadge } from '../FitnessIcons';
@@ -10,9 +10,10 @@ import { parseDateAtStartOfDay } from '../../lib/dates';
 interface QuickStartSheetProps {
   onStartEmpty: () => void;
   onStartTemplate: (exercises: ExerciseEntry[], title: string) => void;
+  onPlanToday?: () => void;
 }
 
-export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({ onStartEmpty, onStartTemplate }) => {
+export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({ onStartEmpty, onStartTemplate, onPlanToday }) => {
   const { user } = useAuth();
   const [recentWorkouts, setRecentWorkouts] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
@@ -54,6 +55,8 @@ export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({ onStartEmpty, 
         weight: set.weight,
         reps: set.reps,
         done: false,
+        planned_weight: set.weight,
+        planned_reps: set.reps,
       })),
     }));
 
@@ -71,6 +74,8 @@ export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({ onStartEmpty, 
         weight: ex.default_weight || 0,
         reps: ex.default_reps || 0,
         done: false,
+        planned_weight: ex.default_weight || null,
+        planned_reps: ex.default_reps || null,
       })),
     }));
 
@@ -148,12 +153,23 @@ export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({ onStartEmpty, 
           </div>
         </div>
 
-        <button 
-          onClick={onStartEmpty}
-          className="w-full py-4 bg-[var(--accent)] text-black rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 mb-4"
-        >
-          Start Empty Workout <ArrowRight className="w-4 h-4" />
-        </button>
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={onStartEmpty}
+            className="flex-1 py-4 bg-[var(--accent)] text-black rounded-xl font-bold text-[14px] flex items-center justify-center gap-2"
+          >
+            Start Empty <ArrowRight className="w-4 h-4" />
+          </button>
+          {onPlanToday && (
+            <button
+              onClick={onPlanToday}
+              className="btn-glow btn-glow-accent flex-1 py-4 text-[var(--text-primary)] font-bold text-[14px] flex items-center justify-center gap-2"
+            >
+              <CalendarPlus className="w-4 h-4 text-[var(--accent)]" />
+              Plan Today
+            </button>
+          )}
+        </div>
 
         {templates.length > 0 ? (
           <div className="space-y-2">

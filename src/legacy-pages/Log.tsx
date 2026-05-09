@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { saveWorkout, getWorkouts, type LocalExercise } from '../lib/supabaseData';
 import { resolveExerciseInputType } from '../lib/exerciseTypes';
 import { QuickStartSheet } from '../components/log/QuickStartSheet';
+import { PlanTodaySheet } from '../components/log/PlanTodaySheet';
 import { ActiveWorkout } from '../components/log/ActiveWorkout';
 import { FinishSheet } from '../components/log/FinishSheet';
 
@@ -15,6 +16,9 @@ export interface Set {
   reps: number | null;
   done: boolean;
   isPR?: boolean;
+  /** Target values loaded from a template / plan — shown as hint during the workout */
+  planned_weight?: number | null;
+  planned_reps?: number | null;
 }
 
 export interface ExerciseEntry {
@@ -145,6 +149,7 @@ export const Log: React.FC = () => {
 
   const [workout, setWorkout] = useState<WorkoutState | null>(null);
   const [showQuickStart, setShowQuickStart] = useState(false);
+  const [showPlanToday, setShowPlanToday] = useState(false);
   const [openPickerOnStart, setOpenPickerOnStart] = useState(false);
   const [showFinish, setShowFinish] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -442,10 +447,20 @@ export const Log: React.FC = () => {
   return (
     <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)]">
       <AnimatePresence>
-        {showQuickStart && (
-          <QuickStartSheet 
+        {showQuickStart && !showPlanToday && (
+          <QuickStartSheet
             onStartEmpty={() => startWorkout()}
             onStartTemplate={(exercises, title) => startWorkout(exercises, title)}
+            onPlanToday={() => setShowPlanToday(true)}
+          />
+        )}
+        {showPlanToday && (
+          <PlanTodaySheet
+            onClose={() => setShowPlanToday(false)}
+            onStartPlan={(exercises, title) => {
+              setShowPlanToday(false);
+              startWorkout(exercises, title);
+            }}
           />
         )}
       </AnimatePresence>

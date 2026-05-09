@@ -16,6 +16,7 @@ interface SetRowProps {
   secondary?: SetRowField | null;
   onOpenDial: (field: 'weight' | 'reps') => void;
   onMarkDone: () => void;
+  weightUnit?: string;
 }
 
 const ValueBox: React.FC<{
@@ -51,7 +52,17 @@ export const SetRow: React.FC<SetRowProps> = ({
   secondary,
   onOpenDial,
   onMarkDone,
+  weightUnit = 'kg',
 }) => {
+  const hasPlanned = (set.planned_weight != null && set.planned_weight > 0) || (set.planned_reps != null && set.planned_reps > 0);
+  const plannedLabel = hasPlanned
+    ? [
+        set.planned_weight != null && set.planned_weight > 0 ? `${set.planned_weight}${weightUnit}` : null,
+        set.planned_reps != null && set.planned_reps > 0 ? `${set.planned_reps} reps` : null,
+      ]
+        .filter(Boolean)
+        .join(' × ')
+    : null;
   return (
     <div
       className="relative overflow-hidden rounded-2xl border transition-all duration-200"
@@ -85,6 +96,11 @@ export const SetRow: React.FC<SetRowProps> = ({
           {set.done && (
             <span className="text-[10px] font-semibold tracking-[0.08em] uppercase" style={{ color: 'rgba(200,255,0,0.70)' }}>
               Done
+            </span>
+          )}
+          {!set.done && plannedLabel && (
+            <span className="text-[10px] font-medium tabular-nums" style={{ color: 'var(--text-muted)' }}>
+              Target: {plannedLabel}
             </span>
           )}
         </div>

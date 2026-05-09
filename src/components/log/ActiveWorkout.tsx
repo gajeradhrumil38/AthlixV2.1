@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Activity, ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Pause, Play, Plus, Trash2, Weight } from 'lucide-react';
+import { Activity, ArrowLeft, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Pause, Play, Plus, Trash2, Weight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { WorkoutState, ExerciseEntry, Set } from '../../legacy-pages/Log';
 import { ExerciseContent } from './ExerciseContent';
 import { ExercisePicker } from './ExercisePicker';
 import { DialPicker } from './DialPicker';
 import { useAuth } from '../../contexts/AuthContext';
-import { getLastExerciseSession } from '../../lib/supabaseData';
+import { getLastExerciseSession, saveTemplate } from '../../lib/supabaseData';
 import {
   DistanceUnit,
   DialFieldKind,
@@ -118,6 +118,35 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   const autoOpenedPickerForStartRef = useRef<number | null>(null);
   const addExerciseInFlightRef = useRef(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+
+  const handleSaveAsTemplate = useCallback(async () => {
+    if (!user || workout.exercises.length === 0) return;
+    setSavingTemplate(true);
+    try {
+      await saveTemplate(user.id, {
+        title: workout.title,
+        exercises: workout.exercises.map((ex, i) => ({
+          name: ex.name,
+          muscle_group: ex.muscleGroup,
+          default_sets: ex.sets.length || 3,
+          default_reps: Math.round(
+            ex.sets.reduce((sum, s) => sum + (s.reps ?? 0), 0) / (ex.sets.length || 1),
+          ) || 10,
+          default_weight: Math.round(
+            ex.sets.reduce((sum, s) => sum + (s.weight ?? 0), 0) / (ex.sets.length || 1),
+          ) || 0,
+          exercise_db_id: ex.exercise_db_id ?? null,
+          order_index: i,
+        })),
+      });
+      toast.success('Saved as template!');
+    } catch {
+      toast.error('Could not save template');
+    } finally {
+      setSavingTemplate(false);
+    }
+  }, [user, workout]);
 
   const createSetId = () =>
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -551,6 +580,15 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
           >
             <CalendarDays className="w-3 h-3 text-[var(--text-muted)]" />
             <span>{fmtWorkoutDate(workoutDateValue)}</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveAsTemplate}
+            disabled={savingTemplate || workout.exercises.length === 0}
+            title="Save as template"
+            className="inline-flex shrink-0 h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-[var(--bg-surface)] text-[var(--text-secondary)] disabled:opacity-40"
+          >
+            <Bookmark className="w-3.5 h-3.5" />
           </button>
         </div>
 
