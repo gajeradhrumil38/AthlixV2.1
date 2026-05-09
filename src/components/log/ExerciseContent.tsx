@@ -44,7 +44,7 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
   const {
     exercise,
     optionalWeight = false,
-    weightUnit = 'kg',
+    weightUnit = 'lbs',
     distanceUnit = 'km',
     bodyWeightForMath = null,
     onWeightUnitChange,

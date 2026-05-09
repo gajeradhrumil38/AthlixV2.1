@@ -404,7 +404,7 @@ export const DialPicker: React.FC<DialPickerProps> = ({
   fieldKind,
   inputType,
   initialValue,
-  weightUnit = 'kg',
+  weightUnit = 'lbs',
   distanceUnit = 'km',
   onClose,
   onConfirm,

@@ -203,7 +203,7 @@ function buildSystemPrompt(
     profile?.height_feet != null
       ? `${profile.height_feet}'${profile.height_inches ?? 0}"`
       : 'not set';
-  const unit = profile?.unit_preference || 'kg';
+  const unit = profile?.unit_preference || 'lbs';
 
   // Last 7 workouts: full exercise detail
   const detailedSection = workouts.slice(0, 7).map((w) => {

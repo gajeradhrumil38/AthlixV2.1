@@ -52,7 +52,7 @@ export const SetRow: React.FC<SetRowProps> = ({
   secondary,
   onOpenDial,
   onMarkDone,
-  weightUnit = 'kg',
+  weightUnit = 'lbs',
 }) => {
   const hasPlanned = (set.planned_weight != null && set.planned_weight > 0) || (set.planned_reps != null && set.planned_reps > 0);
   const plannedLabel = hasPlanned

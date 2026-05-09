@@ -17,7 +17,7 @@ export const WeightRepsModal: React.FC<WeightRepsModalProps> = ({
   setNumber,
   field,
   initialValue,
-  weightUnit = 'kg',
+  weightUnit = 'lbs',
   onConfirm,
   onClose,
 }) => {

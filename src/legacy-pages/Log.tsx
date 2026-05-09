@@ -155,7 +155,7 @@ export const Log: React.FC = () => {
   const [showFinish, setShowFinish] = useState(false);
   const [saving, setSaving] = useState(false);
   const saveInFlightRef = useRef(false);
-  const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>((profile?.unit_preference || 'kg') as 'kg' | 'lbs');
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>((profile?.unit_preference || 'lbs') as 'kg' | 'lbs');
   const [distanceUnit, setDistanceUnit] = useState<'km' | 'mi'>(() => {
     if (typeof window === 'undefined') return 'km';
     const stored = localStorage.getItem('athlix_distance_unit');
@@ -163,7 +163,7 @@ export const Log: React.FC = () => {
   });
 
   useEffect(() => {
-    setWeightUnit((profile?.unit_preference || 'kg') as 'kg' | 'lbs');
+    setWeightUnit((profile?.unit_preference || 'lbs') as 'kg' | 'lbs');
   }, [profile?.unit_preference]);
 
   const handleWeightUnitChange = useCallback(async (nextUnit: 'kg' | 'lbs') => {
@@ -479,7 +479,7 @@ export const Log: React.FC = () => {
           onFinish={handleFinish}
           onBackToPrevious={handleBackToPrevious}
           bodyWeight={profile?.body_weight ?? null}
-          bodyWeightUnit={(profile?.body_weight_unit || 'kg') as 'kg' | 'lbs'}
+          bodyWeightUnit={(profile?.body_weight_unit || 'lbs') as 'kg' | 'lbs'}
           allowLiveAddExercise
           openExercisePickerOnStart={openPickerOnStart}
           weightUnit={weightUnit}
@@ -496,7 +496,7 @@ export const Log: React.FC = () => {
             workout={workout}
             weightUnit={weightUnit}
             bodyWeight={profile?.body_weight ?? null}
-            bodyWeightUnit={(profile?.body_weight_unit || 'kg') as 'kg' | 'lbs'}
+            bodyWeightUnit={(profile?.body_weight_unit || 'lbs') as 'kg' | 'lbs'}
             onConfirm={handleSave}
             onAddMore={() => { if (!saving) setShowFinish(false); }}
             onCancel={() => { if (!saving) setShowFinish(false); }}

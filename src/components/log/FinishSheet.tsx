@@ -18,9 +18,9 @@ interface FinishSheetProps {
 
 export const FinishSheet: React.FC<FinishSheetProps> = ({
   workout,
-  weightUnit = 'kg',
+  weightUnit = 'lbs',
   bodyWeight,
-  bodyWeightUnit = 'kg',
+  bodyWeightUnit = 'lbs',
   onConfirm,
   onCancel,
   onAddMore,

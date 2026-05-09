@@ -399,7 +399,7 @@ export const getInputLabels = (
   type: ExerciseInputType,
   options?: { weightUnit?: WeightUnit; distanceUnit?: DistanceUnit },
 ) => {
-  const weightUnit   = (options?.weightUnit   || 'kg').toUpperCase();
+  const weightUnit   = (options?.weightUnit   || 'lbs').toUpperCase();
   const distanceUnit = (options?.distanceUnit || 'km').toUpperCase();
   const base = INPUT_LABELS[type];
 
@@ -412,7 +412,7 @@ export const getUnitDisplay = (
   type: ExerciseInputType,
   options?: { weightUnit?: WeightUnit; distanceUnit?: DistanceUnit },
 ) => {
-  if (type === 'weight_reps')                              return (options?.weightUnit   || 'kg').toUpperCase();
+  if (type === 'weight_reps')                              return (options?.weightUnit   || 'lbs').toUpperCase();
   if (type === 'distance_time' || type === 'distance_only') return (options?.distanceUnit || 'km').toUpperCase();
   if (type === 'height_reps')   return 'CM';
   if (type === 'calories_time') return 'CAL';
