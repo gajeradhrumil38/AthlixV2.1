@@ -151,6 +151,7 @@ export const Log: React.FC = () => {
   const [workout, setWorkout] = useState<WorkoutState | null>(null);
   const [showQuickStart, setShowQuickStart] = useState(false);
   const [showPlanToday, setShowPlanToday] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const [openPickerOnStart, setOpenPickerOnStart] = useState(false);
   const [showFinish, setShowFinish] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -458,16 +459,32 @@ export const Log: React.FC = () => {
           <QuickStartSheet
             onStartEmpty={() => startWorkout()}
             onStartTemplate={(exercises, title) => startWorkout(exercises, title)}
-            onPlanToday={() => setShowPlanToday(true)}
+            onPlanToday={() => { setEditingTemplate(null); setShowPlanToday(true); }}
+            onEditTemplate={(tmpl) => { setEditingTemplate(tmpl); setShowPlanToday(true); }}
           />
         )}
         {showPlanToday && (
           <PlanTodaySheet
-            onClose={() => setShowPlanToday(false)}
+            onClose={() => { setShowPlanToday(false); setEditingTemplate(null); }}
             onStartPlan={(exercises, title) => {
               setShowPlanToday(false);
+              setEditingTemplate(null);
               startWorkout(exercises, title);
             }}
+            initialTemplate={editingTemplate ? {
+              id: editingTemplate.id,
+              title: editingTemplate.title,
+              exercises: (editingTemplate.template_exercises || []).map((ex: any) => ({
+                id: crypto.randomUUID(),
+                name: ex.name,
+                muscleGroup: ex.muscle_group || ex.muscleGroup || 'Core',
+                exercise_db_id: ex.exercise_db_id || undefined,
+                sets: Array.from({ length: ex.default_sets || 3 }).map(() => ({
+                  weight: ex.default_weight || 0,
+                  reps: ex.default_reps || 0,
+                })),
+              })),
+            } : undefined}
           />
         )}
       </AnimatePresence>

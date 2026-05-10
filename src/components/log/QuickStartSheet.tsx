@@ -1,49 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { ClipboardList, ArrowRight, Plus, CalendarPlus } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ClipboardList, ArrowRight, CalendarPlus, Pencil, Trash2, Play, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import type { ExerciseEntry } from '../../legacy-pages/Log';
-import { FitnessBadge } from '../FitnessIcons';
-import { buildExercisesFromWorkout, getTemplates, getWorkouts } from '../../lib/supabaseData';
+import { buildExercisesFromWorkout, getTemplates, deleteTemplate, getWorkouts } from '../../lib/supabaseData';
 import { parseDateAtStartOfDay } from '../../lib/dates';
+import toast from 'react-hot-toast';
 
 interface QuickStartSheetProps {
   onStartEmpty: () => void;
   onStartTemplate: (exercises: ExerciseEntry[], title: string) => void;
   onPlanToday?: () => void;
+  onEditTemplate?: (template: any) => void;
 }
 
-export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({ onStartEmpty, onStartTemplate, onPlanToday }) => {
+export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({
+  onStartEmpty,
+  onStartTemplate,
+  onPlanToday,
+  onEditTemplate,
+}) => {
   const { user } = useAuth();
   const [recentWorkouts, setRecentWorkouts] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchRecent = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
+  const fetchData = async () => {
+    if (!user) { setLoading(false); return; }
+    const [workoutData, templateData] = await Promise.all([
+      getWorkouts(user.id, { includeExercises: true, limit: 5 }),
+      getTemplates(user.id),
+    ]);
+    if (workoutData) setRecentWorkouts(workoutData);
+    if (templateData) setTemplates(templateData);
+    setLoading(false);
+  };
 
-      const [workoutData, templateData] = await Promise.all([
-        getWorkouts(user.id, {
-          includeExercises: true,
-          limit: 5,
-        }),
-        getTemplates(user.id),
-      ]);
-
-      if (workoutData) setRecentWorkouts(workoutData);
-      if (templateData) setTemplates(templateData);
-      setLoading(false);
-    };
-    fetchRecent();
-  }, [user]);
+  useEffect(() => { fetchData(); }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLoadRecent = async (workout: any) => {
     if (!user) return;
-
     const sourceExercises = await buildExercisesFromWorkout(user.id, workout.id);
     const exercises: ExerciseEntry[] = sourceExercises.map((ex) => ({
       id: crypto.randomUUID(),
@@ -59,11 +56,10 @@ export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({ onStartEmpty, 
         planned_reps: set.reps,
       })),
     }));
-
     onStartTemplate(exercises, workout.title);
   };
 
-  const handleLoadTemplate = (template: any) => {
+  const handleStartTemplate = (template: any) => {
     const exercises: ExerciseEntry[] = template.template_exercises.map((ex: any) => ({
       id: crypto.randomUUID(),
       name: ex.name,
@@ -78,124 +74,202 @@ export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({ onStartEmpty, 
         planned_reps: ex.default_reps || null,
       })),
     }));
-
     onStartTemplate(exercises, template.title);
+  };
+
+  const handleDeleteTemplate = async (templateId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) return;
+    setDeletingId(templateId);
+    try {
+      await deleteTemplate(user.id, templateId);
+      setTemplates((prev) => prev.filter((t) => t.id !== templateId));
+      toast.success('Plan deleted');
+    } catch {
+      toast.error('Failed to delete plan');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm">
-      <motion.div 
+      <motion.div
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="w-full max-w-[480px] bg-[var(--bg-surface)] rounded-t-[20px] p-6 pb-safe border-t border-[var(--border)]"
-        style={{ height: '65%' }}
+        className="w-full max-w-[480px] rounded-t-[20px] flex flex-col border-t border-[var(--border)]"
+        style={{ background: 'var(--bg-surface)', maxHeight: '88%' }}
       >
-        <div className="w-12 h-1 bg-[var(--text-muted)] rounded-full mx-auto mb-6" />
-        
-        <div className="mb-6">
-          <h2 className="text-[14px] font-bold text-[var(--text-primary)]">Start Workout</h2>
+        <div className="shrink-0 pt-3 pb-4 px-6 border-b border-[var(--border)]">
+          <div className="w-12 h-1 bg-[var(--text-muted)] rounded-full mx-auto mb-4 opacity-40" />
+          <h2 className="text-[15px] font-bold text-[var(--text-primary)]">Start Workout</h2>
           <p className="text-[11px] text-[var(--text-secondary)]">What are you training today?</p>
         </div>
 
-        {/* Suggested */}
-        <div className="flex gap-2 mb-8">
-          <button 
-            onClick={onStartEmpty}
-            className="flex-1 px-4 py-3 bg-[var(--accent)]/10 border border-[var(--accent)]/25 rounded-2xl text-left shadow-[0_0_30px_rgba(200,255,0,0.08)]"
-          >
-            <div className="flex items-center gap-3">
-              <FitnessBadge name="push" color="var(--accent)" size={38} />
-              <div>
-                <span className="block text-[12px] font-bold text-[var(--accent)]">Push Day</span>
-                <span className="text-[9px] text-[var(--accent)]/60 uppercase tracking-wider">Suggested</span>
-              </div>
-            </div>
-          </button>
-          <button 
-            onClick={onStartEmpty}
-            className="flex-1 px-4 py-3 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-2xl text-left"
-          >
-            <div className="flex items-center gap-3">
-              <FitnessBadge name="legs" color="#A78BFA" size={38} />
-              <div>
-                <span className="block text-[12px] font-bold text-[var(--text-primary)]">Leg Day</span>
-                <span className="text-[9px] text-[var(--text-secondary)] uppercase tracking-wider">Next in split</span>
-              </div>
-            </div>
-          </button>
-        </div>
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto no-scrollbar px-6 py-4 space-y-6 pb-[max(24px,env(safe-area-inset-bottom))]">
 
-        {/* Recent Workouts */}
-        <div className="mb-8">
-          <label className="block text-[9px] font-bold uppercase tracking-[1.5px] text-[var(--text-muted)] mb-3">Recent Workouts</label>
-          <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-6 px-6">
-            {recentWorkouts.map((w) => (
-              <button 
-                key={w.id}
-                onClick={() => handleLoadRecent(w)}
-                className="flex-shrink-0 w-[140px] p-3 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-xl text-left"
-              >
-                <div className="text-[12px] font-bold text-[var(--text-primary)] truncate mb-1">{w.title}</div>
-                <div className="text-[9px] text-[var(--text-secondary)] mb-2">
-                  {(() => {
-                    const parsedDate = parseDateAtStartOfDay(w.date);
-                    return parsedDate ? parsedDate.toLocaleDateString() : '--';
-                  })()}
-                </div>
-                <div className="text-[9px] font-bold text-[var(--accent)] uppercase tracking-wider">{w.exercises?.length || 0} Exercises</div>
-              </button>
-            ))}
-            {loading && [1,2,3].map(i => (
-              <div key={i} className="flex-shrink-0 w-[140px] h-[80px] bg-[var(--bg-elevated)] animate-pulse rounded-xl" />
-            ))}
-          </div>
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          <button
-            onClick={onStartEmpty}
-            className="flex-1 py-4 bg-[var(--accent)] text-black rounded-xl font-bold text-[14px] flex items-center justify-center gap-2"
-          >
-            Start Empty <ArrowRight className="w-4 h-4" />
-          </button>
-          {onPlanToday && (
+          {/* Primary actions */}
+          <div className="flex gap-2">
             <button
-              onClick={onPlanToday}
-              className="btn-glow btn-glow-accent flex-1 py-4 text-[var(--text-primary)] font-bold text-[14px] flex items-center justify-center gap-2"
+              onClick={onStartEmpty}
+              className="flex-1 py-4 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 text-black"
+              style={{ background: 'var(--accent)' }}
             >
-              <CalendarPlus className="w-4 h-4 text-[var(--accent)]" />
-              Plan Today
+              Start Empty <ArrowRight className="w-4 h-4" />
             </button>
+            {onPlanToday && (
+              <button
+                onClick={onPlanToday}
+                className="btn-glow btn-glow-accent flex-1 py-4 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                <CalendarPlus className="w-4 h-4 text-[var(--accent)]" />
+                New Plan
+              </button>
+            )}
+          </div>
+
+          {/* ── My Plans ── */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] font-bold uppercase tracking-[1.5px]" style={{ color: 'var(--text-muted)' }}>
+                My Plans
+              </p>
+              {onPlanToday && (
+                <button
+                  onClick={onPlanToday}
+                  className="text-[11px] font-semibold"
+                  style={{ color: 'var(--accent)' }}
+                >
+                  + New
+                </button>
+              )}
+            </div>
+
+            {loading ? (
+              <div className="space-y-2">
+                {[1, 2].map((i) => (
+                  <div key={i} className="h-[64px] rounded-xl animate-pulse" style={{ background: 'var(--bg-elevated)' }} />
+                ))}
+              </div>
+            ) : templates.length === 0 ? (
+              <button
+                onClick={onPlanToday}
+                className="w-full py-5 rounded-xl border border-dashed flex flex-col items-center gap-1.5 active:opacity-70 transition-opacity"
+                style={{ borderColor: 'rgba(200,255,0,0.2)', background: 'rgba(200,255,0,0.04)' }}
+              >
+                <ClipboardList className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+                <span className="text-[12px] font-semibold" style={{ color: 'var(--accent)' }}>Create your first plan</span>
+                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Plans sync across all your devices</span>
+              </button>
+            ) : (
+              <AnimatePresence initial={false}>
+                <div className="space-y-2">
+                  {templates.map((tmpl) => {
+                    const exCount = tmpl.template_exercises?.length || 0;
+                    const preview = (tmpl.template_exercises || []).slice(0, 2).map((e: any) => e.name).join(', ');
+                    return (
+                      <motion.div
+                        key={tmpl.id}
+                        layout
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.96 }}
+                        className="flex items-center gap-2 px-3 py-3 rounded-xl"
+                        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+                      >
+                        {/* Icon */}
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                          style={{ background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.15)' }}
+                        >
+                          <ClipboardList className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                            {tmpl.title}
+                          </p>
+                          <p className="text-[10px] truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                            {exCount} exercise{exCount !== 1 ? 's' : ''}{preview ? ` · ${preview}` : ''}
+                          </p>
+                        </div>
+
+                        {/* Edit */}
+                        {onEditTemplate && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onEditTemplate(tmpl); }}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0 active:scale-95 transition-transform"
+                            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+                            title="Edit plan"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
+                        {/* Delete */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteTemplate(tmpl.id, e)}
+                          disabled={deletingId === tmpl.id}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0 active:scale-95 transition-transform disabled:opacity-40"
+                          style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', color: '#f87171' }}
+                          title="Delete plan"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Start */}
+                        <button
+                          type="button"
+                          onClick={() => handleStartTemplate(tmpl)}
+                          className="flex h-8 items-center gap-1.5 px-3 rounded-lg shrink-0 text-[11px] font-bold active:scale-95 transition-transform text-black"
+                          style={{ background: 'var(--accent)' }}
+                          title="Start workout"
+                        >
+                          <Play className="w-3 h-3 fill-black" />
+                          Start
+                        </button>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </AnimatePresence>
+            )}
+          </div>
+
+          {/* ── Recent Workouts ── */}
+          {recentWorkouts.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[1.5px] mb-3" style={{ color: 'var(--text-muted)' }}>
+                Recent Workouts
+              </p>
+              <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-6 px-6">
+                {recentWorkouts.map((w) => (
+                  <button
+                    key={w.id}
+                    onClick={() => handleLoadRecent(w)}
+                    className="flex-shrink-0 w-[140px] p-3 rounded-xl text-left active:scale-[0.97] transition-transform"
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+                  >
+                    <div className="text-[12px] font-bold truncate mb-1" style={{ color: 'var(--text-primary)' }}>{w.title}</div>
+                    <div className="text-[9px] mb-2" style={{ color: 'var(--text-secondary)' }}>
+                      {(() => { const d = parseDateAtStartOfDay(w.date); return d ? d.toLocaleDateString() : '--'; })()}
+                    </div>
+                    <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
+                      {w.exercises?.length || 0} Exercises <ChevronRight className="w-3 h-3" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
         </div>
-
-        {templates.length > 0 ? (
-          <div className="space-y-2">
-            <div className="w-full py-2 text-[12px] font-bold text-[var(--text-secondary)] flex items-center justify-center gap-2">
-              <ClipboardList className="w-4 h-4" /> Load Template
-            </div>
-            <div className="flex gap-2 overflow-x-auto no-scrollbar">
-              {templates.map((template) => (
-                <button
-                  key={template.id}
-                  onClick={() => handleLoadTemplate(template)}
-                  className="flex-shrink-0 px-4 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border)] text-left"
-                >
-                  <div className="text-[11px] font-bold text-[var(--text-primary)]">{template.title}</div>
-                  <div className="text-[9px] text-[var(--text-secondary)]">
-                    {template.template_exercises?.length || 0} exercises
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <button className="w-full py-2 text-[12px] font-bold text-[var(--text-secondary)] flex items-center justify-center gap-2 opacity-50" disabled>
-            <ClipboardList className="w-4 h-4" /> No Templates Yet
-          </button>
-        )}
       </motion.div>
     </div>
   );

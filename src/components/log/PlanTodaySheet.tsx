@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Trash2, Check, Copy } from 'lucide-react';
+import { X, Plus, Trash2, Check, Copy, BookmarkCheck, Bookmark } from 'lucide-react';
 import { ExercisePicker } from './ExercisePicker';
 import { DialPicker } from './DialPicker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -30,6 +30,11 @@ interface DialState {
 interface PlanTodaySheetProps {
   onClose: () => void;
   onStartPlan: (exercises: ExerciseEntry[], title: string) => void;
+  initialTemplate?: {
+    id: string;
+    title: string;
+    exercises: PlannedExercise[];
+  };
 }
 
 const MUSCLE_COLORS: Record<string, string> = {
@@ -269,20 +274,56 @@ const PlanExerciseCard: React.FC<{
 };
 
 /* ── Main sheet ── */
-export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStartPlan }) => {
+export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStartPlan, initialTemplate }) => {
   const { user } = useAuth();
-  const [title, setTitle] = useState('');
-  const [exercises, setExercises] = useState<PlannedExercise[]>([]);
+  const [title, setTitle] = useState(initialTemplate?.title ?? '');
+  const [exercises, setExercises] = useState<PlannedExercise[]>(initialTemplate?.exercises ?? []);
   const [showPicker, setShowPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dialState, setDialState] = useState<DialState | null>(null);
+  const [templateId, setTemplateId] = useState<string | null>(initialTemplate?.id ?? null);
+  const [isSaved, setIsSaved] = useState(!!initialTemplate?.id);
 
   const defaultTitle = `Plan — ${new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`;
 
-  // Auto-open the picker the first time the sheet mounts with no exercises
+  // Auto-open the picker only on first mount when there are no pre-loaded exercises
   useEffect(() => {
-    setShowPicker(true);
+    if (!initialTemplate) setShowPicker(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mark unsaved whenever plan content changes after a save
+  useEffect(() => {
+    if (isSaved) setIsSaved(false);
+  }, [exercises, title]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSavePlan = async () => {
+    if (!exercises.length) { toast.error('Add at least one exercise'); return; }
+    if (!user) { toast.error('Sign in to save plans'); return; }
+    const planTitle = title.trim() || defaultTitle;
+    setSaving(true);
+    try {
+      const saved = await saveTemplate(user.id, {
+        templateId,
+        title: planTitle,
+        exercises: exercises.map((ex, i) => ({
+          name: ex.name,
+          muscle_group: ex.muscleGroup,
+          default_sets: ex.sets.length,
+          default_reps: Math.max(1, Math.round(ex.sets.reduce((s, r) => s + r.reps, 0) / ex.sets.length)),
+          default_weight: Math.round(ex.sets.reduce((s, r) => s + r.weight, 0) / ex.sets.length),
+          exercise_db_id: ex.exercise_db_id ?? null,
+          order_index: i,
+        })),
+      });
+      if (saved && !templateId) setTemplateId(saved as string);
+      setIsSaved(true);
+      toast.success(templateId ? 'Plan updated!' : 'Plan saved to My Plans!');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save plan');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const openDial = (exId: string, setIdx: number, field: 'weight' | 'reps') => {
     setDialState({ exId, setIdx, field });
@@ -355,20 +396,17 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
     try {
       if (user) {
         await saveTemplate(user.id, {
+          templateId,
           title: planTitle,
-          exercises: exercises.map((ex, i) => {
-            const avgWeight = Math.round(ex.sets.reduce((s, r) => s + r.weight, 0) / ex.sets.length);
-            const avgReps = Math.round(ex.sets.reduce((s, r) => s + r.reps, 0) / ex.sets.length);
-            return {
-              name: ex.name,
-              muscle_group: ex.muscleGroup,
-              default_sets: ex.sets.length,
-              default_reps: avgReps,
-              default_weight: avgWeight,
-              exercise_db_id: ex.exercise_db_id ?? null,
-              order_index: i,
-            };
-          }),
+          exercises: exercises.map((ex, i) => ({
+            name: ex.name,
+            muscle_group: ex.muscleGroup,
+            default_sets: ex.sets.length,
+            default_reps: Math.max(1, Math.round(ex.sets.reduce((s, r) => s + r.reps, 0) / ex.sets.length)),
+            default_weight: Math.round(ex.sets.reduce((s, r) => s + r.weight, 0) / ex.sets.length),
+            exercise_db_id: ex.exercise_db_id ?? null,
+            order_index: i,
+          })),
         });
       }
     } catch {
@@ -416,15 +454,16 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
             style={{ borderColor: 'var(--border)' }}
           >
             <div className="w-10 h-1 bg-[var(--text-muted)] rounded-full mx-auto mb-4 opacity-40" />
-            <div className="flex items-center justify-between mb-3">
-              <div>
+            <div className="flex items-center gap-2">
+              {/* Editable plan name — takes all remaining space */}
+              <div className="flex-1 min-w-0">
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder={defaultTitle}
-                  className="text-[18px] font-bold text-[var(--text-primary)] bg-transparent focus:outline-none w-full"
-                  style={{ caretColor: 'var(--accent)' }}
+                  className="text-[18px] font-bold bg-transparent focus:outline-none w-full truncate"
+                  style={{ color: 'var(--text-primary)', caretColor: 'var(--accent)' }}
                 />
                 <p className="text-[11px] font-medium mt-0.5" style={{ color: 'var(--text-muted)' }}>
                   {exercises.length === 0
@@ -432,10 +471,29 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
                     : `${exercises.length} exercise${exercises.length > 1 ? 's' : ''} · ${exercises.reduce((t, e) => t + e.sets.length, 0)} sets`}
                 </p>
               </div>
+
+              {/* Save to My Plans */}
               <button
+                type="button"
+                onClick={handleSavePlan}
+                disabled={saving || exercises.length === 0}
+                title={isSaved ? 'Plan saved' : 'Save to My Plans'}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl active:scale-95 transition-all disabled:opacity-40"
+                style={isSaved
+                  ? { background: 'rgba(200,255,0,0.12)', border: '1px solid rgba(200,255,0,0.3)', color: 'var(--accent)' }
+                  : { background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+              >
+                {isSaved
+                  ? <BookmarkCheck className="w-4 h-4" />
+                  : <Bookmark className="w-4 h-4" />}
+              </button>
+
+              {/* Close */}
+              <button
+                type="button"
                 onClick={onClose}
-                className="p-2 rounded-xl shrink-0 active:scale-95 transition-transform"
-                style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl active:scale-95 transition-transform"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
               >
                 <X className="w-4 h-4" />
               </button>
