@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Trash2, Check } from 'lucide-react';
+import { X, Plus, Trash2, Check, Copy } from 'lucide-react';
 import { ExercisePicker } from './ExercisePicker';
 import { DialPicker } from './DialPicker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -49,147 +49,163 @@ const createId = () =>
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-/* ── Large tappable number box ── */
-const NumBox: React.FC<{
+/* ── Value box — identical style to ActiveWorkout SetRow ── */
+const ValueBox: React.FC<{
+  label: string;
   value: number;
-  suffix?: string;
-  muted?: boolean;
   onTap: () => void;
-}> = ({ value, suffix, muted, onTap }) => (
+}> = ({ label, value, onTap }) => (
   <button
     type="button"
     onClick={onTap}
-    className="flex-1 h-[68px] flex flex-col items-center justify-center rounded-xl active:scale-[0.96] transition-transform"
-    style={{
-      background: muted ? 'transparent' : 'var(--bg-elevated)',
-      border: muted ? 'none' : '1px solid var(--border)',
-    }}
+    className="relative flex h-[82px] w-full flex-col items-center justify-center gap-[3px] overflow-hidden rounded-xl border text-center transition-all active:scale-[0.97]"
+    style={{ background: 'var(--bg-base)', borderColor: 'var(--border)' }}
   >
-    <span
-      className="font-victory text-[38px] font-black leading-none tabular-nums"
-      style={{ color: muted ? 'var(--text-muted)' : 'var(--text-primary)' }}
-    >
+    <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/8 to-transparent" />
+    <div className="font-victory tabular-nums text-[36px] leading-none font-black text-[var(--text-primary)]">
       {value}
-    </span>
-    {suffix && (
-      <span className="text-[10px] font-bold uppercase tracking-widest mt-0.5" style={{ color: 'var(--text-muted)' }}>
-        {suffix}
-      </span>
-    )}
+    </div>
+    <div className="text-[10px] font-bold tracking-[0.16em] uppercase text-[var(--text-secondary)]">
+      {label}
+    </div>
   </button>
 );
 
-/* ── One set row (Strong/Hevy style) ── */
-const PlanSetRow: React.FC<{
-  index: number;
-  set: PlannedSet;
-  onOpenDial: (field: 'weight' | 'reps') => void;
-  onRemove: () => void;
-}> = ({ index, set, onOpenDial, onRemove }) => (
-  <div className="flex items-center gap-2 px-4 py-1.5">
-    {/* Set number */}
-    <div
-      className="w-7 shrink-0 text-center text-[13px] font-bold"
-      style={{ color: 'var(--text-muted)' }}
+/* ── Subtle separator between sets with copy / remove actions ── */
+const SetSeparator: React.FC<{ onCopy: () => void; onRemove: () => void }> = ({ onCopy, onRemove }) => (
+  <div className="flex items-center gap-2 py-0.5 px-4 my-1">
+    <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.05)' }} />
+    <button
+      type="button"
+      onClick={onCopy}
+      className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold active:scale-95 transition-all"
+      style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.08)' }}
     >
-      {index}
-    </div>
-
-    {/* Previous hint — same width zone as weight+reps to keep columns aligned */}
-    <div className="w-[72px] shrink-0 text-center">
-      <span className="text-[11px] tabular-nums" style={{ color: 'rgba(255,255,255,0.20)' }}>
-        {set.weight > 0 ? `${set.weight} × ${set.reps}` : '—'}
-      </span>
-    </div>
-
-    {/* Weight box */}
-    <NumBox value={set.weight} suffix="lb" onTap={() => onOpenDial('weight')} />
-
-    {/* Reps box */}
-    <NumBox value={set.reps} onTap={() => onOpenDial('reps')} />
-
-    {/* Delete */}
+      <Copy className="w-3 h-3" />
+      Copy set
+    </button>
     <button
       type="button"
       onClick={onRemove}
-      className="w-9 h-9 flex items-center justify-center shrink-0 rounded-xl active:scale-95 transition-transform"
-      style={{ color: 'rgba(248,113,113,0.45)' }}
+      className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold active:scale-95 transition-all"
+      style={{ background: 'rgba(248,113,113,0.06)', color: 'rgba(248,113,113,0.7)', border: '1px solid rgba(248,113,113,0.15)' }}
     >
-      <Trash2 className="w-4 h-4" />
+      <X className="w-3 h-3" />
+      Remove
     </button>
+    <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.05)' }} />
   </div>
 );
 
-/* ── Exercise block (full-bleed Strong style) ── */
+/* ── One set row — matches ActiveWorkout SetRow layout ── */
+const PlanSetRow: React.FC<{
+  index: number;
+  set: PlannedSet;
+  weightUnit: string;
+  onOpenDial: (field: 'weight' | 'reps') => void;
+}> = ({ index, set, weightUnit, onOpenDial }) => (
+  <div
+    className="relative overflow-hidden rounded-2xl border mx-4"
+    style={{ background: 'var(--bg-base)', borderColor: 'var(--border)' }}
+  >
+    {/* Left accent bar */}
+    <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: 'var(--border)' }} />
+
+    {/* Header */}
+    <div className="flex items-center px-4 pt-3 pb-2 pl-5">
+      <div
+        className="rounded-lg px-2 py-[3px] text-[10px] font-bold tracking-[0.14em] uppercase"
+        style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+      >
+        Set {index}
+      </div>
+      {(set.weight > 0 || set.reps > 0) && (
+        <span className="ml-2 text-[10px] font-medium tabular-nums" style={{ color: 'var(--text-muted)' }}>
+          {set.weight > 0 ? `${set.weight}${weightUnit}` : ''}
+          {set.weight > 0 && set.reps > 0 ? ' × ' : ''}
+          {set.reps > 0 ? `${set.reps} reps` : ''}
+        </span>
+      )}
+    </div>
+
+    {/* Value boxes */}
+    <div className="grid grid-cols-2 gap-2 px-3 pb-3 pl-4">
+      <ValueBox label={weightUnit} value={set.weight} onTap={() => onOpenDial('weight')} />
+      <ValueBox label="reps" value={set.reps} onTap={() => onOpenDial('reps')} />
+    </div>
+  </div>
+);
+
+/* ── Exercise block ── */
 const PlanExerciseCard: React.FC<{
   ex: PlannedExercise;
+  weightUnit: string;
   onChange: (updated: PlannedExercise) => void;
   onRemove: () => void;
   onOpenDial: (setIdx: number, field: 'weight' | 'reps') => void;
-}> = ({ ex, onChange, onRemove, onOpenDial }) => {
+}> = ({ ex, weightUnit, onChange, onRemove, onOpenDial }) => {
   const color = muscleColor(ex.muscleGroup);
+  const [confirmRemoveIdx, setConfirmRemoveIdx] = useState<number | null>(null);
 
   const addSet = () => {
     const last = ex.sets[ex.sets.length - 1];
     onChange({ ...ex, sets: [...ex.sets, { weight: last?.weight ?? 0, reps: last?.reps ?? 10 }] });
   };
 
-  const repeatLastSet = () => {
-    const last = ex.sets[ex.sets.length - 1];
-    if (!last) return;
-    onChange({ ...ex, sets: [...ex.sets, { weight: last.weight, reps: last.reps }] });
+  const copySet = (i: number) => {
+    const src = ex.sets[i];
+    if (!src) return;
+    const next = [...ex.sets];
+    next.splice(i + 1, 0, { weight: src.weight, reps: src.reps });
+    onChange({ ...ex, sets: next });
   };
 
   const removeSet = (i: number) => {
     if (ex.sets.length <= 1) return;
     onChange({ ...ex, sets: ex.sets.filter((_, idx) => idx !== i) });
+    setConfirmRemoveIdx(null);
   };
 
   return (
     <div style={{ borderBottom: '1px solid var(--border)' }}>
       {/* Exercise header */}
-      <div className="flex items-start justify-between px-4 pt-5 pb-3">
+      <div className="flex items-start justify-between px-4 pt-5 pb-4">
         <div>
-          <h3 className="text-[18px] font-bold text-[var(--text-primary)] leading-tight">{ex.name}</h3>
-          <p
-            className="text-[10px] font-bold uppercase tracking-[1.6px] mt-0.5"
-            style={{ color }}
-          >
+          <h3 className="text-[20px] font-bold text-[var(--text-primary)] leading-tight">{ex.name}</h3>
+          <p className="text-[10px] font-bold uppercase tracking-[1.6px] mt-0.5" style={{ color }}>
             {ex.muscleGroup}
           </p>
         </div>
         <button
           type="button"
           onClick={onRemove}
-          className="mt-1 p-1.5 rounded-lg active:scale-95 transition-transform"
-          style={{ color: 'rgba(248,113,113,0.45)' }}
+          className="mt-1 flex h-[34px] w-[34px] items-center justify-center rounded-lg shrink-0"
+          style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' }}
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Column headers */}
-      <div className="flex items-center px-4 pb-1" style={{ color: 'var(--text-muted)' }}>
-        <span className="w-7 shrink-0 text-center text-[9px] font-bold uppercase tracking-wider">Set</span>
-        <span className="w-[72px] shrink-0 text-center text-[9px] font-bold uppercase tracking-wider">Last</span>
-        <span className="flex-1 text-center text-[9px] font-bold uppercase tracking-wider">Weight</span>
-        <span className="flex-1 text-center text-[9px] font-bold uppercase tracking-wider">Reps</span>
-        <span className="w-9 shrink-0" />
+      {/* Set rows with separators between them */}
+      <div className="flex flex-col gap-2 pb-2">
+        {ex.sets.map((s, i) => (
+          <React.Fragment key={i}>
+            <PlanSetRow
+              index={i + 1}
+              set={s}
+              weightUnit={weightUnit}
+              onOpenDial={(field) => onOpenDial(i, field)}
+            />
+            <SetSeparator
+              onCopy={() => copySet(i)}
+              onRemove={() => setConfirmRemoveIdx(i)}
+            />
+          </React.Fragment>
+        ))}
       </div>
 
-      {/* Set rows */}
-      {ex.sets.map((s, i) => (
-        <PlanSetRow
-          key={i}
-          index={i + 1}
-          set={s}
-          onOpenDial={(field) => onOpenDial(i, field)}
-          onRemove={() => removeSet(i)}
-        />
-      ))}
-
-      {/* Footer actions */}
-      <div className="flex items-center justify-between px-4 pt-2 pb-4">
+      {/* Footer */}
+      <div className="flex items-center justify-between px-4 pt-1 pb-5">
         <button
           type="button"
           onClick={addSet}
@@ -201,13 +217,53 @@ const PlanExerciseCard: React.FC<{
         </button>
         <button
           type="button"
-          onClick={repeatLastSet}
+          onClick={addSet}
           className="flex items-center gap-1 text-[12px] font-semibold active:opacity-70 transition-opacity"
           style={{ color: 'var(--accent)' }}
         >
           ↓ Repeat last
         </button>
       </div>
+
+      {/* Remove set confirmation */}
+      {confirmRemoveIdx !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-6"
+          onClick={() => setConfirmRemoveIdx(null)}
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-[320px] rounded-2xl p-5"
+            style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.08)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[15px] font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+              Remove Set {confirmRemoveIdx + 1}?
+            </p>
+            <p className="text-[13px] mb-5" style={{ color: 'var(--text-muted)' }}>
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmRemoveIdx(null)}
+                className="flex-1 h-11 rounded-xl text-[13px] font-semibold"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => removeSet(confirmRemoveIdx)}
+                className="flex-1 h-11 rounded-xl text-[13px] font-semibold"
+                style={{ background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171' }}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -425,6 +481,7 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
                   >
                     <PlanExerciseCard
                       ex={ex}
+                      weightUnit="lbs"
                       onChange={(updated) =>
                         setExercises((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
                       }
@@ -474,31 +531,27 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
         </motion.div>
       </div>
 
-      {/* ExercisePicker above the sheet */}
+      {/* ExercisePicker — z-[300] in ExercisePicker itself, always above this sheet */}
       {showPicker && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 120 }}>
-          <ExercisePicker
-            onSelect={handleAddExercise}
-            onClose={() => setShowPicker(false)}
-            recentExercises={[]}
-            multiSelect
-          />
-        </div>
+        <ExercisePicker
+          onSelect={handleAddExercise}
+          onClose={() => setShowPicker(false)}
+          recentExercises={[]}
+          multiSelect
+        />
       )}
 
-      {/* Dial Picker */}
+      {/* Dial Picker — z-[400] in DialPicker itself */}
       {dialState && dialSet && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 130 }}>
-          <DialPicker
-            title={dialState.field === 'weight' ? 'Weight' : 'Reps'}
-            fieldKind={dialState.field}
-            inputType="weight_reps"
-            initialValue={dialState.field === 'weight' ? dialSet.weight : dialSet.reps}
-            weightUnit="lbs"
-            onClose={() => setDialState(null)}
-            onConfirm={handleDialConfirm}
-          />
-        </div>
+        <DialPicker
+          title={dialState.field === 'weight' ? 'Weight' : 'Reps'}
+          fieldKind={dialState.field}
+          inputType="weight_reps"
+          initialValue={dialState.field === 'weight' ? dialSet.weight : dialSet.reps}
+          weightUnit="lbs"
+          onClose={() => setDialState(null)}
+          onConfirm={handleDialConfirm}
+        />
       )}
     </>
   );

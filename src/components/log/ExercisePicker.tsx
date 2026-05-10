@@ -427,7 +427,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm">
       <motion.div
         initial={{ y: '100%' }}
         animate={{ y: 0 }}

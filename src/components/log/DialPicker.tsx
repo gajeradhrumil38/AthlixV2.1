@@ -452,7 +452,7 @@ export const DialPicker: React.FC<DialPickerProps> = ({
   void title;
 
   return (
-    <div className="fixed inset-0 z-[220]">
+    <div className="fixed inset-0 z-[400]">
       <button
         type="button"
         aria-label="Dismiss picker"
