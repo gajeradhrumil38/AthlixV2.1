@@ -21,7 +21,7 @@ import {
   subWeeks,
 } from 'date-fns';
 
-import { LineChart, AreaChart, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
+import { LineChart, AreaChart, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, ReferenceDot } from 'recharts';
 import { Trophy, TrendingUp, Activity, Scale, ChevronLeft, ChevronRight, CalendarDays, Pencil, Heart, Bluetooth, PlugZap, Unplug, Info, Flame } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -212,6 +212,7 @@ export const Progress: React.FC = () => {
   const [selectedExerciseForOverload, setSelectedExerciseForOverload] = useState<string>('');
   const [overloadSearch, setOverloadSearch] = useState('');
   const [overloadDropdownOpen, setOverloadDropdownOpen] = useState(false);
+  const [overloadChartView, setOverloadChartView] = useState<'weight' | 'volume'>('weight');
 
   const [newWeight, setNewWeight] = useState('');
   const [weightDate, setWeightDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
@@ -1096,19 +1097,50 @@ export const Progress: React.FC = () => {
               ? weightedNames.filter(n => n.toLowerCase().includes(overloadSearch.toLowerCase()))
               : weightedNames;
 
+            // ── Helpers ──────────────────────────────────────────────────────
+            const fmtWt = (n: number) => Number.isInteger(n) ? String(n) : parseFloat(n.toFixed(1)).toString();
+
+            const linReg = (pts: { x: number; y: number }[]) => {
+              const n = pts.length;
+              if (n < 2) return { slope: 0, intercept: pts[0]?.y ?? 0 };
+              const sx = pts.reduce((s, p) => s + p.x, 0);
+              const sy = pts.reduce((s, p) => s + p.y, 0);
+              const sxy = pts.reduce((s, p) => s + p.x * p.y, 0);
+              const sxx = pts.reduce((s, p) => s + p.x * p.x, 0);
+              const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1);
+              return { slope, intercept: (sy - slope * sx) / n };
+            };
+
             const buildChartData = (name: string) => {
               const rawRows = exercises
                 .filter(ex => ex.name === name && ex.weight > 0)
                 .sort((a, b) => (parseDateAtStartOfDay(a.workouts.date)?.getTime() ?? 0) - (parseDateAtStartOfDay(b.workouts.date)?.getTime() ?? 0));
-              const byDate: Record<string, number[]> = {};
+              const byDate: Record<string, typeof rawRows> = {};
               rawRows.forEach(ex => {
                 if (!byDate[ex.workouts.date]) byDate[ex.workouts.date] = [];
-                byDate[ex.workouts.date].push(ex.weight);
+                byDate[ex.workouts.date].push(ex);
               });
-              return Object.entries(byDate).map(([date, weights]) => {
-                const sorted = [...weights].sort((a, b) => a - b);
-                return { date, min: sorted[0], max: sorted[sorted.length - 1], range: sorted[sorted.length - 1] - sorted[0], mid: sorted[Math.floor((sorted.length - 1) / 2)] };
-              }).sort((a, b) => a.date > b.date ? 1 : -1);
+              let runningMax = 0;
+              const base = Object.entries(byDate)
+                .sort(([a], [b]) => a > b ? 1 : -1)
+                .map(([date, rows]) => {
+                  const weights = rows.map(r => r.weight).sort((a, b) => a - b);
+                  const maxW = weights[weights.length - 1];
+                  const minW = weights[0];
+                  const volume = rows.reduce((s, r) => s + (r.reps || 0) * r.weight, 0);
+                  const isPR = maxW > runningMax;
+                  if (isPR) runningMax = maxW;
+                  return { date, min: minW, max: maxW, range: maxW - minW, volume, isPR };
+                });
+
+              // linear regression for weight trend
+              const wReg = linReg(base.map((p, i) => ({ x: i, y: p.max })));
+              const vReg = linReg(base.map((p, i) => ({ x: i, y: p.volume })));
+              return base.map((p, i) => ({
+                ...p,
+                wTrend: wReg.slope * i + wReg.intercept,
+                vTrend: vReg.slope * i + vReg.intercept,
+              }));
             };
 
             const chartData = effectiveExercise ? buildChartData(effectiveExercise) : [];
@@ -1237,15 +1269,17 @@ export const Progress: React.FC = () => {
                       <div className="grid grid-cols-2 gap-3 mb-4">
                         <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
                           <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-2">First logged</p>
-                          <p className="text-[20px] font-black tabular-nums leading-none" style={{ color: chartColor }}>
-                            {chartData[0].max}<span className="text-[12px] font-medium text-[var(--text-muted)] ml-1">{displayUnit}</span>
+                          <p className="text-[22px] font-black tabular-nums leading-none" style={{ color: chartColor }}>
+                            {fmtWt(chartData[0].max)}<span className="text-[12px] font-medium text-[var(--text-muted)] ml-1">{displayUnit}</span>
                           </p>
                           <p className="text-[10px] text-[var(--text-muted)] mt-1">{formatStoredDate(chartData[0].date, 'MMM d, yyyy')}</p>
                         </div>
                         <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                          <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-2">Trend</p>
-                          <p className="text-[15px] font-bold text-[var(--text-secondary)] leading-none mt-1">—</p>
-                          <p className="text-[10px] text-[var(--text-muted)] mt-1">Need 2+ sessions</p>
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-2">Volume</p>
+                          <p className="text-[22px] font-black tabular-nums leading-none" style={{ color: chartColor }}>
+                            {Math.round(chartData[0].volume).toLocaleString()}
+                          </p>
+                          <p className="text-[10px] text-[var(--text-muted)] mt-1">{displayUnit} total</p>
                         </div>
                       </div>
                       <div className="rounded-xl p-4" style={{ background: `${chartColor}0D`, border: `1px solid ${chartColor}28` }}>
@@ -1253,11 +1287,11 @@ export const Progress: React.FC = () => {
                           <p className="text-[12px] font-semibold text-[var(--text-primary)]">Log again to unlock chart</p>
                           <span className="text-[11px] font-bold" style={{ color: chartColor }}>1 / 2</span>
                         </div>
-                        <div className="w-full h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                          <div className="h-full rounded-full w-1/2" style={{ background: chartColor }} />
+                        <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                          <div className="h-full w-1/2 rounded-full" style={{ background: chartColor }} />
                         </div>
-                        <p className="text-[11px] text-[var(--text-secondary)] mt-2">
-                          1 more {effectiveExercise} session unlocks your progression chart.
+                        <p className="text-[11px] text-[var(--text-secondary)] mt-2.5">
+                          One more {effectiveExercise} session unlocks your full progression chart.
                         </p>
                       </div>
                     </div>
@@ -1265,83 +1299,283 @@ export const Progress: React.FC = () => {
                     /* ── Full chart ── */
                     const firstMax = chartData[0].max;
                     const lastMax = chartData[chartData.length - 1].max;
-                    const percentChange = firstMax > 0 ? ((lastMax - firstMax) / firstMax) * 100 : 0;
-                    const trendColor = percentChange > 0 ? palette.green : percentChange < 0 ? palette.red : palette.yellow;
+                    const allTimeMax = Math.max(...chartData.map(d => d.max));
+                    const firstVol = chartData[0].volume;
+                    const lastVol = chartData[chartData.length - 1].volume;
+                    const wChange = firstMax > 0 ? ((lastMax - firstMax) / firstMax) * 100 : 0;
+                    const vChange = firstVol > 0 ? ((lastVol - firstVol) / firstVol) * 100 : 0;
+                    const isWeight = overloadChartView === 'weight';
+                    const activeChange = isWeight ? wChange : vChange;
+                    const trendUp = activeChange > 0;
+                    const trendDown = activeChange < 0;
+                    const trendColor = trendUp ? palette.green : trendDown ? palette.red : palette.yellow;
                     const firstDate = chartData[0].date;
                     const lastDate = chartData[chartData.length - 1].date;
 
+                    // Y domain with 8% padding so dots aren't clipped
+                    const wVals = chartData.map(d => d.max);
+                    const wMin = Math.min(...wVals);
+                    const wMax = Math.max(...wVals);
+                    const wPad = Math.max((wMax - wMin) * 0.15, wMax * 0.05);
+                    const wDomain: [number, number] = [Math.max(0, wMin - wPad), wMax + wPad];
+
+                    const vVals = chartData.map(d => d.volume);
+                    const vMax = Math.max(...vVals);
+
                     return (
                       <>
-                        {/* 3-stat row */}
+                        {/* ── Stat row ── */}
                         <div className="grid grid-cols-3 gap-2 mb-4">
-                          <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                            <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1.5">Change</p>
-                            <p className="text-[20px] font-black tabular-nums leading-none" style={{ color: trendColor }}>
-                              {percentChange > 0 ? '+' : ''}{percentChange.toFixed(1)}<span className="text-[11px] font-medium ml-0.5">%</span>
-                            </p>
+                          {/* Change */}
+                          <div className="rounded-xl p-3 flex flex-col justify-between" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                            <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1">Change</p>
+                            <div>
+                              <p className="text-[20px] font-black tabular-nums leading-none" style={{ color: trendColor }}>
+                                {activeChange > 0 ? '+' : ''}{activeChange.toFixed(1)}<span className="text-[10px] font-bold ml-0.5">%</span>
+                              </p>
+                              <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                                {trendUp ? '▲' : trendDown ? '▼' : '—'} {isWeight ? 'weight' : 'volume'}
+                              </p>
+                            </div>
                           </div>
-                          <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                            <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1.5">Top Set</p>
-                            <p className="text-[20px] font-black tabular-nums leading-none" style={{ color: chartColor }}>
-                              {lastMax}<span className="text-[11px] font-medium text-[var(--text-muted)] ml-0.5">{displayUnit}</span>
-                            </p>
+                          {/* Best / PR */}
+                          <div className="rounded-xl p-3 flex flex-col justify-between" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                            <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1">All-time PR</p>
+                            <div>
+                              <p className="text-[20px] font-black tabular-nums leading-none" style={{ color: chartColor }}>
+                                {fmtWt(allTimeMax)}<span className="text-[10px] font-medium text-[var(--text-muted)] ml-0.5">{displayUnit}</span>
+                              </p>
+                              <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>best set ever</p>
+                            </div>
                           </div>
-                          <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                            <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1.5">Sessions</p>
-                            <p className="text-[20px] font-black text-[var(--text-primary)] tabular-nums leading-none">{sessions}</p>
+                          {/* Sessions */}
+                          <div className="rounded-xl p-3 flex flex-col justify-between" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                            <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1">Sessions</p>
+                            <div>
+                              <p className="text-[20px] font-black text-[var(--text-primary)] tabular-nums leading-none">{sessions}</p>
+                              <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                                {formatStoredDate(firstDate, 'MMM d')} – {formatStoredDate(lastDate, 'MMM d')}
+                              </p>
+                            </div>
                           </div>
                         </div>
 
-                        <p className="text-[10px] text-[var(--text-muted)] mb-3 px-0.5">
-                          {formatStoredDate(firstDate, 'MMM d')} → {formatStoredDate(lastDate, 'MMM d, yyyy')}
-                        </p>
-
-                        <div className="h-52">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                              <defs>
-                                <linearGradient id="muscleGrad" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="0%" stopColor={chartColor} stopOpacity={0.22} />
-                                  <stop offset="100%" stopColor={chartColor} stopOpacity={0.03} />
-                                </linearGradient>
-                              </defs>
-                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                              <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false}
-                                tickFormatter={(val) => formatStoredDate(val, 'MMM d')} interval="preserveStartEnd" />
-                              <YAxis domain={['auto', 'auto']} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={32} />
-                              <Tooltip content={({ active, payload, label }) => {
-                                if (!active || !payload?.length) return null;
-                                const minV = payload.find(p => p.dataKey === 'min')?.value as number | undefined;
-                                const rangeV = payload.find(p => p.dataKey === 'range')?.value as number | undefined;
-                                const midV = payload.find(p => p.dataKey === 'mid')?.value as number | undefined;
-                                const maxV = minV != null && rangeV != null ? (minV + rangeV).toFixed(1) : '—';
-                                return (
-                                  <div style={{ background: 'var(--bg-elevated)', border: `1px solid ${chartColor}40`, borderRadius: 12, padding: '8px 12px', fontSize: 12, color: 'var(--text-primary)' }}>
-                                    <p style={{ color: 'var(--text-muted)', marginBottom: 4, fontSize: 10 }}>{formatStoredDate(label, 'EEE, MMM d yyyy')}</p>
-                                    {midV != null && <p style={{ fontWeight: 700, color: chartColor }}>Top set: {midV.toFixed(1)} {displayUnit}</p>}
-                                    {minV != null && rangeV! > 0 && <p style={{ color: 'var(--text-muted)', fontSize: 10, marginTop: 2 }}>Range: {minV.toFixed(1)}–{maxV} {displayUnit}</p>}
-                                  </div>
-                                );
-                              }} />
-                              <Area type="monotone" dataKey="min" stackId="band" fill="transparent" stroke="none" dot={false} legendType="none" isAnimationActive={false} />
-                              <Area type="monotone" dataKey="range" stackId="band" fill="url(#muscleGrad)" stroke="none" dot={false} legendType="none" />
-                              <Line type="monotone" dataKey="mid" stroke={chartColor} strokeWidth={2.5}
-                                dot={{ fill: chartColor, r: 3.5, strokeWidth: 0 }}
-                                activeDot={{ r: 5.5, fill: chartColor, stroke: '#111419', strokeWidth: 2 }} />
-                            </ComposedChart>
-                          </ResponsiveContainer>
+                        {/* ── Chart view toggle ── */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="inline-flex rounded-lg p-0.5" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            {(['weight', 'volume'] as const).map(v => (
+                              <button
+                                key={v}
+                                onClick={() => setOverloadChartView(v)}
+                                className="h-7 px-3 rounded-md text-[11px] font-bold uppercase tracking-wide transition-all"
+                                style={overloadChartView === v
+                                  ? { background: chartColor, color: '#000' }
+                                  : { background: 'transparent', color: 'var(--text-muted)' }}
+                              >
+                                {v}
+                              </button>
+                            ))}
+                          </div>
+                          {isWeight && (
+                            <div className="flex items-center gap-3 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                              <span className="flex items-center gap-1.5">
+                                <span className="inline-block w-5 h-px" style={{ background: chartColor }} />
+                                Top set
+                              </span>
+                              <span className="flex items-center gap-1.5">
+                                <span className="inline-block w-5 h-px border-t-2 border-dashed" style={{ borderColor: `${chartColor}70` }} />
+                                Trend
+                              </span>
+                              <span className="flex items-center gap-1.5">
+                                <span className="inline-block w-3 h-3 rounded-full border-2" style={{ borderColor: '#FFD700', background: 'transparent' }} />
+                                PR
+                              </span>
+                            </div>
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-5 mt-3 px-0.5">
-                          <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
-                            <div className="w-4 h-0.5 rounded-full" style={{ background: chartColor }} />
-                            <span>Top set</span>
+                        {/* ── Weight progression chart ── */}
+                        {isWeight && (
+                          <div className="h-52">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <ComposedChart data={chartData} margin={{ top: 16, right: 12, bottom: 0, left: 0 }}>
+                                <defs>
+                                  <linearGradient id="bandGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor={chartColor} stopOpacity={0.18} />
+                                    <stop offset="100%" stopColor={chartColor} stopOpacity={0.02} />
+                                  </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                                <XAxis
+                                  dataKey="date"
+                                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                                  axisLine={false} tickLine={false}
+                                  tickFormatter={(v) => formatStoredDate(v, 'MMM d')}
+                                  interval="preserveStartEnd"
+                                />
+                                <YAxis
+                                  domain={wDomain}
+                                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                                  axisLine={false} tickLine={false}
+                                  width={34}
+                                  tickFormatter={(v) => fmtWt(v)}
+                                />
+                                <Tooltip
+                                  content={({ active, payload, label }) => {
+                                    if (!active || !payload?.length) return null;
+                                    const pt = chartData.find(d => d.date === label);
+                                    if (!pt) return null;
+                                    return (
+                                      <div style={{ background: '#1a1d24', border: `1px solid ${chartColor}50`, borderRadius: 12, padding: '10px 14px', minWidth: 160 }}>
+                                        <p style={{ color: 'var(--text-muted)', fontSize: 10, marginBottom: 6 }}>{formatStoredDate(label, 'EEE, MMM d yyyy')}</p>
+                                        <p style={{ fontWeight: 800, color: chartColor, fontSize: 15 }}>
+                                          {fmtWt(pt.max)} <span style={{ fontWeight: 500, fontSize: 11, color: 'var(--text-muted)' }}>{displayUnit} top set</span>
+                                        </p>
+                                        {pt.range > 0 && (
+                                          <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 3 }}>
+                                            Range: {fmtWt(pt.min)} – {fmtWt(pt.max)} {displayUnit}
+                                          </p>
+                                        )}
+                                        <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 3 }}>
+                                          Volume: {Math.round(pt.volume).toLocaleString()} {displayUnit}
+                                        </p>
+                                        {pt.isPR && (
+                                          <p style={{ color: '#FFD700', fontSize: 10, fontWeight: 700, marginTop: 5 }}>🏆 New Personal Record</p>
+                                        )}
+                                      </div>
+                                    );
+                                  }}
+                                />
+                                {/* Band: min to max range */}
+                                <Area type="monotoneX" dataKey="min" stackId="band" fill="transparent" stroke="none" dot={false} legendType="none" isAnimationActive={false} />
+                                <Area type="monotoneX" dataKey="range" stackId="band" fill="url(#bandGrad)" stroke="none" dot={false} legendType="none" isAnimationActive={false} />
+                                {/* Dashed trend line */}
+                                <Line
+                                  type="linear"
+                                  dataKey="wTrend"
+                                  stroke={`${chartColor}70`}
+                                  strokeWidth={1.5}
+                                  strokeDasharray="5 4"
+                                  dot={false}
+                                  activeDot={false}
+                                  isAnimationActive={false}
+                                />
+                                {/* Top-set line with custom PR dots */}
+                                <Line
+                                  type="monotoneX"
+                                  dataKey="max"
+                                  stroke={chartColor}
+                                  strokeWidth={2.5}
+                                  activeDot={{ r: 6, fill: chartColor, stroke: '#111419', strokeWidth: 2 }}
+                                  dot={(props: any) => {
+                                    const { cx, cy, payload } = props;
+                                    if (payload.isPR) {
+                                      return (
+                                        <g key={`pr-${payload.date}`}>
+                                          <circle cx={cx} cy={cy} r={7} fill="#FFD700" opacity={0.18} />
+                                          <circle cx={cx} cy={cy} r={4} fill="#FFD700" stroke="#111419" strokeWidth={1.5} />
+                                          <text x={cx} y={cy - 11} textAnchor="middle" fill="#FFD700" fontSize={8} fontWeight={800}>PR</text>
+                                        </g>
+                                      );
+                                    }
+                                    return <circle key={`dot-${payload.date}`} cx={cx} cy={cy} r={3} fill={chartColor} />;
+                                  }}
+                                />
+                              </ComposedChart>
+                            </ResponsiveContainer>
                           </div>
-                          <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
-                            <div className="w-4 h-2 rounded" style={{ background: `${chartColor}30` }} />
-                            <span>Weight range</span>
+                        )}
+
+                        {/* ── Volume bar chart ── */}
+                        {!isWeight && (
+                          <div className="h-52">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <ComposedChart data={chartData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+                                <defs>
+                                  <linearGradient id="volBarGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor={chartColor} stopOpacity={0.9} />
+                                    <stop offset="100%" stopColor={chartColor} stopOpacity={0.3} />
+                                  </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                                <XAxis
+                                  dataKey="date"
+                                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                                  axisLine={false} tickLine={false}
+                                  tickFormatter={(v) => formatStoredDate(v, 'MMM d')}
+                                  interval="preserveStartEnd"
+                                />
+                                <YAxis
+                                  domain={[0, vMax * 1.15]}
+                                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                                  axisLine={false} tickLine={false}
+                                  width={40}
+                                  tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v))}
+                                />
+                                <Tooltip
+                                  content={({ active, payload, label }) => {
+                                    if (!active || !payload?.length) return null;
+                                    const pt = chartData.find(d => d.date === label);
+                                    if (!pt) return null;
+                                    const idx = chartData.indexOf(pt);
+                                    const prev = idx > 0 ? chartData[idx - 1] : null;
+                                    const delta = prev ? pt.volume - prev.volume : 0;
+                                    const dColor = delta > 0 ? palette.green : delta < 0 ? palette.red : 'var(--text-muted)';
+                                    return (
+                                      <div style={{ background: '#1a1d24', border: `1px solid ${chartColor}50`, borderRadius: 12, padding: '10px 14px', minWidth: 160 }}>
+                                        <p style={{ color: 'var(--text-muted)', fontSize: 10, marginBottom: 6 }}>{formatStoredDate(label, 'EEE, MMM d yyyy')}</p>
+                                        <p style={{ fontWeight: 800, color: chartColor, fontSize: 15 }}>
+                                          {Math.round(pt.volume).toLocaleString()} <span style={{ fontWeight: 500, fontSize: 11, color: 'var(--text-muted)' }}>{displayUnit}</span>
+                                        </p>
+                                        {prev && (
+                                          <p style={{ color: dColor, fontSize: 11, marginTop: 3, fontWeight: 600 }}>
+                                            {delta > 0 ? '▲' : delta < 0 ? '▼' : '—'} {Math.abs(Math.round(delta)).toLocaleString()} vs prev
+                                          </p>
+                                        )}
+                                      </div>
+                                    );
+                                  }}
+                                />
+                                <Bar dataKey="volume" radius={[4, 4, 0, 0]} maxBarSize={32}>
+                                  {chartData.map((entry, idx) => {
+                                    const prev = idx > 0 ? chartData[idx - 1] : null;
+                                    const up = !prev || entry.volume >= prev.volume;
+                                    return <Cell key={entry.date} fill={up ? `${chartColor}CC` : `${palette.red}CC`} />;
+                                  })}
+                                </Bar>
+                                {/* Volume trend line */}
+                                <Line
+                                  type="linear"
+                                  dataKey="vTrend"
+                                  stroke={`${chartColor}80`}
+                                  strokeWidth={1.5}
+                                  strokeDasharray="5 4"
+                                  dot={false}
+                                  activeDot={false}
+                                  isAnimationActive={false}
+                                />
+                              </ComposedChart>
+                            </ResponsiveContainer>
                           </div>
-                        </div>
+                        )}
+
+                        {/* ── Volume mode legend ── */}
+                        {!isWeight && (
+                          <div className="flex items-center gap-4 mt-3 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                            <span className="flex items-center gap-1.5">
+                              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: `${chartColor}CC` }} />
+                              Volume up
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: `${palette.red}CC` }} />
+                              Volume down
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="inline-block w-5 h-px border-t-2 border-dashed" style={{ borderColor: `${chartColor}70` }} />
+                              Trend
+                            </span>
+                          </div>
+                        )}
                       </>
                     );
                   })()}
