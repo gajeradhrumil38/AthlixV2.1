@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { Copy, X } from 'lucide-react';
 import type { ExerciseEntry } from '../../legacy-pages/Log';
 import { SetRow } from './SetRow';
 import {
@@ -24,6 +25,8 @@ interface ExerciseContentProps {
   onUpdateSet: (setId: string, field: 'weight' | 'reps', value: number) => void;
   onMarkSetDone: (setId: string) => void;
   onAddSet: () => void;
+  onCopySet: (setIndex: number) => void;
+  onRemoveSet: (setIndex: number) => void;
   onClearPrefill: () => void;
   showPrefillBanner: boolean;
   onOpenDial: (setId: string, field: 'weight' | 'reps') => void;
@@ -40,6 +43,31 @@ const getFieldBinding = (type: ReturnType<typeof resolveExerciseInputType>) => {
   }
 };
 
+const SetSeparator: React.FC<{ onCopy: () => void; onRemove: () => void }> = ({ onCopy, onRemove }) => (
+  <div className="flex items-center gap-2 py-0.5 px-1">
+    <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.05)' }} />
+    <button
+      type="button"
+      onClick={onCopy}
+      className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold active:scale-95 transition-all"
+      style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.08)' }}
+    >
+      <Copy className="w-3 h-3" />
+      Copy set
+    </button>
+    <button
+      type="button"
+      onClick={onRemove}
+      className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold active:scale-95 transition-all"
+      style={{ background: 'rgba(248,113,113,0.06)', color: 'rgba(248,113,113,0.7)', border: '1px solid rgba(248,113,113,0.15)' }}
+    >
+      <X className="w-3 h-3" />
+      Remove
+    </button>
+    <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.05)' }} />
+  </div>
+);
+
 export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
   const {
     exercise,
@@ -51,10 +79,14 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
     onDistanceUnitChange,
     onMarkSetDone,
     onAddSet,
+    onCopySet,
+    onRemoveSet,
     onClearPrefill,
     showPrefillBanner,
     onOpenDial,
   } = props;
+
+  const [confirmRemoveIndex, setConfirmRemoveIndex] = useState<number | null>(null);
 
   // When user opts into weight tracking for a normally reps-only exercise, treat it as weight_reps
   const exerciseType = useMemo(() => {
@@ -180,29 +212,34 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
           const secondaryField = binding.secondary;
 
           return (
-            <SetRow
-              key={set.id}
-              index={index + 1}
-              set={set}
-              onMarkDone={() => onMarkSetDone(set.id)}
-              onOpenDial={(field) => onOpenDial(set.id, field)}
-              primary={{
-                field: primaryField,
-                label: inputLabels.primary,
-                value: set[primaryField],
-                displayValue: formatSetValue(fieldKinds.primary, set[primaryField]),
-              }}
-              secondary={
-                secondaryField && inputLabels.secondary
-                  ? {
-                      field: secondaryField,
-                      label: inputLabels.secondary,
-                      value: set[secondaryField],
-                      displayValue: formatSetValue(fieldKinds.secondary || 'reps', set[secondaryField]),
-                    }
-                  : null
-              }
-            />
+            <React.Fragment key={set.id}>
+              <SetRow
+                index={index + 1}
+                set={set}
+                onMarkDone={() => onMarkSetDone(set.id)}
+                onOpenDial={(field) => onOpenDial(set.id, field)}
+                primary={{
+                  field: primaryField,
+                  label: inputLabels.primary,
+                  value: set[primaryField],
+                  displayValue: formatSetValue(fieldKinds.primary, set[primaryField]),
+                }}
+                secondary={
+                  secondaryField && inputLabels.secondary
+                    ? {
+                        field: secondaryField,
+                        label: inputLabels.secondary,
+                        value: set[secondaryField],
+                        displayValue: formatSetValue(fieldKinds.secondary || 'reps', set[secondaryField]),
+                      }
+                    : null
+                }
+              />
+              <SetSeparator
+                onCopy={() => onCopySet(index)}
+                onRemove={() => setConfirmRemoveIndex(index)}
+              />
+            </React.Fragment>
           );
         })}
 
@@ -214,6 +251,49 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
         </button>
 
       </div>
+
+      {/* Remove set confirmation */}
+      {confirmRemoveIndex !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-6"
+          onClick={() => setConfirmRemoveIndex(null)}
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-[320px] rounded-2xl p-5"
+            style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.08)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[15px] font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+              Remove Set {confirmRemoveIndex + 1}?
+            </p>
+            <p className="text-[13px] mb-5" style={{ color: 'var(--text-muted)' }}>
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmRemoveIndex(null)}
+                className="flex-1 h-11 rounded-xl text-[13px] font-semibold"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onRemoveSet(confirmRemoveIndex);
+                  setConfirmRemoveIndex(null);
+                }}
+                className="flex-1 h-11 rounded-xl text-[13px] font-semibold"
+                style={{ background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171' }}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

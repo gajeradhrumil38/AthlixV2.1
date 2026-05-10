@@ -316,6 +316,44 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
     });
   }, [activeIndex, setWorkout]);
 
+  const handleCopySet = useCallback((setIndex: number) => {
+    setWorkout((prev) => {
+      if (!prev) return null;
+      const activeExercise = prev.exercises[activeIndex];
+      if (!activeExercise) return prev;
+      if (activeExercise.sets.length >= 20) {
+        haptics.error();
+        toast.error('Maximum 20 sets per exercise.');
+        return prev;
+      }
+      const source = activeExercise.sets[setIndex];
+      if (!source) return prev;
+      const copy: Set = { id: createSetId(), weight: source.weight, reps: source.reps, done: false };
+      const newSets = [...activeExercise.sets];
+      newSets.splice(setIndex + 1, 0, copy);
+      haptics.tick();
+      return {
+        ...prev,
+        exercises: prev.exercises.map((ex, i) => i === activeIndex ? { ...ex, sets: newSets } : ex),
+      };
+    });
+  }, [activeIndex, setWorkout]);
+
+  const handleRemoveSet = useCallback((setIndex: number) => {
+    setWorkout((prev) => {
+      if (!prev) return null;
+      const activeExercise = prev.exercises[activeIndex];
+      if (!activeExercise || activeExercise.sets.length <= 1) return prev;
+      haptics.tick();
+      return {
+        ...prev,
+        exercises: prev.exercises.map((ex, i) =>
+          i === activeIndex ? { ...ex, sets: ex.sets.filter((_, si) => si !== setIndex) } : ex,
+        ),
+      };
+    });
+  }, [activeIndex, setWorkout]);
+
   const handleAddExercise = useCallback(
     async (exerciseOption: any) => {
       if (addExerciseInFlightRef.current) return;
@@ -787,6 +825,8 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                   onUpdateSet={updateSetField}
                   onMarkSetDone={handleMarkSetDone}
                   onAddSet={handleAddSet}
+                  onCopySet={handleCopySet}
+                  onRemoveSet={handleRemoveSet}
                   onClearPrefill={handleClearPrefill}
                   showPrefillBanner={showPrefillBanner}
                   onOpenDial={handleOpenDial}

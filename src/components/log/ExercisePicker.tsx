@@ -182,7 +182,16 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
   const [activeTab, setActiveTab] = useState<'recent' | 'muscle' | 'templates' | 'search'>('recent');
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
   const [libraryExercises, setLibraryExercises] = useState<Exercise[]>([]);
-  const [recentLibraryExercises, setRecentLibraryExercises] = useState<Exercise[]>([]);
+  const [recentLoading, setRecentLoading] = useState(true);
+  const [recentLibraryExercises, setRecentLibraryExercises] = useState<Exercise[]>(() => {
+    // Seed from localStorage for instant first paint
+    try {
+      const cached = localStorage.getItem('athlix_recent_exercises');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
 
@@ -196,26 +205,29 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
 
   useEffect(() => {
     if (!user) return;
+    // If we had cached data, don't show the spinner — just refresh silently
+    setRecentLoading(recentLibraryExercises.length === 0);
     getRecentExerciseOptions(user.id).then((recent) => {
-      setRecentLibraryExercises(
-        recent.map((ex, i) => ({
-          id: `${ex.name}-${i}`,
-          name: ex.name,
-          muscleGroup: ex.muscleGroup,
-          exercise_db_id: ex.exercise_db_id || undefined,
-          lastSession: ex.lastSession
-            ? {
-                weight: ex.lastSession.weight,
-                reps: ex.lastSession.reps,
-                date: ex.lastSession.date,
-                sets: ex.lastSession.sets,
-                perSetData: ex.lastSession.perSetData,
-              }
-            : undefined,
-        })),
-      );
-    });
-  }, [user]);
+      const mapped: Exercise[] = recent.map((ex, i) => ({
+        id: `${ex.name}-${i}`,
+        name: ex.name,
+        muscleGroup: ex.muscleGroup,
+        exercise_db_id: ex.exercise_db_id || undefined,
+        lastSession: ex.lastSession
+          ? {
+              weight: ex.lastSession.weight,
+              reps: ex.lastSession.reps,
+              date: ex.lastSession.date,
+              sets: ex.lastSession.sets,
+              perSetData: ex.lastSession.perSetData,
+            }
+          : undefined,
+      }));
+      setRecentLibraryExercises(mapped);
+      setRecentLoading(false);
+      try { localStorage.setItem('athlix_recent_exercises', JSON.stringify(mapped)); } catch { /* quota */ }
+    }).catch(() => setRecentLoading(false));
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!user) return;
@@ -648,10 +660,25 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
               {/* Recent tab */}
               {activeTab === 'recent' && !search && (
                 <div className="flex flex-col gap-2">
-                  {(recentExercises.length > 0 ? recentExercises : recentLibraryExercises).map((exercise) => (
-                    <ExerciseRow key={exercise.id} exercise={exercise} isSelected={selectedMap.has(exercise.name)} onToggle={handleToggle} />
-                  ))}
-                  {recentExercises.length === 0 && recentLibraryExercises.length === 0 && (
+                  {recentLoading && recentLibraryExercises.length === 0
+                    ? Array.from({ length: 6 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="w-full rounded-xl flex items-center gap-3 px-3 py-2.5 animate-pulse"
+                          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', minHeight: 60 }}
+                        >
+                          <div className="h-10 w-10 rounded-xl shrink-0" style={{ background: 'var(--bg-elevated)' }} />
+                          <div className="flex-1 flex flex-col gap-2">
+                            <div className="h-3 rounded-full w-2/3" style={{ background: 'var(--bg-elevated)' }} />
+                            <div className="h-2.5 rounded-full w-1/3" style={{ background: 'var(--bg-elevated)' }} />
+                          </div>
+                        </div>
+                      ))
+                    : (recentExercises.length > 0 ? recentExercises : recentLibraryExercises).map((exercise) => (
+                        <ExerciseRow key={exercise.id} exercise={exercise} isSelected={selectedMap.has(exercise.name)} onToggle={handleToggle} />
+                      ))
+                  }
+                  {!recentLoading && recentExercises.length === 0 && recentLibraryExercises.length === 0 && (
                     <div className="flex flex-col items-center justify-center gap-2 py-16 text-center" style={{ color: 'var(--text-muted)' }}>
                       <History className="w-8 h-8 opacity-40" />
                       <p className="text-[13px] font-medium">No recent exercises</p>

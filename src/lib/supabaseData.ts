@@ -6,6 +6,7 @@ import {
   normalizeExerciseName,
 } from '../data/opentrainingCatalog';
 import { getExerciseMuscleProfile } from './exerciseMuscles';
+import { fuzzyFilter } from './fuzzySearch';
 import * as localData from './localData';
 import { hasSupabaseConfig, supabase } from './supabase';
 import { convertWeight, isWeightUnit, type WeightUnit } from './units';
@@ -1370,6 +1371,7 @@ export const saveWorkout = async (
   });
 
   await insertRows('exercises', rowsToInsert);
+  invalidateExerciseRowsCache(); // fresh data next time the picker opens
 
   const exerciseNames = Array.from(bestFromNewWorkout.keys());
   const { data: existingRecords, error: recordError } = await supabase
@@ -1671,6 +1673,26 @@ export const getPersonalRecords = async (
   return (data || []) as LocalPersonalRecord[];
 };
 
+// ── In-memory cache for exercise rows (avoids repeated full-table fetches) ────
+let _exerciseRowsCache: { userId: string; rows: any[]; ts: number } | null = null;
+const EXERCISE_ROWS_TTL_MS = 45_000; // 45 s — invalidated after any workout save
+
+export const invalidateExerciseRowsCache = () => { _exerciseRowsCache = null; };
+
+const getCachedExerciseRows = async (userId: string) => {
+  const now = Date.now();
+  if (
+    _exerciseRowsCache &&
+    _exerciseRowsCache.userId === userId &&
+    now - _exerciseRowsCache.ts < EXERCISE_ROWS_TTL_MS
+  ) {
+    return _exerciseRowsCache.rows;
+  }
+  const rows = await getExerciseRowsWithWorkoutDates(userId);
+  _exerciseRowsCache = { userId, rows, ts: now };
+  return rows;
+};
+
 export const getExerciseRowsWithWorkoutDates = async (userId: string) => {
   if (!hasSupabaseConfig) return localData.getExerciseRowsWithWorkoutDates(userId);
 
@@ -1714,7 +1736,7 @@ export const getExerciseRowsWithWorkoutDates = async (userId: string) => {
 export const getLastExerciseSession = async (userId: string, exerciseName: string) => {
   if (!hasSupabaseConfig) return localData.getLastExerciseSession(userId, exerciseName);
 
-  const rows = await getExerciseRowsWithWorkoutDates(userId);
+  const rows = await getCachedExerciseRows(userId);
   const matches = rows
     .filter((row) => row.name === exerciseName)
     .sort((a, b) => {
@@ -1821,19 +1843,28 @@ export const addCustomExercise = async (userId: string, name: string, muscleGrou
   return item;
 };
 
+// ── Exercise library in-memory cache (shared across search calls) ─────────────
+let _libCache: { userId: string; rows: ReturnType<typeof mergeWithDefaultLibrary>; ts: number } | null = null;
+const LIB_TTL_MS = 5 * 60_000;
+
+const getCachedLibrary = async (userId: string) => {
+  const now = Date.now();
+  if (_libCache && _libCache.userId === userId && now - _libCache.ts < LIB_TTL_MS) {
+    return _libCache.rows;
+  }
+  const rows = await fetchExerciseLibraryRows(userId);
+  _libCache = { userId, rows, ts: now };
+  return rows;
+};
+
 export const searchExerciseLibrary = async (userId: string, query: string) => {
   if (!hasSupabaseConfig) return localData.searchExerciseLibrary(userId, query);
 
-  const normalized = query.trim();
-  if (!normalized) {
-    const rows = await fetchExerciseLibraryRows(userId);
-    return rows.sort((a, b) => a.name.localeCompare(b.name));
-  }
+  const all = await getCachedLibrary(userId);
 
-  const rows = await fetchExerciseLibraryRows(userId, normalized);
-  return rows
-    .filter((exercise) => exercise.name.toLowerCase().includes(normalized.toLowerCase()))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  if (!query.trim()) return [...all].sort((a, b) => a.name.localeCompare(b.name));
+
+  return fuzzyFilter(all, query, (ex) => ex.name);
 };
 
 export const getRecentExerciseOptions = async (
@@ -1841,28 +1872,57 @@ export const getRecentExerciseOptions = async (
 ): Promise<LocalExerciseSessionSummary[]> => {
   if (!hasSupabaseConfig) return localData.getRecentExerciseOptions(userId);
 
-  const rows = await getExerciseRowsWithWorkoutDates(userId);
-  const recentRows = rows.sort((a, b) => {
+  // Single fetch — reused from cache if called again within TTL
+  const rows = await getCachedExerciseRows(userId);
+
+  // Sort desc by date then order_index so the most-recent set of each exercise comes first
+  const sorted = [...rows].sort((a, b) => {
     if (a.workouts.date !== b.workouts.date) return b.workouts.date.localeCompare(a.workouts.date);
     return b.order_index - a.order_index;
   });
 
+  // Build a lookup: exerciseName → all rows grouped by workout
+  const byName = new Map<string, typeof sorted>();
+  for (const row of rows) {
+    const key = row.name.toLowerCase();
+    if (!byName.has(key)) byName.set(key, []);
+    byName.get(key)!.push(row);
+  }
+
   const seen = new Set<string>();
   const options: LocalExerciseSessionSummary[] = [];
 
-  for (const row of recentRows) {
+  for (const row of sorted) {
     const key = row.name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const summary = await getLastExerciseSession(userId, row.name);
-    options.push(
-      summary || {
-        name: row.name,
-        muscleGroup: row.muscle_group || inferMuscleGroupFromName(row.name),
-        exercise_db_id: row.exercise_db_id || null,
-      },
-    );
+    // Compute last session inline — no extra round-trip
+    const allRowsForExercise = byName.get(key) || [];
+    const latestDate = row.workouts.date;
+    const latestWorkoutId = row.workout_id;
+    const sessionRows = allRowsForExercise
+      .filter((r) => r.workout_id === latestWorkoutId || r.workouts.date === latestDate)
+      .sort((a, b) => a.order_index - b.order_index);
+
+    const lastRow = sessionRows[sessionRows.length - 1] || row;
+    const totalVolume = sessionRows.reduce((sum, r) => sum + r.weight * r.reps * (r.sets || 1), 0);
+
+    options.push({
+      name: row.name,
+      muscleGroup: row.muscle_group || inferMuscleGroupFromName(row.name),
+      exercise_db_id: row.exercise_db_id || null,
+      lastSession: sessionRows.length > 0
+        ? {
+            date: latestDate,
+            sets: sessionRows.length,
+            reps: lastRow.reps,
+            weight: lastRow.weight,
+            totalVolume,
+            perSetData: sessionRows.map((r) => ({ weight: r.weight, reps: r.reps })),
+          }
+        : undefined,
+    });
 
     if (options.length >= 12) break;
   }

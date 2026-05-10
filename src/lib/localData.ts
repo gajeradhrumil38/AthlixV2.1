@@ -1,5 +1,6 @@
 import { DEFAULT_LAYOUT } from '../config/widgets';
 import { getExerciseMuscleProfile } from './exerciseMuscles';
+import { fuzzyFilter } from './fuzzySearch';
 import { convertWeight, isWeightUnit, type WeightUnit } from './units';
 import {
   OPENTRAINING_ASSETS_BY_ID,
@@ -1044,11 +1045,9 @@ export const addCustomExercise = async (userId: string, name: string, muscleGrou
 
 export const searchExerciseLibrary = async (userId: string, query: string) => {
   const db = readDb();
-  const normalized = query.trim().toLowerCase();
-  return db.exerciseLibrary
-    .filter((exercise) => !exercise.is_custom || exercise.user_id === userId)
-    .filter((exercise) => exercise.name.toLowerCase().includes(normalized))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const eligible = db.exerciseLibrary.filter((ex) => !ex.is_custom || ex.user_id === userId);
+  if (!query.trim()) return [...eligible].sort((a, b) => a.name.localeCompare(b.name));
+  return fuzzyFilter(eligible, query, (ex) => ex.name);
 };
 
 export const getRecentExerciseOptions = async (userId: string): Promise<LocalExerciseSessionSummary[]> => {
