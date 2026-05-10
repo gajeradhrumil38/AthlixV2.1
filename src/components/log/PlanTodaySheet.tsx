@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Trash2, Check, BookmarkPlus } from 'lucide-react';
+import { X, Plus, Trash2, Check } from 'lucide-react';
 import { ExercisePicker } from './ExercisePicker';
 import { DialPicker } from './DialPicker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -223,6 +223,11 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
 
   const defaultTitle = `Plan — ${new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`;
 
+  // Auto-open the picker the first time the sheet mounts with no exercises
+  useEffect(() => {
+    setShowPicker(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const openDial = (exId: string, setIdx: number, field: 'weight' | 'reps') => {
     setDialState({ exId, setIdx, field });
   };
@@ -385,22 +390,30 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
           <div className="flex-1 overflow-y-auto">
             <AnimatePresence initial={false}>
               {exercises.length === 0 ? (
-                <motion.div
+                <motion.button
+                  type="button"
                   key="empty"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="flex flex-col items-center justify-center h-48 gap-3 text-center px-6"
+                  onClick={() => setShowPicker(true)}
+                  className="w-full flex flex-col items-center justify-center gap-4 text-center px-6 active:opacity-70 transition-opacity"
+                  style={{ minHeight: 260 }}
                 >
                   <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                    className="w-16 h-16 rounded-2xl flex items-center justify-center"
                     style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
                   >
-                    <BookmarkPlus className="w-6 h-6 text-[var(--text-muted)]" />
+                    <Plus className="w-7 h-7" style={{ color: 'var(--accent)' }} />
                   </div>
-                  <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
-                    Add exercises to build your plan
-                  </p>
-                </motion.div>
+                  <div>
+                    <p className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      Add your first exercise
+                    </p>
+                    <p className="text-[12px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                      Tap here or use the button below
+                    </p>
+                  </div>
+                </motion.button>
               ) : (
                 exercises.map((ex) => (
                   <motion.div
