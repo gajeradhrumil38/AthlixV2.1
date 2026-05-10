@@ -547,29 +547,22 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* Start (new workout) or Load (add to existing) */}
-                    {onStartTemplate ? (
-                      <button
-                        type="button"
-                        onClick={() => { onStartTemplate(templateToExercises(tmpl), tmpl.title); onClose(); }}
-                        className="flex h-8 items-center gap-1.5 px-3 rounded-lg shrink-0 text-[11px] font-bold active:scale-95 transition-transform text-black"
-                        style={{ background: 'var(--accent)' }}
-                        title="Start workout"
-                      >
-                        <Play className="w-3 h-3 fill-black" />
-                        Start
-                      </button>
-                    ) : onLoadTemplate ? (
-                      <button
-                        type="button"
-                        onClick={() => { onLoadTemplate(templateToExercises(tmpl)); onClose(); }}
-                        className="flex h-8 items-center gap-1.5 px-3 rounded-lg shrink-0 text-[11px] font-bold active:scale-95 transition-transform"
-                        style={{ background: 'rgba(200,255,0,0.12)', color: 'var(--accent)', border: '1px solid rgba(200,255,0,0.18)' }}
-                        title="Load exercises"
-                      >
-                        Load
-                      </button>
-                    ) : null}
+                    {/* Start / Load — always visible */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const exs = templateToExercises(tmpl);
+                        if (onStartTemplate) { onStartTemplate(exs, tmpl.title); onClose(); }
+                        else if (onLoadTemplate) { onLoadTemplate(exs); onClose(); }
+                        else { exs.forEach((ex) => onSelect(ex)); onClose(); }
+                      }}
+                      className="flex h-8 items-center gap-1.5 px-3 rounded-lg shrink-0 text-[11px] font-bold active:scale-95 transition-transform text-black"
+                      style={{ background: 'var(--accent)' }}
+                      title={onStartTemplate ? 'Start workout' : onLoadTemplate ? 'Load exercises' : 'Add exercises'}
+                    >
+                      <Play className="w-3 h-3 fill-black" />
+                      {onStartTemplate ? 'Start' : onLoadTemplate ? 'Load' : 'Add'}
+                    </button>
                   </div>
                 );
               })}
