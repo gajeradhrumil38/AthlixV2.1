@@ -36,6 +36,7 @@ interface ActiveWorkoutProps {
   onWeightUnitChange?: (unit: WeightUnit) => void;
   onDistanceUnitChange?: (unit: DistanceUnit) => void;
   onRequestPlanToday?: () => void;
+  onEditTemplate?: (template: any) => void;
 }
 
 interface DialPickerState {
@@ -109,6 +110,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   onWeightUnitChange,
   onDistanceUnitChange,
   onRequestPlanToday,
+  onEditTemplate,
 }) => {
   const { user } = useAuth();
   const [activeIndex, setActiveIndex] = useState(0);
@@ -865,6 +867,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             onSelect={(exercise) => { void handleAddExercise(exercise); }}
             onClose={() => setShowExercisePicker(false)}
             recentExercises={[]}
+            onEditTemplate={onEditTemplate}
             onLoadTemplate={(exercises) => {
               // Build ExerciseEntry objects with template defaults pre-filled so the
               // user only needs to mark sets done — no manual weight/reps entry.

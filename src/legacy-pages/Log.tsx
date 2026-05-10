@@ -504,6 +504,7 @@ export const Log: React.FC = () => {
           onWeightUnitChange={handleWeightUnitChange}
           onDistanceUnitChange={handleDistanceUnitChange}
           onRequestPlanToday={() => setShowPlanToday(true)}
+          onEditTemplate={(tmpl) => { setEditingTemplate(tmpl); setShowPlanToday(true); }}
         />
       )}
 
