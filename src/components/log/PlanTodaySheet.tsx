@@ -468,6 +468,7 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
             onSelect={handleAddExercise}
             onClose={() => setShowPicker(false)}
             recentExercises={[]}
+            multiSelect
           />
         </div>
       )}

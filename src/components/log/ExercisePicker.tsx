@@ -70,6 +70,7 @@ interface ExercisePickerProps {
   onClose: () => void;
   recentExercises: Exercise[];
   onLoadTemplate?: (exercises: Exercise[]) => void;
+  multiSelect?: boolean;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -172,6 +173,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
   onClose,
   recentExercises,
   onLoadTemplate,
+  multiSelect = false,
 }) => {
   const { user } = useAuth();
 
@@ -280,6 +282,11 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
   const isNestedView = Boolean(search.trim()) || Boolean(selectedMuscle);
 
   const handleToggle = (exercise: Exercise) => {
+    if (!multiSelect) {
+      onSelect(exercise);
+      onClose();
+      return;
+    }
     setSelectedMap((prev) => {
       const next = new Map(prev);
       if (next.has(exercise.name)) {
