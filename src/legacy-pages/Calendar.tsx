@@ -9,21 +9,20 @@ import {
   format,
   isSameDay,
   isSameMonth,
-  isSameWeek,
   startOfMonth,
   startOfWeek,
-  subDays,
   subMonths,
   subWeeks,
+  isToday as dateFnsIsToday,
 } from 'date-fns';
 import {
-  Calendar as CalendarIcon,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
   Dumbbell,
   LayoutGrid,
-  Sparkles,
+  Plus,
   Trash2,
   Zap,
 } from 'lucide-react';
@@ -35,868 +34,653 @@ import { deleteWorkout, getWorkouts } from '../lib/supabaseData';
 import { convertWeight, isWeightUnit, type WeightUnit } from '../lib/units';
 import { muscleColor } from '../lib/muscleColors';
 
-const MUSCLE_FILTERS = [
-  'All',
-  'Chest',
-  'Back',
-  'Legs',
-  'Shoulders',
-  'Arms',
-  'Core',
-  'Cardio',
-  'Full Body',
-] as const;
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-type ViewMode = 'today' | 'week' | 'month';
+type ViewMode = 'week' | 'month';
 
-const parseStoredDate = (value: unknown) => {
+const MUSCLE_FILTERS = ['All', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Cardio'] as const;
+
+// ── Pure helpers ──────────────────────────────────────────────────────────────
+
+const parseStoredDate = (value: unknown): Date | null => {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return new Date(value.getFullYear(), value.getMonth(), value.getDate());
   }
-
   if (typeof value !== 'string') return null;
-
-  const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (dateOnlyMatch) {
-    const [, year, month, day] = dateOnlyMatch;
-    const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    const parsed = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     if (!Number.isNaN(parsed.getTime())) return parsed;
   }
-
-  const fallback = new Date(value);
-  if (Number.isNaN(fallback.getTime())) return null;
-  return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate());
+  const fb = new Date(value);
+  if (Number.isNaN(fb.getTime())) return null;
+  return new Date(fb.getFullYear(), fb.getMonth(), fb.getDate());
 };
 
-const getWorkoutExerciseCount = (workout: any) =>
-  (() => {
-    const fromRows = new Set((workout.exercises || []).map((exercise: any) => exercise.name).filter(Boolean)).size;
-    if (fromRows > 0) return fromRows;
-    // Fallback for legacy/corrupted entries saved before strict set validation.
-    if (Array.isArray(workout.muscle_groups) && workout.muscle_groups.length > 0) return 1;
-    if (Number(workout.duration_minutes || 0) > 0) return 1;
-    return 0;
-  })();
+const getExerciseCount = (workout: any): number => {
+  const fromRows = new Set((workout.exercises || []).map((e: any) => e.name).filter(Boolean)).size;
+  if (fromRows > 0) return fromRows;
+  if (Array.isArray(workout.muscle_groups) && workout.muscle_groups.length > 0) return 1;
+  if (Number(workout.duration_minutes || 0) > 0) return 1;
+  return 0;
+};
 
-const getWorkoutVolume = (workout: any, targetUnit: WeightUnit = 'kg') =>
+const getVolume = (workout: any, unit: WeightUnit = 'kg'): number =>
   (workout.exercises || []).reduce(
-    (sum: number, exercise: any) =>
+    (sum: number, ex: any) =>
       sum +
-      (exercise.unit && !isWeightUnit(exercise.unit)
+      (ex.unit && !isWeightUnit(ex.unit)
         ? 0
-        : convertWeight(
-            Number(exercise.weight || 0),
-            isWeightUnit(exercise.unit) ? exercise.unit : targetUnit,
-            targetUnit,
-            0.1,
-          ) *
-          Number(exercise.reps || 0) *
-          Number(exercise.sets || 0)),
+        : convertWeight(Number(ex.weight || 0), isWeightUnit(ex.unit) ? ex.unit : unit, unit, 0.1) *
+          Number(ex.reps || 0) *
+          Number(ex.sets || 0)),
     0,
   );
 
-const getWorkoutAccent = (workout: any) =>
-  muscleColor((workout.muscle_groups || [])[0]);
+const getAccent = (workout: any): string => muscleColor((workout.muscle_groups || [])[0]);
 
-const getMuscleBarSegments = (workouts: any[]): [string, number][] => {
-  const coverage = new Map<string, number>();
-  workouts.forEach((workout) => {
-    const exs: any[] = workout.exercises || [];
-    let counted = false;
-    exs.forEach((ex) => {
-      const mg = (ex.muscle_group || '').trim();
-      if (mg) { coverage.set(mg, (coverage.get(mg) || 0) + 1); counted = true; }
-    });
-    if (!counted) {
-      (workout.muscle_groups || []).forEach((mg: string) => {
-        if (mg) coverage.set(mg, (coverage.get(mg) || 0) + 1);
-      });
-    }
-  });
-  return Array.from(coverage.entries()).sort((a, b) => b[1] - a[1]);
-};
+const getExerciseNames = (workout: any): string[] =>
+  Array.from(new Set((workout.exercises || []).map((e: any) => e.name as string).filter(Boolean)));
 
-const isGenericWorkoutTitle = (title?: string | null) => {
+const isGenericTitle = (title?: string | null) => {
   if (!title) return true;
-  const normalized = title.trim().toLowerCase();
-  return (
-    normalized === 'workout' ||
-    normalized === 'morning workout' ||
-    normalized === 'afternoon workout' ||
-    normalized === 'evening workout'
-  );
+  const t = title.trim().toLowerCase();
+  return ['workout', 'morning workout', 'afternoon workout', 'evening workout'].includes(t);
 };
 
-const getOrderedExerciseNames = (workout: any): string[] =>
-  Array.from(
-    new Set((workout.exercises || []).map((exercise: any) => exercise.name as string).filter(Boolean)),
-  );
-
-const getWorkoutDisplayTitle = (workout: any) => {
-  const exerciseNames = getOrderedExerciseNames(workout);
-
-  if (exerciseNames.length > 0 && isGenericWorkoutTitle(workout.title)) {
-    return exerciseNames[0];
-  }
-
-  return workout.title || exerciseNames[0] || 'Workout';
+const getDisplayTitle = (workout: any): string => {
+  const names = getExerciseNames(workout);
+  if (names.length > 0 && isGenericTitle(workout.title)) return names[0];
+  return workout.title || names[0] || 'Workout';
 };
 
-const workoutMatchesFilter = (workout: any, filter: string | null) => {
+const matchesFilter = (workout: any, filter: string | null): boolean => {
   if (!filter || filter === 'All') return true;
-  const groups = Array.isArray(workout.muscle_groups) ? workout.muscle_groups : [];
-  if (filter === 'Arms') return groups.includes('Arms') || groups.includes('Biceps') || groups.includes('Triceps');
-  if (filter === 'Full Body') return groups.includes('Full Body') || groups.length >= 4;
-  return groups.includes(filter);
+  const g = Array.isArray(workout.muscle_groups) ? workout.muscle_groups : [];
+  if (filter === 'Arms') return g.includes('Arms') || g.includes('Biceps') || g.includes('Triceps');
+  return g.includes(filter);
 };
 
-const getDaySummary = (workouts: any[], targetUnit: WeightUnit = 'kg') => {
-  const totalDuration = workouts.reduce((sum, workout) => sum + Number(workout.duration_minutes || 0), 0);
-  const totalVolume = workouts.reduce((sum, workout) => sum + getWorkoutVolume(workout, targetUnit), 0);
-  const exerciseCount = workouts.reduce((sum, workout) => sum + getWorkoutExerciseCount(workout), 0);
+const getDaySummary = (workouts: any[], unit: WeightUnit) => ({
+  count: workouts.length,
+  duration: workouts.reduce((s, w) => s + Number(w.duration_minutes || 0), 0),
+  exercises: workouts.reduce((s, w) => s + getExerciseCount(w), 0),
+  volume: workouts.reduce((s, w) => s + getVolume(w, unit), 0),
+});
 
-  return {
-    totalDuration,
-    totalVolume,
-    exerciseCount,
-    workoutCount: workouts.length,
-  };
-};
+const getWeekDays = (anchor: Date): Date[] =>
+  eachDayOfInterval({ start: startOfWeek(anchor, { weekStartsOn: 1 }), end: endOfWeek(anchor, { weekStartsOn: 1 }) });
 
-const getRangeLabel = (viewMode: ViewMode, currentDate: Date) => {
-  if (viewMode === 'today') return format(currentDate, 'EEEE, MMM d');
-  if (viewMode === 'week') {
-    const start = startOfWeek(currentDate);
-    const end = endOfWeek(currentDate);
-    return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
-  }
-  return format(currentDate, 'MMMM yyyy');
-};
+// ── Sub-components ────────────────────────────────────────────────────────────
 
-const shiftDateByView = (date: Date, viewMode: ViewMode, direction: 1 | -1) => {
-  if (viewMode === 'month') return direction > 0 ? addMonths(date, 1) : subMonths(date, 1);
-  if (viewMode === 'week') return direction > 0 ? addWeeks(date, 1) : subWeeks(date, 1);
-  return direction > 0 ? addDays(date, 1) : subDays(date, 1);
-};
+const ExerciseChip: React.FC<{ name: string; color: string }> = ({ name, color }) => (
+  <div
+    className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold border-2 shrink-0"
+    style={{
+      background: `color-mix(in srgb, ${color} 18%, var(--bg-elevated))`,
+      borderColor: `color-mix(in srgb, ${color} 30%, transparent)`,
+      color,
+    }}
+  >
+    {name.charAt(0).toUpperCase()}
+  </div>
+);
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 export const Calendar: React.FC = () => {
   const { user, profile } = useAuth();
-  const displayUnit = profile?.unit_preference || 'kg';
+  const unit = (profile?.unit_preference || 'kg') as WeightUnit;
   const navigate = useNavigate();
-  const [viewMode, setViewMode] = useState<ViewMode>('today');
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
+
+  const today = useMemo(() => new Date(), []);
+  const [anchor, setAnchor] = useState<Date>(today);
+  const [selectedDate, setSelectedDate] = useState<Date>(today);
+  const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    const fetchWorkouts = async () => {
-      setLoading(true);
-      try {
-        if (!user) {
-          setWorkouts([]);
-          return;
-        }
-
-        let start = currentDate;
-        let end = currentDate;
-        if (viewMode === 'month') {
-          start = startOfWeek(startOfMonth(currentDate));
-          end = endOfWeek(endOfMonth(currentDate));
-        } else if (viewMode === 'week') {
-          start = startOfWeek(currentDate);
-          end = endOfWeek(currentDate);
-        } else {
-          start = currentDate;
-          end = currentDate;
-        }
-
-        const data = await getWorkouts(user.id, {
-          startDate: format(start, 'yyyy-MM-dd'),
-          endDate: format(end, 'yyyy-MM-dd'),
-          includeExercises: true,
-        });
-
-        setWorkouts(data || []);
-      } catch (error) {
-        console.error('Error fetching workouts:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchWorkouts();
-  }, [currentDate, user, viewMode]);
+  // ── Data ────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (viewMode === 'today') {
-      setSelectedDate(currentDate);
-    }
-  }, [currentDate, viewMode]);
+    if (!user) { setLoading(false); return; }
+    setLoading(true);
+    const start = startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 });
+    const end = endOfWeek(endOfMonth(anchor), { weekStartsOn: 1 });
+    getWorkouts(user.id, {
+      startDate: format(start, 'yyyy-MM-dd'),
+      endDate: format(end, 'yyyy-MM-dd'),
+      includeExercises: true,
+    })
+      .then((data) => setWorkouts(data || []))
+      .catch(() => setWorkouts([]))
+      .finally(() => setLoading(false));
+  }, [user, anchor]);
 
-  const days = useMemo(() => {
-    if (viewMode === 'month') {
-      return eachDayOfInterval({
-        start: startOfWeek(startOfMonth(currentDate)),
-        end: endOfWeek(endOfMonth(currentDate)),
-      });
-    }
+  // ── Derived ─────────────────────────────────────────────────────────────────
+
+  const weekDays = useMemo(() => getWeekDays(anchor), [anchor]);
+
+  const monthDays = useMemo(() =>
+    eachDayOfInterval({
+      start: startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 }),
+      end: endOfWeek(endOfMonth(anchor), { weekStartsOn: 1 }),
+    }),
+  [anchor]);
+
+  const getForDay = (day: Date) =>
+    workouts.filter((w) => {
+      const d = parseStoredDate(w.date);
+      return d !== null && isSameDay(d, day) && matchesFilter(w, activeFilter);
+    });
+
+  const selectedWorkouts = useMemo(() => getForDay(selectedDate), [selectedDate, workouts, activeFilter]);
+  const selectedSummary = useMemo(() => getDaySummary(selectedWorkouts, unit), [selectedWorkouts, unit]);
+
+  // Count new workouts this week
+  const weekNewCount = useMemo(() =>
+    weekDays.reduce((sum, d) => sum + getForDay(d).length, 0),
+  [weekDays, workouts, activeFilter]);
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
+
+  const prevPeriod = () => {
     if (viewMode === 'week') {
-      return eachDayOfInterval({
-        start: startOfWeek(currentDate),
-        end: endOfWeek(currentDate),
-      });
+      setAnchor((p) => subWeeks(p, 1));
+      setSelectedDate((p) => subWeeks(p, 1));
+    } else {
+      setAnchor((p) => subMonths(p, 1));
     }
-    return [currentDate];
-  }, [currentDate, viewMode]);
-
-  const getWorkoutsForDay = (day: Date) =>
-    workouts.filter(
-      (workout) => {
-        const parsed = parseStoredDate(workout.date);
-        return parsed !== null && isSameDay(parsed, day) && workoutMatchesFilter(workout, activeFilter);
-      },
-    );
-
-  const visibleWeekDays = useMemo(() => {
-    if (viewMode !== 'week' || !activeFilter) return days;
-    return days.filter((day) => getWorkoutsForDay(day).length > 0);
-  }, [activeFilter, days, viewMode, workouts]);
-
-  useEffect(() => {
-    if (viewMode !== 'week' || !activeFilter || visibleWeekDays.length === 0) return;
-
-    const hasVisibleSelection = visibleWeekDays.some((day) => isSameDay(day, selectedDate));
-    if (!hasVisibleSelection) {
-      setSelectedDate(visibleWeekDays[0]);
-    }
-  }, [activeFilter, selectedDate, viewMode, visibleWeekDays]);
-
-  const selectedDayWorkouts = useMemo(() => getWorkoutsForDay(selectedDate), [selectedDate, workouts, activeFilter]);
-  const selectedDaySummary = useMemo(
-    () => getDaySummary(selectedDayWorkouts, displayUnit as WeightUnit),
-    [selectedDayWorkouts, displayUnit],
-  );
-  const todayWorkouts = useMemo(() => getWorkoutsForDay(currentDate), [currentDate, workouts, activeFilter]);
-  const todaySummary = useMemo(
-    () => getDaySummary(todayWorkouts, displayUnit as WeightUnit),
-    [todayWorkouts, displayUnit],
-  );
-  const today = new Date();
-  const isCurrentRange = useMemo(() => {
-    if (viewMode === 'today') return true;
-    if (viewMode === 'week') return isSameWeek(currentDate, today);
-    return isSameMonth(currentDate, today);
-  }, [currentDate, today, viewMode]);
-
-  const handleToday = () => {
-    const now = new Date();
-    setCurrentDate(now);
-    setSelectedDate(now);
-  };
-
-  const handleViewModeChange = (mode: ViewMode) => {
-    if (mode === 'today') {
-      const now = new Date();
-      setViewMode('today');
-      setCurrentDate(now);
-      setSelectedDate(now);
-      return;
-    }
-    setViewMode(mode);
-    setCurrentDate(selectedDate);
   };
 
   const nextPeriod = () => {
-    if (viewMode === 'today') return;
-    setCurrentDate((prev) => shiftDateByView(prev, viewMode, 1));
-    setSelectedDate((prev) => shiftDateByView(prev, viewMode, 1));
-  };
-
-  const prevPeriod = () => {
-    if (viewMode === 'today') return;
-    setCurrentDate((prev) => shiftDateByView(prev, viewMode, -1));
-    setSelectedDate((prev) => shiftDateByView(prev, viewMode, -1));
-  };
-
-  const handleSelectDay = (day: Date) => {
-    setSelectedDate(day);
-    if (viewMode === 'today') {
-      setCurrentDate(day);
+    if (viewMode === 'week') {
+      setAnchor((p) => addWeeks(p, 1));
+      setSelectedDate((p) => addWeeks(p, 1));
+    } else {
+      setAnchor((p) => addMonths(p, 1));
     }
   };
 
-  const handleTouchStart = (day: Date, event: React.PointerEvent<HTMLButtonElement>) => {
-    if (event.pointerType !== 'touch') return;
+  const goToToday = () => {
+    setAnchor(today);
+    setSelectedDate(today);
+  };
+
+  const selectDay = (day: Date) => {
+    setSelectedDate(day);
+    if (!isSameMonth(day, anchor)) setAnchor(day);
+  };
+
+  const handleLongPressStart = (day: Date, e: React.PointerEvent) => {
+    if (e.pointerType !== 'touch') return;
     longPressTimer.current = setTimeout(() => {
-      if (navigator.vibrate) {
-        try {
-          navigator.vibrate(45);
-        } catch {
-          // Ignore unsupported vibration behavior.
-        }
-      }
+      try { navigator.vibrate?.(45); } catch { /* ignore */ }
       navigate(`/log?date=${format(day, 'yyyy-MM-dd')}`);
     }, 480);
   };
 
-  const handleTouchEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
+  const handleLongPressEnd = () => {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
   };
 
-  useEffect(() => {
-    return () => {
-      if (longPressTimer.current) {
-        clearTimeout(longPressTimer.current);
-        longPressTimer.current = null;
-      }
-    };
-  }, []);
+  useEffect(() => () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }, []);
 
-  const handleDeleteWorkout = async (workoutId: string, workoutTitle: string) => {
-    if (!user) return;
-    const confirmed = window.confirm(`Delete "${workoutTitle}"? This cannot be undone.`);
-    if (!confirmed) return;
-
+  const handleDelete = async (id: string, title: string) => {
+    if (!user || !window.confirm(`Delete "${title}"? This cannot be undone.`)) return;
     try {
-      await deleteWorkout(user.id, workoutId);
-      setWorkouts((current) => current.filter((workout) => workout.id !== workoutId));
+      await deleteWorkout(user.id, id);
+      setWorkouts((p) => p.filter((w) => w.id !== id));
       toast.success('Workout deleted');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to delete workout');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete');
     }
   };
 
-  const renderWorkoutCard = (workout: any, _compact = false) => {
-    const volume = getWorkoutVolume(workout, displayUnit as WeightUnit);
-    const exerciseCount = getWorkoutExerciseCount(workout);
-    const accent = getWorkoutAccent(workout);
-    const exerciseNames = getOrderedExerciseNames(workout);
-    const fallbackTitle = getWorkoutDisplayTitle(workout);
-    const primaryExercise = exerciseNames[0] || fallbackTitle;
-    const secondaryExercises = exerciseNames.slice(1);
+  // ── Renders ──────────────────────────────────────────────────────────────────
+
+  const renderWorkoutCard = (workout: any) => {
+    const accent = getAccent(workout);
+    const names = getExerciseNames(workout);
+    const title = getDisplayTitle(workout);
+    const exCount = getExerciseCount(workout);
+    const dur = Number(workout.duration_minutes || 0);
     const mainMuscle = (workout.muscle_groups || [])[0];
-    const customSessionLabel =
-      workout.title &&
-      !isGenericWorkoutTitle(workout.title) &&
-      workout.title.trim().toLowerCase() !== primaryExercise.trim().toLowerCase()
-        ? workout.title
-        : null;
+    const chipNames = names.slice(0, 4);
+    const extra = names.length - chipNames.length;
 
     return (
-      <div
+      <motion.div
         key={workout.id}
-        className="relative overflow-hidden rounded-2xl border border-white/[0.07]"
-        style={{ background: 'var(--bg-surface)' }}
+        layout
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.97 }}
+        className="relative overflow-hidden rounded-2xl"
+        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
       >
-        {/* Accent bar */}
-        <div
-          className="absolute inset-y-0 left-0 w-[3px] rounded-l-2xl"
-          style={{ backgroundColor: accent }}
-        />
+        {/* Left accent bar */}
+        <div className="absolute inset-y-0 left-0 w-[3px] rounded-l-2xl" style={{ backgroundColor: accent }} />
 
         <div className="pl-4 pr-3 py-3.5">
-          {/* Top row: muscle tag + actions */}
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div
-              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em]"
-              style={{
-                background: `color-mix(in srgb, ${accent} 14%, transparent)`,
-                color: accent,
-                border: `1px solid color-mix(in srgb, ${accent} 24%, transparent)`,
-              }}
-            >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: accent }} />
-              {mainMuscle || 'Workout'}
+          {/* Title row */}
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[17px] font-bold leading-snug truncate" style={{ color: 'var(--text-primary)' }}>
+                {title}
+              </p>
+              {mainMuscle && (
+                <p className="text-[11px] font-medium mt-0.5" style={{ color: accent }}>
+                  {mainMuscle}
+                </p>
+              )}
             </div>
-
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
               <button
-                onClick={() => handleDeleteWorkout(workout.id, workout.title)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+                onClick={() => handleDelete(workout.id, workout.title)}
+                className="h-7 w-7 flex items-center justify-center rounded-lg"
                 style={{ background: 'rgba(255,59,48,0.08)', color: 'rgba(255,80,65,0.85)' }}
-                aria-label="Delete workout"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
               <Link
                 to="/timeline"
-                className="inline-flex h-7 items-center rounded-lg px-3 text-[11px] font-semibold transition-colors"
-                style={{
-                  background: 'rgba(200,255,0,0.1)',
-                  color: 'var(--accent)',
-                  border: '1px solid rgba(200,255,0,0.15)',
-                }}
+                className="h-7 inline-flex items-center px-3 rounded-lg text-[11px] font-semibold"
+                style={{ background: 'var(--accent-dim)', color: 'var(--accent)', border: '1px solid rgba(200,255,0,0.15)' }}
               >
                 Details
               </Link>
             </div>
           </div>
 
-          {/* Exercise name */}
-          <p className="text-[18px] font-bold text-white leading-snug truncate">
-            {primaryExercise}
-          </p>
-          {customSessionLabel && (
-            <p className="mt-0.5 text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>
-              {customSessionLabel}
-            </p>
-          )}
-
-          {/* Stats row */}
-          <div className="mt-2 flex items-center gap-2.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-            <span className="inline-flex items-center gap-1">
-              <Clock3 className="h-3.5 w-3.5" style={{ color: accent }} />
-              {workout.duration_minutes || 0} min
-            </span>
-            <span className="h-1 w-1 rounded-full bg-white/20" />
-            <span>{exerciseCount} exercise{exerciseCount !== 1 ? 's' : ''}</span>
-            {volume > 0 && (
-              <>
-                <span className="h-1 w-1 rounded-full bg-white/20" />
-                <span>{Math.round(volume).toLocaleString()} {displayUnit}</span>
-              </>
-            )}
-          </div>
-
-          {/* Secondary exercises */}
-          {secondaryExercises.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {secondaryExercises.slice(0, 5).map((name) => (
-                <span
-                  key={name}
-                  className="inline-flex items-center rounded-lg px-2 py-0.5 text-[11px] font-medium"
-                  style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    color: 'var(--text-muted)',
-                    border: '1px solid rgba(255,255,255,0.06)',
-                  }}
-                >
-                  {name}
-                </span>
-              ))}
-              {secondaryExercises.length > 5 && (
-                <span
-                  className="inline-flex items-center rounded-lg px-2 py-0.5 text-[11px] font-medium"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  +{secondaryExercises.length - 5}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderDayCell = (day: Date, compact = false) => {
-    const dayWorkouts = getWorkoutsForDay(day);
-    const daySummary = getDaySummary(dayWorkouts, displayUnit as WeightUnit);
-    const isToday = isSameDay(day, today);
-    const isSelected = isSameDay(day, selectedDate);
-    const isOutsideMonth = viewMode === 'month' && !isSameMonth(day, currentDate);
-
-    if (compact) {
-      const visibleMarkers = dayWorkouts.slice(0, 4);
-      const extraWorkoutCount = Math.max(0, dayWorkouts.length - visibleMarkers.length);
-
-      return (
-        <button
-          key={day.toISOString()}
-          onClick={() => handleSelectDay(day)}
-          onPointerDown={(event) => handleTouchStart(day, event)}
-          onPointerUp={handleTouchEnd}
-          onPointerLeave={handleTouchEnd}
-          onPointerCancel={handleTouchEnd}
-          className={`group relative min-h-[116px] min-w-0 overflow-hidden rounded-2xl border px-2 py-2 text-left transition-all ${
-            isSelected
-              ? 'border-[var(--accent)]/55 bg-[linear-gradient(180deg,#1c1c1c_0%,#141414_100%)] shadow-[0_0_0_1px_rgba(200,255,0,0.08)]'
-              : 'border-white/6 bg-[linear-gradient(180deg,#181818_0%,#141414_100%)] hover:border-white/12 hover:bg-white/[0.03]'
-          } ${isOutsideMonth ? 'opacity-40' : ''}`}
-        >
-          <div className="flex h-full flex-col items-center">
-            <div className="flex-1 flex items-center justify-center">
-              <div
-                className={`flex h-10 w-10 items-center justify-center rounded-full text-[16px] font-semibold ${
-                  isToday
-                    ? 'bg-[var(--accent)] text-black'
-                    : isSelected
-                      ? 'border border-[var(--accent)]/35 bg-[var(--accent)]/10 text-white'
-                      : 'text-white'
-                }`}
-              >
-                {format(day, 'd')}
-              </div>
+          {/* Bottom row: time + exercise chips */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+              <Clock3 className="h-3.5 w-3.5 shrink-0" style={{ color: accent }} />
+              <span>{dur > 0 ? `${dur} min` : `${exCount} exercise${exCount !== 1 ? 's' : ''}`}</span>
             </div>
 
-            <div className="w-full pb-1">
-              {dayWorkouts.length > 0 ? (
-                <div className="flex items-end justify-center gap-1.5">
-                    {visibleMarkers.map((workout) => (
-                      <div
-                        key={workout.id}
-                        className="h-5 w-1 rounded-full"
-                        style={{ backgroundColor: getWorkoutAccent(workout) }}
-                      />
-                    ))}
-                    {extraWorkoutCount > 0 && (
-                      <div className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-1 text-[9px] font-semibold text-[var(--text-secondary)]">
-                        +{extraWorkoutCount}
-                      </div>
-                    )}
-                </div>
-              ) : (
-                <div className="flex h-7 items-center justify-center rounded-lg border border-dashed border-white/8 bg-black/10 px-2 text-center text-[10px] font-medium text-[var(--text-muted)]">
-                  Rest
-                </div>
-              )}
-            </div>
-          </div>
-        </button>
-      );
-    }
-
-    return (
-      <button
-        key={day.toISOString()}
-        onClick={() => handleSelectDay(day)}
-        onPointerDown={(event) => handleTouchStart(day, event)}
-        onPointerUp={handleTouchEnd}
-        onPointerLeave={handleTouchEnd}
-        onPointerCancel={handleTouchEnd}
-        className={`group min-h-[132px] rounded-2xl border p-3 text-left transition-all ${
-          isSelected
-            ? 'border-[var(--accent)]/55 bg-[linear-gradient(180deg,#1c1c1c_0%,#141414_100%)] shadow-[0_0_0_1px_rgba(200,255,0,0.08)]'
-            : 'border-white/6 bg-[linear-gradient(180deg,#181818_0%,#141414_100%)] hover:border-white/12 hover:bg-white/[0.03]'
-        } ${isOutsideMonth ? 'opacity-45' : ''} ${compact ? 'min-h-[116px]' : ''}`}
-      >
-        <div className="flex h-full flex-col">
-          <div className="mb-3 flex items-start justify-between">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#788496]">
-                {format(day, compact ? 'EEE' : 'EEEEEE')}
-              </div>
-              <div
-                className={`mt-1 flex h-9 w-9 items-center justify-center rounded-full text-[16px] font-semibold ${
-                  isToday ? 'bg-[var(--accent)] text-black' : isSelected ? 'bg-white/8 text-white' : 'text-white'
-                }`}
-              >
-                {format(day, 'd')}
-              </div>
-            </div>
-
-            {dayWorkouts.length > 0 && (
-              <div className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-bold text-[#D7E2EC]">
-                {dayWorkouts.length} workout{dayWorkouts.length > 1 ? 's' : ''}
-              </div>
-            )}
-          </div>
-
-          {dayWorkouts.length > 0 ? (
-            <div className="mt-auto space-y-2">
-              {/* Muscle-coverage bar — proportional segments per muscle group */}
-              {(() => {
-                const segs = getMuscleBarSegments(dayWorkouts);
-                return segs.length > 0 ? (
-                  <div className="flex h-2 w-full overflow-hidden rounded-full" style={{ gap: '2px' }}>
-                    {segs.map(([muscle, count]) => (
-                      <div key={muscle} style={{ flex: count, backgroundColor: muscleColor(muscle), borderRadius: '9999px' }} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="h-2 w-full rounded-full" style={{ backgroundColor: getWorkoutAccent(dayWorkouts[0]) }} />
-                );
-              })()}
-              <div className="grid grid-cols-2 gap-2 text-[10px] text-[#9EABBB]">
-                <div>
-                  <div className="font-semibold text-[var(--text-primary)]">{daySummary.totalDuration}m</div>
-                  <div>Duration</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-semibold text-[var(--text-primary)]">{daySummary.exerciseCount}</div>
-                  <div>Exercises</div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-auto rounded-xl border border-dashed border-white/8 bg-black/10 px-3 py-3 text-center text-[11px] text-[var(--text-muted)]">
-              {isToday ? 'Nothing logged yet' : 'Rest'}
-            </div>
-          )}
-        </div>
-      </button>
-    );
-  };
-
-  const renderSelectedDayPanel = () => {
-    const title = isSameDay(selectedDate, today) ? 'Today' : format(selectedDate, 'EEEE, MMMM d');
-
-    return (
-      <AnimatePresence mode="wait">
-        <motion.section
-          key={`${viewMode}-${format(selectedDate, 'yyyy-MM-dd')}-${activeFilter || 'all'}`}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          className="rounded-3xl border border-white/6 bg-[linear-gradient(180deg,#171717_0%,#121212_100%)] p-5"
-        >
-          <div className="mb-5">
-            {/* Date badge + title */}
-            <div className="mb-1 inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/20 bg-[var(--accent)]/8 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--accent)]">
-              <Sparkles className="h-3.5 w-3.5" />
-              {title}
-            </div>
-            <h3 className="text-[22px] font-semibold text-white">
-              {selectedDaySummary.workoutCount > 0
-                ? `${selectedDaySummary.workoutCount} workout${selectedDaySummary.workoutCount > 1 ? 's' : ''}`
-                : 'No workouts yet'}
-            </h3>
-
-            {/* Compact stats strip */}
-            {selectedDaySummary.workoutCount > 0 && (
-              <div
-                className="mt-3 inline-flex items-center gap-0 rounded-xl border border-white/[0.07] overflow-hidden divide-x divide-white/[0.07]"
-                style={{ background: 'var(--bg-elevated)' }}
-              >
-                {[
-                  { label: 'MIN', value: selectedDaySummary.totalDuration },
-                  { label: 'EXERCISES', value: selectedDaySummary.exerciseCount },
-                  { label: 'VOLUME', value: `${Math.round(selectedDaySummary.totalVolume).toLocaleString()} ${displayUnit}` },
-                ].map((item) => (
-                  <div key={item.label} className="flex flex-col items-center px-4 py-2">
-                    <span className="text-[9px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--text-muted)' }}>
-                      {item.label}
-                    </span>
-                    <span className="mt-0.5 text-[15px] font-bold text-white tabular-nums">{item.value}</span>
-                  </div>
+            <div className="flex items-center">
+              {/* Exercise initial chips — overlapping like avatars */}
+              <div className="flex -space-x-2">
+                {chipNames.map((name) => (
+                  <ExerciseChip key={name} name={name} color={accent} />
                 ))}
               </div>
-            )}
+              {extra > 0 && (
+                <span
+                  className="ml-1.5 text-[11px] font-semibold"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  +{extra}
+                </span>
+              )}
+            </div>
           </div>
-
-          {loading ? (
-            <div className="space-y-3">
-              <div className="h-24 animate-pulse rounded-2xl bg-white/5" />
-              <div className="h-24 animate-pulse rounded-2xl bg-white/5" />
-            </div>
-          ) : selectedDayWorkouts.length > 0 ? (
-            <div className="space-y-3">{selectedDayWorkouts.map((workout) => renderWorkoutCard(workout, true))}</div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-white/8 bg-black/10 px-6 py-10 text-center">
-              <Zap className="mx-auto mb-4 h-10 w-10 text-[var(--accent)]/55" />
-              <div className="mb-2 text-[18px] font-semibold text-white">No workouts on this day</div>
-              <div className="mb-5 text-[13px] text-[#95A3B4]">
-                Start a session here and this day will fill in with volume, time, and muscle data.
-              </div>
-              <Link
-                to={`/log?date=${format(selectedDate, 'yyyy-MM-dd')}`}
-                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-5 py-2.5 text-[12px] font-bold text-black transition-colors hover:bg-[var(--accent)]"
-              >
-                Log a Workout
-              </Link>
-            </div>
-          )}
-        </motion.section>
-      </AnimatePresence>
+        </div>
+      </motion.div>
     );
   };
 
-  return (
-    <div className="mx-auto max-w-5xl pb-24 md:pb-8">
-      {/* ── Sticky Controls ─────────────────────────────────── */}
-      <div className="sticky top-0 z-20 bg-[var(--bg-base)]/95 backdrop-blur-xl border-b border-white/[0.06] px-4 pt-3 pb-2 space-y-2">
-        {/* View toggle + Jump to Today */}
-        <div className="flex items-center gap-2">
-          <div className="flex flex-1 space-x-1 rounded-2xl border border-white/6 bg-[#171717] p-1">
-            {[
-              { id: 'today', icon: Zap, label: 'Today' },
-              { id: 'week', icon: CalendarIcon, label: 'Week' },
-              { id: 'month', icon: LayoutGrid, label: 'Month' },
-            ].map((mode) => (
-              <button
-                key={mode.id}
-                onClick={() => handleViewModeChange(mode.id as ViewMode)}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors md:flex-none ${
-                  viewMode === mode.id
-                    ? 'bg-[var(--accent)] text-black'
-                    : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <mode.icon className="h-4 w-4" />
-                <span>{mode.label}</span>
-              </button>
-            ))}
-          </div>
-          {!isCurrentRange && (
-            <button
-              onClick={handleToday}
-              className="flex-shrink-0 rounded-xl border border-[var(--accent)]/22 bg-[var(--accent)]/10 px-3 py-2 text-[12px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/16"
+  const renderWeekStrip = () => (
+    <div className="flex items-center gap-1 justify-between px-4 pb-3 pt-1">
+      {weekDays.map((day) => {
+        const isSelected = isSameDay(day, selectedDate);
+        const isTodayDay = dateFnsIsToday(day);
+        const dayWorkouts = getForDay(day);
+        const hasWorkout = dayWorkouts.length > 0;
+        return (
+          <button
+            key={day.toISOString()}
+            onClick={() => selectDay(day)}
+            onPointerDown={(e) => handleLongPressStart(day, e)}
+            onPointerUp={handleLongPressEnd}
+            onPointerLeave={handleLongPressEnd}
+            className="flex flex-col items-center gap-1 flex-1 py-1 rounded-xl transition-all active:scale-95"
+          >
+            <span
+              className="text-[10px] font-semibold uppercase tracking-widest"
+              style={{ color: isSelected ? 'var(--accent)' : 'var(--text-muted)' }}
             >
-              Today
-            </button>
-          )}
-        </div>
+              {format(day, 'EEEEE')}
+            </span>
+            <div
+              className="h-9 w-9 flex items-center justify-center rounded-full text-[15px] font-bold transition-all"
+              style={
+                isTodayDay
+                  ? { background: 'var(--accent)', color: '#000' }
+                  : isSelected
+                  ? { background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1.5px solid var(--accent)' }
+                  : { color: 'var(--text-secondary)' }
+              }
+            >
+              {format(day, 'd')}
+            </div>
+            {/* Workout dot */}
+            <div className="h-1.5 flex items-center justify-center gap-0.5">
+              {hasWorkout
+                ? dayWorkouts.slice(0, 3).map((w) => (
+                    <div
+                      key={w.id}
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: isSelected ? 'var(--accent)' : getAccent(w) }}
+                    />
+                  ))
+                : <div className="h-1.5 w-1.5 rounded-full opacity-0" />}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
 
-        {/* Filter pills — horizontally scrollable */}
-        <div className="flex gap-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
-          {MUSCLE_FILTERS.map((muscle) => {
-            const isAll = muscle === 'All';
-            const active = isAll ? activeFilter === null : activeFilter === muscle;
+  const renderMonthGrid = () => {
+    const days = monthDays;
+    return (
+      <div className="px-3 pb-3">
+        {/* Weekday headers */}
+        <div className="grid grid-cols-7 mb-1">
+          {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+            <div key={i} className="py-1 text-center text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {days.map((day) => {
+            const isSelected = isSameDay(day, selectedDate);
+            const isTodayDay = dateFnsIsToday(day);
+            const outside = !isSameMonth(day, anchor);
+            const dayWorkouts = getForDay(day);
+            const hasWorkout = dayWorkouts.length > 0;
             return (
               <button
-                key={muscle}
-                onClick={() => setActiveFilter(isAll ? null : activeFilter === muscle ? null : muscle)}
-                className={`inline-flex flex-shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  active
-                    ? 'border-white/30 bg-white text-black'
-                    : 'border-white/10 bg-transparent text-[var(--text-secondary)] hover:border-white/20 hover:text-white'
-                }`}
+                key={day.toISOString()}
+                onClick={() => selectDay(day)}
+                onPointerDown={(e) => handleLongPressStart(day, e)}
+                onPointerUp={handleLongPressEnd}
+                onPointerLeave={handleLongPressEnd}
+                className={`flex flex-col items-center py-1.5 rounded-xl transition-all active:scale-95 ${outside ? 'opacity-30' : ''}`}
+                style={isSelected ? { background: 'var(--bg-elevated)', border: '1px solid var(--accent)' } : undefined}
               >
-                {!isAll && (
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: muscleColor(muscle) }}
-                  />
-                )}
-                <span>{muscle}</span>
+                <div
+                  className="h-8 w-8 flex items-center justify-center rounded-full text-[13px] font-semibold"
+                  style={
+                    isTodayDay
+                      ? { background: 'var(--accent)', color: '#000' }
+                      : { color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)' }
+                  }
+                >
+                  {format(day, 'd')}
+                </div>
+                <div className="h-1 flex items-center gap-0.5 mt-0.5">
+                  {hasWorkout && dayWorkouts.slice(0, 2).map((w) => (
+                    <div key={w.id} className="h-1 w-1 rounded-full" style={{ backgroundColor: getAccent(w) }} />
+                  ))}
+                </div>
               </button>
             );
           })}
         </div>
       </div>
+    );
+  };
 
-      {/* ── Content ─────────────────────────────────────────── */}
-      <div className="space-y-5 px-4 pt-4">
+  // Day label for section header
+  const dayLabel = isSameDay(selectedDate, today)
+    ? 'Today'
+    : dateFnsIsToday(addDays(selectedDate, 1))
+    ? 'Yesterday'
+    : format(selectedDate, 'EEEE, MMM d');
 
-      <section className="overflow-hidden rounded-3xl border border-white/6 bg-[linear-gradient(180deg,#171717_0%,#111111_100%)]">
-        <div className="flex items-center justify-between border-b border-white/6 px-5 py-4">
+  return (
+    <div className="min-h-screen pb-28" style={{ background: 'var(--bg-base)' }}>
+
+      {/* ── Top header ────────────────────────────────────────── */}
+      <div
+        className="sticky top-0 z-20 px-5 pt-3 pb-0"
+        style={{
+          background: 'var(--bg-base)',
+          borderBottom: '1px solid transparent',
+        }}
+      >
+        {/* Month + controls row */}
+        <div className="flex items-center justify-between mb-3">
           <button
-            onClick={prevPeriod}
-            disabled={viewMode === 'today'}
-            className={`rounded-full p-2 transition-colors ${
-              viewMode === 'today'
-                ? 'opacity-0 pointer-events-none'
-                : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-white'
-            }`}
+            className="flex items-center gap-1.5"
+            onClick={() => setShowMonthPicker((p) => !p)}
           >
-            <ChevronLeft className="h-5 w-5" />
+            <span className="text-[26px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+              {format(anchor, 'MMM')}
+            </span>
+            <span className="text-[18px] font-medium" style={{ color: 'var(--text-muted)' }}>
+              {format(anchor, 'yyyy')}
+            </span>
+            <ChevronDown
+              className="w-4 h-4 transition-transform"
+              style={{ color: 'var(--text-muted)', transform: showMonthPicker ? 'rotate(180deg)' : 'none' }}
+            />
           </button>
-          <div className="text-center">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7C889A]">
-              {viewMode === 'today' ? 'Today' : viewMode}
-            </div>
-            <h2 className="mt-1 text-xl font-semibold text-white">{getRangeLabel(viewMode, currentDate)}</h2>
+
+          <div className="flex items-center gap-2">
+            {/* Nav arrows */}
+            <button
+              onClick={prevPeriod}
+              className="h-8 w-8 flex items-center justify-center rounded-full transition-colors"
+              style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={nextPeriod}
+              className="h-8 w-8 flex items-center justify-center rounded-full transition-colors"
+              style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+
+            {/* View toggle */}
+            <button
+              onClick={() => setViewMode((v) => v === 'week' ? 'month' : 'week')}
+              className="h-8 w-8 flex items-center justify-center rounded-full transition-colors"
+              style={{
+                background: viewMode === 'month' ? 'var(--accent)' : 'var(--bg-elevated)',
+                color: viewMode === 'month' ? '#000' : 'var(--text-secondary)',
+              }}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+
+            {/* Log workout */}
+            <Link
+              to={`/log?date=${format(selectedDate, 'yyyy-MM-dd')}`}
+              className="h-8 w-8 flex items-center justify-center rounded-full transition-colors"
+              style={{ background: 'var(--accent)', color: '#000' }}
+            >
+              <Plus className="w-4 h-4" />
+            </Link>
           </div>
-          <button
-            onClick={nextPeriod}
-            disabled={viewMode === 'today'}
-            className={`rounded-full p-2 transition-colors ${
-              viewMode === 'today'
-                ? 'opacity-0 pointer-events-none'
-                : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
         </div>
 
-        {viewMode === 'month' && (
-          <div className="p-3">
-            <div className="mb-2 grid grid-cols-7 gap-2">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                <div
-                  key={day}
-                  className="px-2 py-1 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6F7D8E]"
-                >
-                  {day}
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-2">
-              {days.map((day) => renderDayCell(day, true))}
-            </div>
-          </div>
-        )}
+        {/* Calendar strip */}
+        {viewMode === 'week' ? renderWeekStrip() : renderMonthGrid()}
+      </div>
 
-        {viewMode === 'week' && (
-          <div className="p-3">
-            {loading ? (
-              <div className="space-y-3">
-                <div className="h-24 animate-pulse rounded-2xl bg-white/5" />
-                <div className="h-24 animate-pulse rounded-2xl bg-white/5" />
-              </div>
-            ) : visibleWeekDays.length > 0 ? (
-              <div
-                className={`grid grid-cols-1 gap-3 ${
-                  activeFilter ? 'md:grid-cols-2 xl:grid-cols-3' : 'md:grid-cols-7'
-                }`}
+      {/* ── Body ──────────────────────────────────────────────── */}
+      <div className="px-4 space-y-3 pt-3">
+
+
+        {/* ── Event list card ── */}
+        <div
+          className="rounded-3xl overflow-hidden"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+        >
+          {/* Tab header: All | filter pills */}
+          <div className="px-4 pt-3 pb-2 flex items-center gap-2 border-b" style={{ borderColor: 'var(--border)' }}>
+            <div
+              className="flex gap-1 rounded-xl p-0.5 flex-shrink-0"
+              style={{ background: 'var(--bg-elevated)' }}
+            >
+              <button
+                onClick={() => setActiveFilter(null)}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all"
+                style={
+                  activeFilter === null
+                    ? { background: 'var(--bg-base)', color: 'var(--text-primary)' }
+                    : { color: 'var(--text-secondary)' }
+                }
               >
-                {visibleWeekDays.map((day) => renderDayCell(day))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-white/8 bg-black/10 px-6 py-10 text-center">
-                <Sparkles className="mx-auto mb-4 h-10 w-10 text-white/30" />
-                <div className="mb-2 text-[18px] font-semibold text-white">No {activeFilter} sessions this week</div>
-                <div className="text-[13px] text-[#95A3B4]">
-                  Switch filters or log a {activeFilter?.toLowerCase()} workout to see matching days here.
+                All
+              </button>
+              {weekNewCount > 0 && (
+                <button
+                  disabled
+                  className="px-3 py-1.5 rounded-lg text-[12px] font-bold relative"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  This week
+                  <span
+                    className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full"
+                    style={{ background: '#f87171' }}
+                  />
+                </button>
+              )}
+            </div>
+
+            {/* Muscle filter chips */}
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar flex-1">
+              {MUSCLE_FILTERS.slice(1).map((m) => {
+                const active = activeFilter === m;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setActiveFilter(active ? null : m)}
+                    className="flex-shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-all"
+                    style={
+                      active
+                        ? { background: muscleColor(m), color: '#000', border: `1px solid ${muscleColor(m)}` }
+                        : { background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)' }
+                    }
+                  >
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: active ? '#000' : muscleColor(m) }}
+                    />
+                    {m}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Workout list */}
+          <div className="px-4 pt-3 pb-4 space-y-3">
+            {/* Section header */}
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+                {dayLabel}
+              </span>
+              {selectedWorkouts.length > 0 && (
+                <div
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold"
+                  style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+                >
+                  {selectedWorkouts.length} workout{selectedWorkouts.length !== 1 ? 's' : ''}
+                  <ChevronDown className="w-3 h-3" />
                 </div>
+              )}
+            </div>
+
+            {/* Stats strip */}
+            {selectedWorkouts.length > 0 && (
+              <div
+                className="flex items-center rounded-xl overflow-hidden"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+              >
+                {[
+                  { label: 'Min', value: selectedSummary.duration },
+                  { label: 'Exercises', value: selectedSummary.exercises },
+                  { label: 'Volume', value: `${Math.round(selectedSummary.volume).toLocaleString()} ${unit}` },
+                ].map((s, i) => (
+                  <div
+                    key={s.label}
+                    className="flex-1 flex flex-col items-center py-2 px-1"
+                    style={i > 0 ? { borderLeft: '1px solid var(--border)' } : undefined}
+                  >
+                    <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                      {s.label}
+                    </span>
+                    <span className="text-[15px] font-bold tabular-nums mt-0.5" style={{ color: 'var(--text-primary)' }}>
+                      {s.value}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
-          </div>
-        )}
 
-        {viewMode === 'today' && (
-          <div className="p-5">
+            {/* Workout cards */}
             {loading ? (
               <div className="space-y-3">
-                <div className="h-24 animate-pulse rounded-2xl bg-white/5" />
-                <div className="h-24 animate-pulse rounded-2xl bg-white/5" />
+                {[1, 2].map((i) => (
+                  <div key={i} className="h-[88px] rounded-2xl animate-pulse" style={{ background: 'var(--bg-elevated)' }} />
+                ))}
               </div>
-            ) : todayWorkouts.length > 0 ? (
-              <div className="space-y-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#7C889A]">Today&apos;s Log</div>
-                    <div className="mt-1 text-[18px] font-semibold text-white">
-                      {todaySummary.workoutCount} workout{todaySummary.workoutCount > 1 ? 's' : ''} logged
-                    </div>
-                  </div>
-                  <Link
-                    to={`/log?date=${format(currentDate, 'yyyy-MM-dd')}`}
-                    className="rounded-full border border-[var(--accent)]/25 bg-[var(--accent)]/10 px-4 py-2 text-[11px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/15"
-                  >
-                    Log More
-                  </Link>
+            ) : selectedWorkouts.length > 0 ? (
+              <AnimatePresence initial={false}>
+                <div className="space-y-3">
+                  {selectedWorkouts.map((w) => renderWorkoutCard(w))}
                 </div>
-                {todayWorkouts.map((workout) => renderWorkoutCard(workout))}
-              </div>
+              </AnimatePresence>
             ) : (
-              <div className="rounded-2xl border border-dashed border-white/8 bg-black/10 px-6 py-12 text-center">
-                <Dumbbell className="mx-auto mb-4 h-12 w-12 text-[var(--text-muted)]" />
-                <div className="mb-2 text-[18px] font-semibold text-white">Nothing logged today</div>
-                <div className="mb-5 text-[13px] text-[#95A3B4]">
-                  This view is locked to today, so you can quickly check today&apos;s session the same way you do on Home.
-                </div>
-                <Link
-                  to={`/log?date=${format(currentDate, 'yyyy-MM-dd')}`}
-                  className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-5 py-2.5 text-[12px] font-bold text-black transition-colors hover:bg-[var(--accent)]"
+              <div
+                className="rounded-2xl border border-dashed px-5 py-10 flex flex-col items-center gap-3 text-center"
+                style={{ borderColor: 'rgba(200,255,0,0.15)', background: 'rgba(200,255,0,0.03)' }}
+              >
+                <div
+                  className="h-12 w-12 rounded-2xl flex items-center justify-center"
+                  style={{ background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.15)' }}
                 >
-                  Log Today&apos;s Workout
-                </Link>
+                  <Dumbbell className="h-6 w-6" style={{ color: 'var(--accent)' }} />
+                </div>
+                <div>
+                  <p className="text-[15px] font-bold" style={{ color: 'var(--text-primary)' }}>
+                    {isSameDay(selectedDate, today) ? 'Nothing logged today' : 'Rest day'}
+                  </p>
+                  <p className="text-[12px] mt-1" style={{ color: 'var(--text-secondary)' }}>
+                    {isSameDay(selectedDate, today)
+                      ? 'Start a session and it will appear here.'
+                      : 'No workouts were logged on this day.'}
+                  </p>
+                </div>
+                {isSameDay(selectedDate, today) && (
+                  <Link
+                    to={`/log?date=${format(selectedDate, 'yyyy-MM-dd')}`}
+                    className="mt-1 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold text-black"
+                    style={{ background: 'var(--accent)' }}
+                  >
+                    <Zap className="h-4 w-4" />
+                    Log Today&apos;s Workout
+                  </Link>
+                )}
               </div>
             )}
-          </div>
-        )}
-      </section>
 
-      {(viewMode === 'month' || (viewMode === 'week' && visibleWeekDays.length > 0)) && renderSelectedDayPanel()}
+            {/* Go to today if not viewing today */}
+            {!isSameDay(selectedDate, today) && (
+              <button
+                onClick={goToToday}
+                className="w-full py-3 rounded-xl text-[13px] font-semibold transition-colors"
+                style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+              >
+                Jump to Today
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
