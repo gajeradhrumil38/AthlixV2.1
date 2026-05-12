@@ -48,7 +48,7 @@ interface ExercisePickerProps {
   onSelect: (exercise: Exercise) => void;
   onClose: () => void;
   recentExercises: Exercise[];
-  onLoadTemplate?: (exercises: Exercise[]) => void;
+  onLoadTemplate?: (exercises: Exercise[], title?: string) => void;
   onStartTemplate?: (exercises: Exercise[], title: string) => void;
   onEditTemplate?: (template: any) => void;
   multiSelect?: boolean;
@@ -497,7 +497,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
 
               {!templatesLoading && templates.map((tmpl) => {
                 const exCount = tmpl.template_exercises?.length || 0;
-                const preview = (tmpl.template_exercises || []).slice(0, 2).map((e) => e.name).join(', ');
+                const preview = (tmpl.template_exercises || []).slice(0, 3).map((e) => e.name).join(', ');
                 return (
                   <div
                     key={tmpl.id}
@@ -553,7 +553,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
                       onClick={() => {
                         const exs = templateToExercises(tmpl);
                         if (onStartTemplate) { onStartTemplate(exs, tmpl.title); onClose(); }
-                        else if (onLoadTemplate) { onLoadTemplate(exs); onClose(); }
+                        else if (onLoadTemplate) { onLoadTemplate(exs, tmpl.title); onClose(); }
                         else { exs.forEach((ex) => onSelect(ex)); onClose(); }
                       }}
                       className="flex h-8 items-center gap-1.5 px-3 rounded-lg shrink-0 text-[11px] font-bold active:scale-95 transition-transform text-black"

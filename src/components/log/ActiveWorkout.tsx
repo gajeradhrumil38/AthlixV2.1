@@ -868,9 +868,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             onClose={() => setShowExercisePicker(false)}
             recentExercises={[]}
             onEditTemplate={onEditTemplate}
-            onLoadTemplate={(exercises) => {
-              // Build ExerciseEntry objects with template defaults pre-filled so the
-              // user only needs to mark sets done — no manual weight/reps entry.
+            onLoadTemplate={(exercises, planTitle) => {
               const newEntries: ExerciseEntry[] = exercises.map((ex) => ({
                 id: createSetId(),
                 name: ex.name,
@@ -883,11 +881,15 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                   done: false,
                 })),
               }));
+              const GENERIC_TITLES = ['workout', 'morning workout', 'afternoon workout', 'evening workout'];
               setWorkout((prev) => {
                 if (!prev) return prev;
                 const existing = new Set(prev.exercises.map((e) => e.name.toLowerCase()));
                 const toAdd = newEntries.filter((e) => !existing.has(e.name.toLowerCase()));
-                return toAdd.length > 0 ? { ...prev, exercises: [...prev.exercises, ...toAdd] } : prev;
+                const isGeneric = GENERIC_TITLES.includes(prev.title.trim().toLowerCase());
+                const newTitle = (planTitle && isGeneric) ? planTitle : prev.title;
+                if (toAdd.length === 0 && newTitle === prev.title) return prev;
+                return { ...prev, title: newTitle, exercises: [...prev.exercises, ...toAdd] };
               });
               setShowExercisePicker(false);
             }}
