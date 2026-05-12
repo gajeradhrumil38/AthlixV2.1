@@ -417,6 +417,21 @@ export const Calendar: React.FC = () => {
   // Week list view — all 7 days with their workouts
   const renderWeekList = () => (
     <div className="space-y-4">
+      {/* Week range header */}
+      <div className="flex items-center justify-between px-1">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-widest mb-0.5" style={{ color: 'var(--text-muted)' }}>Week</p>
+          <p className="text-[16px] font-bold" style={{ color: 'var(--text-primary)' }}>
+            {format(weekDays[0], 'MMM d')} – {format(weekDays[6], isSameMonth(weekDays[0], weekDays[6]) ? 'd' : 'MMM d')}
+            <span className="text-[13px] font-medium ml-1" style={{ color: 'var(--text-muted)' }}>
+              {format(weekDays[0], 'yyyy')}
+            </span>
+          </p>
+        </div>
+        <div className="text-[11px] font-medium px-2.5 py-1 rounded-full" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+          {weekDays.reduce((sum, d) => sum + getForDay(d).length, 0)} workouts
+        </div>
+      </div>
       {weekDays.map((day) => {
         const dayWorkouts = getForDay(day);
         const isTodayDay  = dateFnsIsToday(day);
@@ -627,7 +642,7 @@ export const Calendar: React.FC = () => {
         </div>
 
         {/* Calendar (week strip or month grid) */}
-        {viewMode !== 'week' && renderWeekStrip()}
+        {viewMode === 'today' && renderWeekStrip()}
         {viewMode === 'month' && renderMonthGrid()}
       </div>
 
