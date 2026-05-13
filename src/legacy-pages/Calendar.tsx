@@ -9,6 +9,7 @@ import {
   format,
   isSameDay,
   isSameMonth,
+  isSameWeek,
   startOfMonth,
   startOfWeek,
   subMonths,
@@ -80,7 +81,11 @@ const getExerciseNames = (w: any): string[] =>
 
 const isGenericTitle = (t?: string | null) => {
   if (!t) return true;
-  return ['workout','morning workout','afternoon workout','evening workout'].includes(t.trim().toLowerCase());
+  const lower = t.trim().toLowerCase();
+  return (
+    ['workout','morning workout','afternoon workout','evening workout'].includes(lower) ||
+    /^plan\s*[—–-]/.test(lower)
+  );
 };
 
 const getDisplayTitle = (w: any) => {
@@ -131,7 +136,7 @@ const DayRing: React.FC<{ workouts: any[]; size: number; r: number; strokeWidth?
           fill="none"
           stroke={getAccent(w)}
           strokeWidth={strokeWidth}
-          strokeLinecap={n === 1 ? 'round' : 'butt'}
+          strokeLinecap="round"
           strokeDasharray={`${segLen} ${circ - segLen}`}
           transform={`rotate(${i * (segDeg + gapDeg)}, ${cx}, ${cy})`}
         />
@@ -171,6 +176,7 @@ export const Calendar: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear]     = useState(today.getFullYear());
+  const [windowScrollY, setWindowScrollY] = useState(0);
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -236,7 +242,11 @@ export const Calendar: React.FC = () => {
   // ── Navigation ───────────────────────────────────────────────────────────────
 
   const prevPeriod = () => {
-    if (viewMode === 'week') {
+    if (viewMode === 'today') {
+      const newDay = addDays(selectedDate, -1);
+      setSelectedDate(newDay);
+      if (weekStart(newDay).getTime() < weekStart(anchor).getTime()) setAnchor(newDay);
+    } else if (viewMode === 'week') {
       setAnchor((p) => subWeeks(p, 1));
       setSelectedDate((p) => subWeeks(p, 1));
     } else {
@@ -245,7 +255,11 @@ export const Calendar: React.FC = () => {
   };
 
   const nextPeriod = () => {
-    if (viewMode === 'week') {
+    if (viewMode === 'today') {
+      const newDay = addDays(selectedDate, 1);
+      setSelectedDate(newDay);
+      if (weekStart(newDay).getTime() > weekStart(anchor).getTime()) setAnchor(newDay);
+    } else if (viewMode === 'week') {
       setAnchor((p) => addWeeks(p, 1));
       setSelectedDate((p) => addWeeks(p, 1));
     } else {
@@ -280,6 +294,14 @@ export const Calendar: React.FC = () => {
   };
   useEffect(() => () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }, []);
 
+  useEffect(() => {
+    const handler = () => setWindowScrollY(window.scrollY);
+    window.addEventListener('scroll', handler, { passive: true });
+    return () => window.removeEventListener('scroll', handler);
+  }, []);
+  // Reset scroll position when view changes
+  useEffect(() => { window.scrollTo({ top: 0 }); }, [viewMode]);
+
   // ── Delete ───────────────────────────────────────────────────────────────────
 
   const handleDelete = async (id: string, title: string) => {
@@ -296,14 +318,16 @@ export const Calendar: React.FC = () => {
   // ── Render helpers ────────────────────────────────────────────────────────────
 
   const renderWorkoutCard = (workout: any) => {
-    const accent  = getAccent(workout);
-    const names   = getExerciseNames(workout);
-    const title   = getDisplayTitle(workout);
-    const exCount = getExerciseCount(workout);
-    const dur     = Number(workout.duration_minutes || 0);
-    const muscle  = (workout.muscle_groups || [])[0];
-    const chips   = names.slice(0, 4);
-    const extra   = names.length - chips.length;
+    const accent    = getAccent(workout);
+    const names     = getExerciseNames(workout);
+    const title     = getDisplayTitle(workout);
+    const exCount   = getExerciseCount(workout);
+    const dur       = Number(workout.duration_minutes || 0);
+    const muscle    = (workout.muscle_groups || [])[0];
+    const chips     = names.slice(0, 4);
+    const extra     = names.length - chips.length;
+    // Show plan name near clock when the stored title is a real plan name (not generic/auto)
+    const planLabel = !isGenericTitle(workout.title) && workout.title !== title ? workout.title : null;
 
     return (
       <motion.div
@@ -348,9 +372,17 @@ export const Calendar: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--text-muted)' }}>
               <Clock3 className="h-3 w-3 shrink-0" />
               <span>{dur > 0 ? `${dur} min` : `${exCount} ex`}</span>
+              {planLabel && (
+                <span
+                  className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold truncate max-w-[120px]"
+                  style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                >
+                  {planLabel}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-0.5">
               <div className="flex -space-x-1.5">
@@ -407,46 +439,58 @@ export const Calendar: React.FC = () => {
   );
 
   // Month grid
-  const renderMonthGrid = () => (
-    <div className="pb-2">
-      <div className="grid grid-cols-7 mb-1">
-        {['M','T','W','T','F','S','S'].map((d, i) => (
-          <div key={i} className="py-1 text-center text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
-            {d}
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-0.5">
-        {monthDays.map((day) => {
-          const isSelected = isSameDay(day, selectedDate);
-          const isTodayDay = dateFnsIsToday(day);
-          const outside = !isSameMonth(day, anchor);
-          const dots = getForDay(day);
-          return (
-            <button
-              key={day.toISOString()}
-              onClick={() => selectDay(day)}
-              onPointerDown={(e) => handleLongPressStart(day, e)}
-              onPointerUp={handleLongPressEnd}
-              onPointerLeave={handleLongPressEnd}
-              className={`flex flex-col items-center py-1 rounded-xl transition-all active:scale-95 ${outside ? 'opacity-25' : ''}`}
-              style={isSelected ? { background: 'var(--bg-elevated)', outline: '1px solid var(--accent)' } : undefined}
-            >
-              <div className="relative flex items-center justify-center" style={{ width: 32, height: 32 }}>
-                <DayRing workouts={dots} size={32} r={14} strokeWidth={2} />
-                <div
-                  className="h-7 w-7 flex items-center justify-center rounded-full text-[12px] font-semibold"
-                  style={isTodayDay ? { background: 'var(--accent)', color: '#000' } : { color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)' }}
-                >
-                  {format(day, 'd')}
+  const renderMonthGrid = () => {
+    const dimMode = windowScrollY > 60;
+    return (
+      <div className="pb-2">
+        <div className="grid grid-cols-7 mb-1">
+          {['M','T','W','T','F','S','S'].map((d, i) => (
+            <div key={i} className="py-1 text-center text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-0.5">
+          {monthDays.map((day) => {
+            const isSelected = isSameDay(day, selectedDate);
+            const isTodayDay = dateFnsIsToday(day);
+            const outside = !isSameMonth(day, anchor);
+            const dots = getForDay(day);
+            return (
+              <button
+                key={day.toISOString()}
+                onClick={() => selectDay(day)}
+                onPointerDown={(e) => handleLongPressStart(day, e)}
+                onPointerUp={handleLongPressEnd}
+                onPointerLeave={handleLongPressEnd}
+                className="flex flex-col items-center py-1 rounded-xl transition-all active:scale-95"
+                style={{
+                  opacity: outside ? 0.25 : (dimMode && !isSameWeek(day, selectedDate, { weekStartsOn: 1 })) ? 0.2 : 1,
+                  transition: 'opacity 0.25s ease',
+                }}
+              >
+                <div className="relative flex items-center justify-center" style={{ width: 32, height: 32 }}>
+                  <DayRing workouts={dots} size={32} r={14} strokeWidth={2} />
+                  <div
+                    className="h-7 w-7 flex items-center justify-center text-[12px] font-semibold transition-all"
+                    style={
+                      isTodayDay
+                        ? { background: 'var(--accent)', color: '#000', borderRadius: '50%' }
+                        : isSelected
+                        ? { background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1.5px solid var(--accent)', borderRadius: 10, width: 34, height: 26 }
+                        : { color: 'var(--text-secondary)', borderRadius: '50%' }
+                    }
+                  >
+                    {format(day, 'd')}
+                  </div>
                 </div>
-              </div>
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Week list view — all 7 days with their workouts
   const renderWeekList = () => (
@@ -479,17 +523,20 @@ export const Calendar: React.FC = () => {
               onClick={() => selectDay(day)}
             >
               <div className="flex items-center gap-2">
-                <div
-                  className="h-8 w-8 flex items-center justify-center rounded-full text-[13px] font-bold shrink-0"
-                  style={
-                    isTodayDay
-                      ? { background: 'var(--accent)', color: '#000' }
-                      : isSelected
-                      ? { background: 'var(--bg-elevated)', color: 'var(--text-primary)', outline: '1px solid var(--accent)' }
-                      : { background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }
-                  }
-                >
-                  {format(day, 'd')}
+                <div className="relative flex items-center justify-center shrink-0" style={{ width: 40, height: 40 }}>
+                  <DayRing workouts={dayWorkouts} size={40} r={18} strokeWidth={2.5} />
+                  <div
+                    className="h-8 w-8 flex items-center justify-center rounded-full text-[13px] font-bold"
+                    style={
+                      isTodayDay
+                        ? { background: 'var(--accent)', color: '#000' }
+                        : isSelected
+                        ? { background: 'var(--bg-elevated)', color: 'var(--text-primary)', outline: '1.5px solid var(--accent)' }
+                        : { background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }
+                    }
+                  >
+                    {format(day, 'd')}
+                  </div>
                 </div>
                 <div className="text-left">
                   <p className="text-[12px] font-semibold" style={{ color: isTodayDay ? 'var(--accent)' : 'var(--text-primary)' }}>
@@ -624,22 +671,8 @@ export const Calendar: React.FC = () => {
             </AnimatePresence>
           </div>
 
-          {/* Right: prev/next + log */}
+          {/* Right: log */}
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={prevPeriod}
-              className="h-8 w-8 flex items-center justify-center rounded-full"
-              style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={nextPeriod}
-              className="h-8 w-8 flex items-center justify-center rounded-full"
-              style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
             <Link
               to={`/log?date=${format(selectedDate, 'yyyy-MM-dd')}`}
               className="h-8 w-8 flex items-center justify-center rounded-full"
@@ -651,28 +684,44 @@ export const Calendar: React.FC = () => {
         </div>
 
         {/* View tabs */}
-        <div
-          className="flex gap-1 rounded-xl p-1 mb-3"
-          style={{ background: 'var(--bg-elevated)' }}
-        >
-          {([
-            { id: 'today', label: 'Today', Icon: Sun },
-            { id: 'week',  label: 'Week',  Icon: CalendarDays },
-            { id: 'month', label: 'Month', Icon: LayoutGrid },
-          ] as const).map(({ id, label, Icon }) => {
-            const active = viewMode === id;
-            return (
-              <button
-                key={id}
-                onClick={() => changeViewMode(id)}
-                className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-[12px] font-semibold transition-all"
-                style={active ? { background: 'var(--bg-surface)', color: 'var(--text-primary)' } : { color: 'var(--text-muted)' }}
-              >
-                <Icon className="w-3 h-3" />
-                {label}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={prevPeriod}
+            className="h-8 w-8 flex items-center justify-center rounded-full shrink-0"
+            style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <div
+            className="flex flex-1 gap-1 rounded-xl p-1"
+            style={{ background: 'var(--bg-elevated)' }}
+          >
+            {([
+              { id: 'today', label: 'Today', Icon: Sun },
+              { id: 'week',  label: 'Week',  Icon: CalendarDays },
+              { id: 'month', label: 'Month', Icon: LayoutGrid },
+            ] as const).map(({ id, label, Icon }) => {
+              const active = viewMode === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => changeViewMode(id)}
+                  className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-[12px] font-semibold transition-all"
+                  style={active ? { background: 'var(--bg-surface)', color: 'var(--text-primary)' } : { color: 'var(--text-muted)' }}
+                >
+                  <Icon className="w-3 h-3" />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            onClick={nextPeriod}
+            className="h-8 w-8 flex items-center justify-center rounded-full shrink-0"
+            style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Calendar (week strip or month grid) */}

@@ -497,8 +497,8 @@ export const Log: React.FC = () => {
           onBackToPrevious={handleBackToPrevious}
           bodyWeight={profile?.body_weight ?? null}
           bodyWeightUnit={(profile?.body_weight_unit || 'lbs') as 'kg' | 'lbs'}
-          allowLiveAddExercise
           openExercisePickerOnStart={openPickerOnStart}
+          onPickerAutoOpened={() => setOpenPickerOnStart(false)}
           weightUnit={weightUnit}
           distanceUnit={distanceUnit}
           onWeightUnitChange={handleWeightUnitChange}

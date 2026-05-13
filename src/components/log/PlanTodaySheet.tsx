@@ -284,7 +284,16 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
   const [templateId, setTemplateId] = useState<string | null>(initialTemplate?.id ?? null);
   const [isSaved, setIsSaved] = useState(!!initialTemplate?.id);
 
-  const defaultTitle = `Plan — ${new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`;
+  const inferPlanName = (exs: PlannedExercise[]) => {
+    const muscles = new Set(exs.map((e) => e.muscleGroup));
+    if (muscles.has('Chest') || muscles.has('Triceps')) return 'Push Day';
+    if (muscles.has('Back') || muscles.has('Biceps')) return 'Pull Day';
+    if (muscles.has('Legs')) return 'Leg Day';
+    if (muscles.has('Shoulders')) return 'Shoulder Day';
+    if (muscles.has('Core') || muscles.has('Cardio')) return 'Cardio Day';
+    return 'My Plan';
+  };
+  const defaultTitle = inferPlanName(exercises);
 
   // Auto-open the picker only on first mount when there are no pre-loaded exercises
   useEffect(() => {

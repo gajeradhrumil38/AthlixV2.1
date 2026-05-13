@@ -29,7 +29,6 @@ interface ActiveWorkoutProps {
   onBackToPrevious?: () => void;
   bodyWeight?: number | null;
   bodyWeightUnit?: WeightUnit;
-  allowLiveAddExercise?: boolean;
   openExercisePickerOnStart?: boolean;
   weightUnit?: WeightUnit;
   distanceUnit?: DistanceUnit;
@@ -37,6 +36,7 @@ interface ActiveWorkoutProps {
   onDistanceUnitChange?: (unit: DistanceUnit) => void;
   onRequestPlanToday?: () => void;
   onEditTemplate?: (template: any) => void;
+  onPickerAutoOpened?: () => void;
 }
 
 interface DialPickerState {
@@ -103,7 +103,6 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   onBackToPrevious,
   bodyWeight,
   bodyWeightUnit = 'lbs',
-  allowLiveAddExercise = true,
   openExercisePickerOnStart = false,
   weightUnit = 'lbs',
   distanceUnit = 'km',
@@ -111,6 +110,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   onDistanceUnitChange,
   onRequestPlanToday,
   onEditTemplate,
+  onPickerAutoOpened,
 }) => {
   const { user } = useAuth();
   const [activeIndex, setActiveIndex] = useState(0);
@@ -123,6 +123,8 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   const addExerciseInFlightRef = useRef(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   const handleSaveAsTemplate = useCallback(async () => {
     if (!user || workout.exercises.length === 0) return;
@@ -180,10 +182,10 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   useEffect(() => {
     if (!openExercisePickerOnStart) return;
     if (autoOpenedPickerForStartRef.current === workout.startTime) return;
-
     autoOpenedPickerForStartRef.current = workout.startTime;
     setShowExercisePicker(true);
-  }, [openExercisePickerOnStart, workout.startTime]);
+    onPickerAutoOpened?.();
+  }, [openExercisePickerOnStart, workout.startTime, onPickerAutoOpened]);
 
   useEffect(() => {
     if (workout.exercises.length > 0 && activeIndex > workout.exercises.length - 1) {
@@ -622,10 +624,31 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
           </button>
 
           <div className="flex-1 min-w-0 text-center">
-            <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate leading-none">{workout.title}</p>
-            <p className="text-[11px] text-[var(--text-muted)] mt-0.5 leading-none">
-              {workout.exercises.length} exercise{workout.exercises.length === 1 ? '' : 's'}
-            </p>
+            {editingTitle ? (
+              <input
+                ref={titleInputRef}
+                value={workout.title}
+                onChange={(e) => setWorkout((p) => p ? { ...p, title: e.target.value } : p)}
+                onBlur={() => setEditingTitle(false)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { setEditingTitle(false); } }}
+                className="w-full text-center text-[13px] font-semibold bg-transparent border-b outline-none leading-none pb-0.5"
+                style={{ color: 'var(--text-primary)', borderColor: 'var(--accent)' }}
+                autoFocus
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setEditingTitle(true); setTimeout(() => titleInputRef.current?.select(), 0); }}
+                className="w-full"
+              >
+                <p className="text-[13px] font-semibold truncate leading-none" style={{ color: 'var(--text-primary)' }}>
+                  {workout.title}
+                </p>
+                <p className="text-[10px] mt-0.5 leading-none" style={{ color: 'var(--text-muted)' }}>
+                  tap to rename
+                </p>
+              </button>
+            )}
           </div>
 
           <button
@@ -712,7 +735,25 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
           ) : (
             /* Exercise list */
             <div className="flex-1 min-h-0 overflow-y-auto">
-              <div className="flex flex-col gap-2 p-4">
+              {/* List header with clear-all */}
+              <div className="flex items-center justify-between px-4 pt-3 pb-1">
+                <span className="text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>
+                  {workout.exercises.length} exercise{workout.exercises.length !== 1 ? 's' : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Remove all exercises from this workout?')) {
+                      setWorkout((p) => p ? { ...p, exercises: [] } : p);
+                    }
+                  }}
+                  className="text-[11px] font-medium transition-colors"
+                  style={{ color: 'rgba(248,113,113,0.6)' }}
+                >
+                  Unload all
+                </button>
+              </div>
+              <div className="flex flex-col gap-2 px-4 pb-4 pt-1">
                 {workout.exercises.map((ex, i) => {
                   const doneCount = ex.sets.filter((s) => s.done).length;
                   return (
@@ -754,6 +795,17 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                     </div>
                   );
                 })}
+
+                {/* In-list Add Exercise button */}
+                <button
+                  type="button"
+                  onClick={() => setShowExercisePicker(true)}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[12px] font-semibold transition-colors mt-1"
+                  style={{ border: '1.5px dashed rgba(255,255,255,0.1)', color: 'var(--text-muted)' }}
+                >
+                  <Plus className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+                  Add Exercise
+                </button>
               </div>
             </div>
           )
@@ -839,21 +891,11 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
         )}
 
         {/* ── Bottom Bar ───────────────────────────────────────────── */}
-        <div className="shrink-0 flex gap-2 px-4 py-3 border-t border-white/5 bg-[var(--bg-base)]/80 backdrop-blur-xl pb-[max(12px,env(safe-area-inset-bottom))]">
-          {allowLiveAddExercise && (
-            <button
-              type="button"
-              onClick={() => setShowExercisePicker(true)}
-              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-[var(--bg-surface)] text-[13px] font-semibold text-[var(--text-primary)]"
-            >
-              <Plus className="w-3.5 h-3.5 text-[var(--accent)]" />
-              Add Exercise
-            </button>
-          )}
+        <div className="shrink-0 flex px-4 py-3 border-t border-white/5 bg-[var(--bg-base)]/80 backdrop-blur-xl pb-[max(12px,env(safe-area-inset-bottom))]">
           <button
             type="button"
             onClick={() => { haptics.complete(); onFinish(); }}
-            className={`flex h-12 items-center justify-center rounded-xl bg-[var(--accent)] text-[14px] font-bold text-black ${allowLiveAddExercise ? 'flex-[2]' : 'flex-1'}`}
+            className="flex h-12 flex-1 items-center justify-center rounded-xl bg-[var(--accent)] text-[14px] font-bold text-black"
           >
             Finish Workout
           </button>

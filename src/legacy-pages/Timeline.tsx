@@ -25,6 +25,23 @@ const calcVolume = (exercises: any[], unit: WeightUnit): number =>
 
 const fmtNum = (v: number) => Number.isInteger(v) ? v.toLocaleString() : v.toFixed(1);
 
+const isGenericTitle = (t?: string | null) => {
+  if (!t) return true;
+  const lower = t.trim().toLowerCase();
+  return (
+    ['workout','morning workout','afternoon workout','evening workout'].includes(lower) ||
+    /^plan\s*[—–-]/.test(lower)
+  );
+};
+
+const getDisplayTitle = (workout: any): string => {
+  const names: string[] = Array.from(
+    new Set((workout.exercises || []).map((e: any) => e.name as string).filter(Boolean))
+  );
+  if (names.length > 0 && isGenericTitle(workout.title)) return names[0];
+  return workout.title || names[0] || 'Workout';
+};
+
 // ── Timeline card ─────────────────────────────────────────────────────────────
 
 const TimelineItem: React.FC<{
@@ -42,6 +59,8 @@ const TimelineItem: React.FC<{
   );
   const parsedDate  = parseDateAtStartOfDay(workout.date);
   const dateLabel   = parsedDate ? format(parsedDate, 'EEE, MMM d · yyyy') : '--';
+  const displayTitle = getDisplayTitle(workout);
+  const planLabel    = !isGenericTitle(workout.title) && workout.title !== displayTitle ? workout.title : null;
   const PREVIEW_MAX = 4; // exercises shown collapsed
   const previewExs  = sortedExercises.slice(0, PREVIEW_MAX);
   const hiddenCount = sortedExercises.length - PREVIEW_MAX;
@@ -147,7 +166,7 @@ const TimelineItem: React.FC<{
                 {dateLabel}
               </p>
               <h3 className="text-[16px] font-bold leading-snug" style={{ color: 'var(--text-primary)' }}>
-                {workout.title}
+                {displayTitle}
               </h3>
 
               {/* Muscle group tags */}
@@ -188,9 +207,17 @@ const TimelineItem: React.FC<{
 
           {/* Stats row */}
           <div className="flex items-center gap-3 mt-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <Clock className="w-3 h-3" />
               {workout.duration_minutes ?? 0} min
+              {planLabel && (
+                <span
+                  className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold"
+                  style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                >
+                  {planLabel}
+                </span>
+              )}
             </span>
             <span className="flex items-center gap-1">
               <Dumbbell className="w-3 h-3" />
