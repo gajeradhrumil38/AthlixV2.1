@@ -278,7 +278,8 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
   const { user } = useAuth();
   const [title, setTitle] = useState(initialTemplate?.title ?? '');
   const [exercises, setExercises] = useState<PlannedExercise[]>(initialTemplate?.exercises ?? []);
-  const [showPicker, setShowPicker] = useState(false);
+  // Auto-open picker immediately when creating a brand new plan (no template loaded)
+  const [showPicker, setShowPicker] = useState(!initialTemplate);
   const [saving, setSaving] = useState(false);
   const [dialState, setDialState] = useState<DialState | null>(null);
   const [templateId, setTemplateId] = useState<string | null>(initialTemplate?.id ?? null);
@@ -508,30 +509,23 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
           <div className="flex-1 overflow-y-auto">
             <AnimatePresence initial={false}>
               {exercises.length === 0 ? (
-                <motion.button
-                  type="button"
+                <motion.div
                   key="empty"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  onClick={() => setShowPicker(true)}
-                  className="w-full flex flex-col items-center justify-center gap-4 text-center px-6 active:opacity-70 transition-opacity"
-                  style={{ minHeight: 260 }}
+                  className="flex flex-col items-center justify-center gap-3 text-center px-6"
+                  style={{ minHeight: 220 }}
                 >
                   <div
-                    className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                    className="w-14 h-14 rounded-2xl flex items-center justify-center"
                     style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
                   >
-                    <Plus className="w-7 h-7" style={{ color: 'var(--accent)' }} />
+                    <Plus className="w-6 h-6" style={{ color: 'var(--accent)' }} />
                   </div>
-                  <div>
-                    <p className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      Add your first exercise
-                    </p>
-                    <p className="text-[12px] mt-1" style={{ color: 'var(--text-muted)' }}>
-                      Tap here or use the button below
-                    </p>
-                  </div>
-                </motion.button>
+                  <p className="text-[14px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                    No exercises yet
+                  </p>
+                </motion.div>
               ) : (
                 exercises.map((ex) => (
                   <motion.div
@@ -570,25 +564,25 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
               <Plus className="w-4 h-4 text-[var(--accent)]" />
               Add Exercise
             </button>
-            <button
-              type="button"
-              onClick={handleStart}
-              disabled={saving || exercises.length === 0}
-              className="w-full py-4 rounded-xl text-[14px] font-bold text-black flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
-              style={{ background: 'var(--accent)' }}
-            >
-              {saving ? 'Saving…' : (
-                <>
-                  <Check className="w-4 h-4" />
-                  Start Workout
-                  {exercises.length > 0 && (
+            {exercises.length > 0 && (
+              <button
+                type="button"
+                onClick={handleStart}
+                disabled={saving}
+                className="w-full py-4 rounded-xl text-[14px] font-bold text-black flex items-center justify-center gap-2 transition-opacity"
+                style={{ background: 'var(--accent)', opacity: saving ? 0.5 : 1 }}
+              >
+                {saving ? 'Saving…' : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Start Workout
                     <span className="opacity-70 font-medium text-[12px]">
                       · {exercises.reduce((t, e) => t + e.sets.length, 0)} sets
                     </span>
-                  )}
-                </>
-              )}
-            </button>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </motion.div>
       </div>
