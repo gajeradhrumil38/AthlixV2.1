@@ -295,11 +295,6 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
   };
   const defaultTitle = inferPlanName(exercises);
 
-  // Auto-open the picker only on first mount when there are no pre-loaded exercises
-  useEffect(() => {
-    if (!initialTemplate) setShowPicker(true);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Mark unsaved whenever plan content changes after a save
   useEffect(() => {
     if (isSaved) setIsSaved(false);

@@ -398,43 +398,134 @@ export const Calendar: React.FC = () => {
     );
   };
 
-  // Week strip (used in Today + Month views)
-  const renderWeekStrip = () => (
-    <div className="flex items-center justify-between gap-1 px-1 pb-1">
-      {weekDays.map((day) => {
-        const isSelected = isSameDay(day, selectedDate);
-        const isTodayDay = dateFnsIsToday(day);
-        const dots = getForDay(day);
-        return (
-          <button
-            key={day.toISOString()}
-            onClick={() => selectDay(day)}
-            onPointerDown={(e) => handleLongPressStart(day, e)}
-            onPointerUp={handleLongPressEnd}
-            onPointerLeave={handleLongPressEnd}
-            className="flex flex-col items-center gap-0.5 flex-1 py-1 rounded-xl transition-all active:scale-95"
-          >
-            <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: isSelected ? 'var(--accent)' : 'var(--text-muted)' }}>
-              {format(day, 'EEEEE')}
-            </span>
-            <div className="relative flex items-center justify-center" style={{ width: 38, height: 38 }}>
-              <DayRing workouts={dots} size={38} r={17} strokeWidth={2.5} />
-              <div
-                className="h-8 w-8 flex items-center justify-center rounded-full text-[14px] font-bold"
-                style={
-                  isTodayDay
-                    ? { background: 'var(--accent)', color: '#000' }
-                    : isSelected
-                    ? { background: 'var(--bg-elevated)', color: 'var(--text-primary)', outline: '1.5px solid var(--accent)' }
-                    : { color: 'var(--text-secondary)' }
-                }
+  // 5-day focal strip for Today view — selected day centre, ±1 & ±2 fade out
+  const renderTodayStrip = () => {
+    const offsets = [-2, -1, 0, 1, 2] as const;
+    const isOffToday = !dateFnsIsToday(selectedDate);
+    return (
+      <div className="pb-1">
+        <div className="flex items-end justify-between gap-1 px-1">
+          {offsets.map((offset) => {
+            const day       = addDays(selectedDate, offset);
+            const isCenter  = offset === 0;
+            const absOff    = Math.abs(offset);
+            const isTodayDay = dateFnsIsToday(day);
+            const dots      = getForDay(day);
+
+            const opacity   = absOff === 0 ? 1 : absOff === 1 ? 0.55 : 0.22;
+            const ringSize  = isCenter ? 50 : absOff === 1 ? 40 : 32;
+            const r         = isCenter ? 23 : absOff === 1 ? 18 : 14;
+            const sw        = isCenter ? 3 : 2;
+            const numCls    = isCenter ? 'text-[18px] font-bold' : absOff === 1 ? 'text-[14px] font-semibold' : 'text-[12px] font-medium';
+            const circleSz  = isCenter ? 42 : absOff === 1 ? 34 : 26;
+
+            return (
+              <button
+                key={day.toISOString()}
+                onClick={() => selectDay(day)}
+                onPointerDown={(e) => handleLongPressStart(day, e)}
+                onPointerUp={handleLongPressEnd}
+                onPointerLeave={handleLongPressEnd}
+                className="flex flex-col items-center gap-0.5 active:scale-95 transition-all"
+                style={{ opacity, flex: isCenter ? 1.6 : absOff === 1 ? 1.1 : 1 }}
               >
-                {format(day, 'd')}
+                <span
+                  className="text-[9px] font-bold uppercase tracking-widest"
+                  style={{ color: isTodayDay ? 'var(--accent)' : isCenter ? 'var(--text-secondary)' : 'var(--text-muted)' }}
+                >
+                  {isTodayDay && !isCenter ? 'TODAY' : format(day, 'EEEEE')}
+                </span>
+                <div className="relative flex items-center justify-center" style={{ width: ringSize, height: ringSize }}>
+                  <DayRing workouts={dots} size={ringSize} r={r} strokeWidth={sw} />
+                  <div
+                    className={`flex items-center justify-center rounded-full transition-all ${numCls}`}
+                    style={{
+                      width: circleSz,
+                      height: circleSz,
+                      background: isTodayDay ? 'var(--accent)' : isCenter ? 'var(--bg-elevated)' : 'transparent',
+                      color: isTodayDay ? '#000' : isCenter ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      outline: isCenter && !isTodayDay ? '1.5px solid rgba(200,255,0,0.45)' : 'none',
+                    }}
+                  >
+                    {format(day, 'd')}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Return-to-today pill — only visible when browsing a different day */}
+        {isOffToday && (
+          <div className="flex justify-center mt-2">
+            <button
+              onClick={goToToday}
+              className="flex items-center gap-1 px-3 py-0.5 rounded-full text-[10px] font-semibold transition-all active:scale-95"
+              style={{ background: 'rgba(200,255,0,0.08)', color: 'var(--accent)', border: '1px solid rgba(200,255,0,0.2)' }}
+            >
+              ↑ Today
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // 7-day week strip (Week view header + anchor for month view)
+  const renderWeekStrip = () => (
+    <div className="pb-1">
+      {/* Week range label shown only in Week view */}
+      {viewMode === 'week' && (
+        <div className="flex items-center justify-between px-1 pb-2">
+          <p className="text-[14px] font-bold" style={{ color: 'var(--text-primary)' }}>
+            {format(weekDays[0], 'MMM d')}
+            <span className="font-normal mx-1" style={{ color: 'var(--text-muted)' }}>–</span>
+            {format(weekDays[6], isSameMonth(weekDays[0], weekDays[6]) ? 'd' : 'MMM d')}
+            <span className="text-[12px] font-medium ml-1.5" style={{ color: 'var(--text-muted)' }}>
+              {format(weekDays[0], 'yyyy')}
+            </span>
+          </p>
+          <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
+            {weekDays.reduce((s, d) => s + getForDay(d).length, 0)} workouts
+          </span>
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-1 px-1">
+        {weekDays.map((day) => {
+          const isSelected = isSameDay(day, selectedDate);
+          const isTodayDay = dateFnsIsToday(day);
+          const dots = getForDay(day);
+          return (
+            <button
+              key={day.toISOString()}
+              onClick={() => selectDay(day)}
+              onPointerDown={(e) => handleLongPressStart(day, e)}
+              onPointerUp={handleLongPressEnd}
+              onPointerLeave={handleLongPressEnd}
+              className="flex flex-col items-center gap-0.5 flex-1 py-1 rounded-xl transition-all active:scale-95"
+            >
+              <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: isSelected ? 'var(--accent)' : 'var(--text-muted)' }}>
+                {format(day, 'EEEEE')}
+              </span>
+              <div className="relative flex items-center justify-center" style={{ width: 38, height: 38 }}>
+                <DayRing workouts={dots} size={38} r={17} strokeWidth={2.5} />
+                <div
+                  className="h-8 w-8 flex items-center justify-center rounded-full text-[14px] font-bold"
+                  style={
+                    isTodayDay
+                      ? { background: 'var(--accent)', color: '#000' }
+                      : isSelected
+                      ? { background: 'var(--bg-elevated)', color: 'var(--text-primary)', outline: '1.5px solid var(--accent)' }
+                      : { color: 'var(--text-secondary)' }
+                  }
+                >
+                  {format(day, 'd')}
+                </div>
               </div>
-            </div>
-          </button>
-        );
-      })}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 
@@ -495,21 +586,6 @@ export const Calendar: React.FC = () => {
   // Week list view — all 7 days with their workouts
   const renderWeekList = () => (
     <div className="space-y-4">
-      {/* Week range header */}
-      <div className="flex items-center justify-between px-1">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest mb-0.5" style={{ color: 'var(--text-muted)' }}>Week</p>
-          <p className="text-[16px] font-bold" style={{ color: 'var(--text-primary)' }}>
-            {format(weekDays[0], 'MMM d')} – {format(weekDays[6], isSameMonth(weekDays[0], weekDays[6]) ? 'd' : 'MMM d')}
-            <span className="text-[13px] font-medium ml-1" style={{ color: 'var(--text-muted)' }}>
-              {format(weekDays[0], 'yyyy')}
-            </span>
-          </p>
-        </div>
-        <div className="text-[11px] font-medium px-2.5 py-1 rounded-full" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
-          {weekDays.reduce((sum, d) => sum + getForDay(d).length, 0)} workouts
-        </div>
-      </div>
       {weekDays.map((day) => {
         const dayWorkouts = getForDay(day);
         const isTodayDay  = dateFnsIsToday(day);
@@ -724,8 +800,9 @@ export const Calendar: React.FC = () => {
           </button>
         </div>
 
-        {/* Calendar (week strip or month grid) */}
-        {viewMode === 'today' && renderWeekStrip()}
+        {/* Calendar (today strip, week strip, or month grid) */}
+        {viewMode === 'today' && renderTodayStrip()}
+        {viewMode === 'week' && renderWeekStrip()}
         {viewMode === 'month' && renderMonthGrid()}
       </div>
 

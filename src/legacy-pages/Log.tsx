@@ -247,6 +247,11 @@ export const Log: React.FC = () => {
     }
 
     if (forcePlanToday) {
+      // Create a blank workout so closing PlanTodaySheet without starting falls back
+      // to ActiveWorkout empty state instead of a black screen.
+      const initialState = createWorkoutState([], undefined, forcedWorkoutDate);
+      setWorkout(initialState);
+      writeDraft(initialState);
       setShowPlanToday(true);
       setShowQuickStart(false);
       return;
@@ -350,12 +355,21 @@ export const Log: React.FC = () => {
     writeDraft(initialState);
   }, [showStartSheet, workout, createWorkoutState, forceAddExercise, forcedWorkoutDate, user]);
 
-  // Auto-save draft every 30s
+  // Write draft immediately when exercise count changes (covers unload / add / remove)
+  const prevExCountRef = useRef<number>(-1);
   useEffect(() => {
     if (!workout) return;
-    const interval = setInterval(() => {
+    const len = workout.exercises.length;
+    if (prevExCountRef.current !== len) {
+      prevExCountRef.current = len;
       writeDraft(workout);
-    }, 30000);
+    }
+  }, [workout]);
+
+  // Also auto-save every 30s for title/notes/timer changes
+  useEffect(() => {
+    if (!workout) return;
+    const interval = setInterval(() => { writeDraft(workout); }, 30000);
     return () => clearInterval(interval);
   }, [workout]);
 
@@ -465,7 +479,15 @@ export const Log: React.FC = () => {
         )}
         {showPlanToday && (
           <PlanTodaySheet
-            onClose={() => { setShowPlanToday(false); setEditingTemplate(null); }}
+            onClose={() => {
+              setShowPlanToday(false);
+              setEditingTemplate(null);
+              // If there's no active workout, restore the start sheet or go home.
+              if (!workout) {
+                if (showStartSheet) setShowQuickStart(true);
+                else navigate(-1);
+              }
+            }}
             onStartPlan={(exercises, title) => {
               setShowPlanToday(false);
               setEditingTemplate(null);

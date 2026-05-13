@@ -644,9 +644,11 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                 <p className="text-[13px] font-semibold truncate leading-none" style={{ color: 'var(--text-primary)' }}>
                   {workout.title}
                 </p>
-                <p className="text-[10px] mt-0.5 leading-none" style={{ color: 'var(--text-muted)' }}>
-                  tap to rename
-                </p>
+                {workout.exercises.length > 0 && (
+                  <p className="text-[10px] mt-0.5 leading-none" style={{ color: 'var(--text-muted)' }}>
+                    tap to rename
+                  </p>
+                )}
               </button>
             )}
           </div>
@@ -744,7 +746,12 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                   type="button"
                   onClick={() => {
                     if (window.confirm('Remove all exercises from this workout?')) {
-                      setWorkout((p) => p ? { ...p, exercises: [] } : p);
+                      setWorkout((p) => {
+                        if (!p) return p;
+                        const hour = new Date().getHours();
+                        const genericTitle = hour < 12 ? 'Morning Workout' : 'Evening Workout';
+                        return { ...p, exercises: [], title: genericTitle };
+                      });
                     }
                   }}
                   className="text-[11px] font-medium transition-colors"
