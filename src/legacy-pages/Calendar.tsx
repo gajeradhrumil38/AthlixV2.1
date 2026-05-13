@@ -101,6 +101,45 @@ const weekEnd   = (d: Date) => endOfWeek(d,   { weekStartsOn: 1 });
 const weekDaysOf = (d: Date): Date[] =>
   eachDayOfInterval({ start: weekStart(d), end: weekEnd(d) });
 
+// ── DayRing — segmented arc ring around day number ────────────────────────────
+
+const DayRing: React.FC<{ workouts: any[]; size: number; r: number; strokeWidth?: number }> = ({
+  workouts, size, r, strokeWidth = 2.5,
+}) => {
+  if (workouts.length === 0) return null;
+  const cx = size / 2;
+  const cy = size / 2;
+  const circ = 2 * Math.PI * r;
+  const n = workouts.length;
+  // gap shrinks when many segments so they all fit
+  const gapDeg = n === 1 ? 0 : Math.max(3, Math.min(10, 60 / n));
+  const segDeg = n === 1 ? 359.9 : (360 - n * gapDeg) / n;
+  const segLen = circ * segDeg / 360;
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      style={{ position: 'absolute', inset: 0, pointerEvents: 'none', transform: 'rotate(-90deg)' }}
+    >
+      {workouts.map((w, i) => (
+        <circle
+          key={w.id}
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke={getAccent(w)}
+          strokeWidth={strokeWidth}
+          strokeLinecap={n === 1 ? 'round' : 'butt'}
+          strokeDasharray={`${segLen} ${circ - segLen}`}
+          transform={`rotate(${i * (segDeg + gapDeg)}, ${cx}, ${cy})`}
+        />
+      ))}
+    </svg>
+  );
+};
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 const ExerciseChip: React.FC<{ name: string; color: string }> = ({ name, color }) => (
@@ -346,23 +385,20 @@ export const Calendar: React.FC = () => {
             <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: isSelected ? 'var(--accent)' : 'var(--text-muted)' }}>
               {format(day, 'EEEEE')}
             </span>
-            <div
-              className="h-8 w-8 flex items-center justify-center rounded-full text-[14px] font-bold"
-              style={
-                isTodayDay
-                  ? { background: 'var(--accent)', color: '#000' }
-                  : isSelected
-                  ? { background: 'var(--bg-elevated)', color: 'var(--text-primary)', outline: '1.5px solid var(--accent)' }
-                  : { color: 'var(--text-secondary)' }
-              }
-            >
-              {format(day, 'd')}
-            </div>
-            <div className="h-1.5 flex gap-0.5">
-              {dots.slice(0, 3).map((w) => (
-                <div key={w.id} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: isSelected ? 'var(--accent)' : getAccent(w) }} />
-              ))}
-              {dots.length === 0 && <div className="h-1.5 w-1.5 opacity-0" />}
+            <div className="relative flex items-center justify-center" style={{ width: 38, height: 38 }}>
+              <DayRing workouts={dots} size={38} r={17} strokeWidth={2.5} />
+              <div
+                className="h-8 w-8 flex items-center justify-center rounded-full text-[14px] font-bold"
+                style={
+                  isTodayDay
+                    ? { background: 'var(--accent)', color: '#000' }
+                    : isSelected
+                    ? { background: 'var(--bg-elevated)', color: 'var(--text-primary)', outline: '1.5px solid var(--accent)' }
+                    : { color: 'var(--text-secondary)' }
+                }
+              >
+                {format(day, 'd')}
+              </div>
             </div>
           </button>
         );
@@ -396,16 +432,14 @@ export const Calendar: React.FC = () => {
               className={`flex flex-col items-center py-1 rounded-xl transition-all active:scale-95 ${outside ? 'opacity-25' : ''}`}
               style={isSelected ? { background: 'var(--bg-elevated)', outline: '1px solid var(--accent)' } : undefined}
             >
-              <div
-                className="h-7 w-7 flex items-center justify-center rounded-full text-[12px] font-semibold"
-                style={isTodayDay ? { background: 'var(--accent)', color: '#000' } : { color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)' }}
-              >
-                {format(day, 'd')}
-              </div>
-              <div className="flex gap-0.5 h-1.5 mt-0.5">
-                {dots.slice(0, 2).map((w) => (
-                  <div key={w.id} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: getAccent(w) }} />
-                ))}
+              <div className="relative flex items-center justify-center" style={{ width: 32, height: 32 }}>
+                <DayRing workouts={dots} size={32} r={14} strokeWidth={2} />
+                <div
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-[12px] font-semibold"
+                  style={isTodayDay ? { background: 'var(--accent)', color: '#000' } : { color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                >
+                  {format(day, 'd')}
+                </div>
               </div>
             </button>
           );
