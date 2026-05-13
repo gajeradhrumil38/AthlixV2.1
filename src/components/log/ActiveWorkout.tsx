@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Activity, ArrowLeft, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Pause, Play, Plus, Trash2, Weight } from 'lucide-react';
+import { Activity, ArrowLeft, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Pause, Play, Plus, Timer, Trash2, Weight, X } from 'lucide-react';
+import { muscleColor } from '../../lib/muscleColors';
 import toast from 'react-hot-toast';
 import type { WorkoutState, ExerciseEntry, Set } from '../../legacy-pages/Log';
 import { ExerciseContent } from './ExerciseContent';
@@ -125,6 +126,35 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Rest timer ────────────────────────────────────────────────────────────
+  const REST_DURATION = 90; // seconds
+  const [restSecondsLeft, setRestSecondsLeft] = useState(0);
+  const restIntervalRef = useRef<number | null>(null);
+
+  const startRestTimer = useCallback(() => {
+    if (restIntervalRef.current) window.clearInterval(restIntervalRef.current);
+    setRestSecondsLeft(REST_DURATION);
+    restIntervalRef.current = window.setInterval(() => {
+      setRestSecondsLeft((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(restIntervalRef.current!);
+          restIntervalRef.current = null;
+          haptics.complete();
+          return 0;
+        }
+        if (prev <= 4) haptics.tick();
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  const stopRestTimer = useCallback(() => {
+    if (restIntervalRef.current) { window.clearInterval(restIntervalRef.current); restIntervalRef.current = null; }
+    setRestSecondsLeft(0);
+  }, []);
+
+  useEffect(() => () => { if (restIntervalRef.current) window.clearInterval(restIntervalRef.current); }, []);
 
   const handleSaveAsTemplate = useCallback(async () => {
     if (!user || workout.exercises.length === 0) return;
@@ -274,12 +304,12 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
       if (nextDone) {
         haptics.success();
+        startRestTimer();
         const doneCount = exercise.sets.filter((entry) => entry.done || entry.id === setId).length;
-        if (doneCount === exercise.sets.length) {
-          haptics.complete();
-        }
+        if (doneCount === exercise.sets.length) haptics.complete();
       } else {
         haptics.tick();
+        stopRestTimer();
       }
     },
     [activeIndex, setWorkout, workout.exercises],
@@ -771,12 +801,19 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                         className="flex flex-1 items-center gap-3 p-3 rounded-xl border text-left transition-colors min-w-0"
                         style={{ background: 'var(--bg-surface)', borderColor: 'rgba(255,255,255,0.07)' }}
                       >
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-white/10 bg-white/[0.03]">
-                          <Activity className="w-4 h-4 text-[var(--text-muted)]" />
+                        <div
+                          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-[13px] font-bold"
+                          style={{
+                            background: `color-mix(in srgb, ${muscleColor(ex.muscleGroup)} 14%, var(--bg-elevated))`,
+                            color: muscleColor(ex.muscleGroup),
+                            border: `1px solid color-mix(in srgb, ${muscleColor(ex.muscleGroup)} 25%, transparent)`,
+                          }}
+                        >
+                          {ex.name.charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate leading-none mb-1">{ex.name}</p>
-                          <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-[0.08em]">
+                          <p className="text-[11px] uppercase tracking-[0.08em]" style={{ color: muscleColor(ex.muscleGroup) }}>
                             {ex.muscleGroup || 'Exercise'} · {ex.sets.length} set{ex.sets.length !== 1 ? 's' : ''}
                           </p>
                         </div>
@@ -896,6 +933,49 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             ) : null}
           </AnimatePresence>
         )}
+
+        {/* ── Rest Timer Bar ───────────────────────────────────────── */}
+        <AnimatePresence>
+          {restSecondsLeft > 0 && (
+            <motion.div
+              key="rest-timer"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.2 }}
+              className="shrink-0 px-4 pt-2 pb-1 border-t border-white/5 bg-[var(--bg-base)]/90"
+            >
+              <div className="flex items-center gap-3">
+                <Timer className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>Rest</span>
+                    <span className="text-[13px] font-bold tabular-nums" style={{ color: 'var(--accent)' }}>
+                      {Math.floor(restSecondsLeft / 60)}:{String(restSecondsLeft % 60).padStart(2, '0')}
+                    </span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
+                    <motion.div
+                      className="h-full rounded-full"
+                      style={{ background: 'var(--accent)' }}
+                      animate={{ width: `${(restSecondsLeft / REST_DURATION) * 100}%` }}
+                      transition={{ duration: 0.9, ease: 'linear' }}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={stopRestTimer}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0"
+                  style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ── Bottom Bar ───────────────────────────────────────────── */}
         <div className="shrink-0 flex px-4 py-3 border-t border-white/5 bg-[var(--bg-base)]/80 backdrop-blur-xl pb-[max(12px,env(safe-area-inset-bottom))]">

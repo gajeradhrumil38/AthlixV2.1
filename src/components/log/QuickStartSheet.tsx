@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ClipboardList, ArrowRight, CalendarPlus, Pencil, Trash2, Play, ChevronRight } from 'lucide-react';
+import { ClipboardList, ArrowRight, CalendarPlus, Pencil, Trash2, Play, ChevronRight, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import type { ExerciseEntry } from '../../legacy-pages/Log';
 import { buildExercisesFromWorkout, getTemplates, deleteTemplate, getWorkouts } from '../../lib/supabaseData';
 import { parseDateAtStartOfDay } from '../../lib/dates';
+import { muscleColor } from '../../lib/muscleColors';
 import toast from 'react-hot-toast';
+
+const fmtRelativeDate = (workout: any): string => {
+  const d = parseDateAtStartOfDay(workout.date);
+  if (!d) return '';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today.getTime() - d.getTime()) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  if (diff < 7) return d.toLocaleDateString('en-US', { weekday: 'long' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
 
 interface QuickStartSheetProps {
   onStartEmpty: () => void;
@@ -111,11 +123,62 @@ export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto no-scrollbar px-6 py-4 space-y-6 pb-[max(24px,env(safe-area-inset-bottom))]">
 
+          {/* ── Repeat Last Workout ── */}
+          {!loading && recentWorkouts.length > 0 && (() => {
+            const last = recentWorkouts[0];
+            const muscles = Array.from(new Set((last.exercises || []).map((e: any) => e.muscle_group).filter(Boolean))) as string[];
+            const exNames = (last.exercises || []).slice(0, 3).map((e: any) => e.name).filter(Boolean);
+            return (
+              <button
+                onClick={() => handleLoadRecent(last)}
+                className="w-full text-left rounded-2xl p-4 active:scale-[0.98] transition-all"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="h-7 w-7 rounded-lg flex items-center justify-center" style={{ background: 'rgba(200,255,0,0.1)' }}>
+                      <RotateCcw className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[1.2px]" style={{ color: 'var(--text-muted)' }}>Repeat Last</p>
+                      <p className="text-[14px] font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>{last.title || 'Workout'}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>{fmtRelativeDate(last)}</span>
+                    <div
+                      className="px-2.5 py-1 rounded-lg text-[12px] font-bold text-black"
+                      style={{ background: 'var(--accent)' }}
+                    >
+                      Start →
+                    </div>
+                  </div>
+                </div>
+                {/* Muscle chips */}
+                {muscles.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {muscles.slice(0, 4).map((mg) => (
+                      <span key={mg} className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider"
+                        style={{ color: muscleColor(mg), background: `color-mix(in srgb, ${muscleColor(mg)} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${muscleColor(mg)} 22%, transparent)` }}>
+                        {mg}
+                      </span>
+                    ))}
+                    {exNames.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px]" style={{ color: 'var(--text-muted)', background: 'var(--bg-surface)' }}>
+                        {exNames.join(' · ')}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </button>
+            );
+          })()}
+
           {/* Primary actions */}
           <div className="flex gap-2">
             <button
               onClick={onStartEmpty}
-              className="flex-1 py-4 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 text-black"
+              className="flex-1 py-3.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2 text-black"
               style={{ background: 'var(--accent)' }}
             >
               Start Empty <ArrowRight className="w-4 h-4" />
@@ -123,11 +186,11 @@ export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({
             {onPlanToday && (
               <button
                 onClick={onPlanToday}
-                className="btn-glow btn-glow-accent flex-1 py-4 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2"
+                className="btn-glow btn-glow-accent flex-1 py-3.5 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2"
                 style={{ color: 'var(--text-primary)' }}
               >
                 <CalendarPlus className="w-4 h-4 text-[var(--accent)]" />
-                New Plan
+                Plan Today
               </button>
             )}
           </div>
@@ -243,27 +306,27 @@ export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({
             )}
           </div>
 
-          {/* ── Recent Workouts ── */}
-          {recentWorkouts.length > 0 && (
+          {/* ── More Recent Workouts (2–5) ── */}
+          {recentWorkouts.length > 1 && (
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[1.5px] mb-3" style={{ color: 'var(--text-muted)' }}>
-                Recent Workouts
+              <p className="text-[10px] font-bold uppercase tracking-[1.5px] mb-2" style={{ color: 'var(--text-muted)' }}>
+                More Recent
               </p>
-              <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-6 px-6">
-                {recentWorkouts.map((w) => (
+              <div className="space-y-1.5">
+                {recentWorkouts.slice(1, 4).map((w) => (
                   <button
                     key={w.id}
                     onClick={() => handleLoadRecent(w)}
-                    className="flex-shrink-0 w-[140px] p-3 rounded-xl text-left active:scale-[0.97] transition-transform"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left active:scale-[0.98] transition-transform"
                     style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
                   >
-                    <div className="text-[12px] font-bold truncate mb-1" style={{ color: 'var(--text-primary)' }}>{w.title}</div>
-                    <div className="text-[9px] mb-2" style={{ color: 'var(--text-secondary)' }}>
-                      {(() => { const d = parseDateAtStartOfDay(w.date); return d ? d.toLocaleDateString() : '--'; })()}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{w.title}</p>
+                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        {fmtRelativeDate(w)} · {w.exercises?.length || 0} exercises
+                      </p>
                     </div>
-                    <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
-                      {w.exercises?.length || 0} Exercises <ChevronRight className="w-3 h-3" />
-                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
                   </button>
                 ))}
               </div>

@@ -14,6 +14,19 @@ import {
   resolveExerciseInputType,
 } from '../../lib/exerciseTypes';
 
+const fmtLastDate = (dateStr?: string): string => {
+  if (!dateStr) return 'last session';
+  // dateStr is "YYYY-MM-DD"
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return 'last session';
+  const date = new Date(y, m - 1, d);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today.getTime() - date.getTime()) / 86400000);
+  if (diff === 0) return 'today';
+  if (diff === 1) return 'yesterday';
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
 interface ExerciseContentProps {
   exercise: ExerciseEntry;
   optionalWeight?: boolean;
@@ -195,14 +208,14 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
             <div className="flex items-center gap-2">
               <div className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
               <span className="text-[12px] font-medium text-[var(--text-primary)]">
-                Prefilled from {exercise.lastSession.date}
+                Last session · {fmtLastDate(exercise.lastSession.date)}
               </span>
             </div>
             <button
               onClick={onClearPrefill}
               className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--accent)] transition-colors hover:opacity-85"
             >
-              Clear
+              Reset
             </button>
           </div>
         )}

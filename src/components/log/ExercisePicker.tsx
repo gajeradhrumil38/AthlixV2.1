@@ -105,8 +105,8 @@ const ExerciseRow: React.FC<{
       onClick={() => onToggle(exercise)}
       className="w-full rounded-xl flex items-center gap-3 px-3 py-2.5 text-left active:scale-[0.99] transition-all duration-150"
       style={{
-        background: isSelected ? 'color-mix(in srgb, var(--accent) 8%, var(--bg-surface))' : 'var(--bg-surface)',
-        border: isSelected ? '1px solid rgba(200,255,0,0.35)' : '1px solid var(--border)',
+        background: 'var(--bg-surface)',
+        border: isSelected ? '1.5px solid rgba(200,255,0,0.6)' : '1px solid var(--border)',
         minHeight: 60,
       }}
     >
