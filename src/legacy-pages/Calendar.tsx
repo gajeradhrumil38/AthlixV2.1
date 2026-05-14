@@ -665,8 +665,8 @@ export const Calendar: React.FC = () => {
 
       {/* ── Sticky Header ── */}
       <div
-        className="sticky top-0 z-20 px-4 pt-3"
-        style={{ background: 'var(--bg-base)', borderBottom: '1px solid var(--border)' }}
+        className="sticky top-0 z-20 px-4 pt-3 scroll-fade-header"
+        style={{ background: 'var(--bg-base)' }}
       >
         {/* Month row */}
         <div className="flex items-center justify-between mb-3">

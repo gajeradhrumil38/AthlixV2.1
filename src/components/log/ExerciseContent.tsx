@@ -132,7 +132,7 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
 
   return (
     <div className="h-full overflow-y-auto bg-transparent pb-24">
-      <div className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--bg-base)]/90 px-4 pb-3 pt-3 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 bg-[var(--bg-base)]/90 px-4 pb-3 pt-3 backdrop-blur-xl scroll-fade-header">
         <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-surface)]">
           <div className="grid grid-cols-3">
             {/* Sets */}

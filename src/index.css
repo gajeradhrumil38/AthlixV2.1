@@ -373,3 +373,28 @@
 .btn-glow-subtle {
   --btn-glow-color: 130, 146, 164;
 }
+
+/* ── Sticky header gradient fade ────────────────────────────────────────────
+   Replaces hard border-bottom with a soft gradient that blends scrolling
+   content into the header. Add this class to any sticky header container.
+   The pseudo-element sits just below the header in the stacking context.
+──────────────────────────────────────────────────────────────────────────── */
+.scroll-fade-header {
+  position: relative;
+}
+
+.scroll-fade-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -24px;
+  height: 24px;
+  background: linear-gradient(
+    to bottom,
+    var(--scroll-fade-color, var(--bg-base)) 0%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
