@@ -2192,7 +2192,17 @@ export const searchExerciseLibrary = async (userId: string, query: string) => {
     (ex) => aliasCanonicals.has(ex.name.toLowerCase()) && !nameMatchedNames.has(ex.name.toLowerCase()),
   );
 
-  return [...nameMatches, ...aliasExtras];
+  // Tertiary: match query against muscle group name so "forearm" → all Forearms exercises
+  const matchedNames = new Set([
+    ...nameMatches.map((e) => e.name.toLowerCase()),
+    ...aliasExtras.map((e) => e.name.toLowerCase()),
+  ]);
+  const muscleGroupExtras = all.filter((ex) => {
+    const group = (ex.muscle_group || '').toLowerCase();
+    return group.includes(q) && !matchedNames.has(ex.name.toLowerCase());
+  });
+
+  return [...nameMatches, ...aliasExtras, ...muscleGroupExtras];
 };
 
 export const getRecentExerciseOptions = async (

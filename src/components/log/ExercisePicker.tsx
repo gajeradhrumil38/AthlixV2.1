@@ -94,12 +94,20 @@ const InitialBadge: React.FC<{ label: string; colorVar?: string; size?: 'sm' | '
   );
 };
 
+// Split "Bench Press (one arm, biased)" → ["Bench Press", "one arm, biased"]
+const splitVariant = (name: string): [string, string | null] => {
+  const idx = name.indexOf('(');
+  if (idx === -1) return [name, null];
+  return [name.slice(0, idx).trim(), name.slice(idx + 1).replace(/\)$/, '').trim()];
+};
+
 const ExerciseRow: React.FC<{
   exercise: Exercise;
   isSelected: boolean;
   onToggle: (exercise: Exercise) => void;
 }> = ({ exercise, isSelected, onToggle }) => {
   const cssVar = MUSCLE_CSS_VAR[exercise.muscleGroup];
+  const [baseName, variant] = splitVariant(exercise.name);
   return (
     <button
       onClick={() => onToggle(exercise)}
@@ -111,13 +119,23 @@ const ExerciseRow: React.FC<{
       }}
     >
       <InitialBadge
-        label={exercise.name}
+        label={baseName}
         colorVar={MUSCLE_CSS_VAR[exercise.muscleGroup] || '--text-secondary'}
         size="sm"
       />
       <div className="flex-1 min-w-0">
-        <div className="text-[14px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-          {exercise.name}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {baseName}
+          </span>
+          {variant && (
+            <span
+              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md shrink-0"
+              style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+            >
+              {variant}
+            </span>
+          )}
         </div>
         <div className="mt-0.5 text-[11px] font-medium" style={{ color: cssVar ? `var(${cssVar})` : 'var(--text-secondary)' }}>
           {exercise.muscleGroup}
