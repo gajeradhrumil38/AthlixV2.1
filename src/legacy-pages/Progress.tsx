@@ -213,6 +213,9 @@ export const Progress: React.FC = () => {
   const [overloadSearch, setOverloadSearch] = useState('');
   const [overloadDropdownOpen, setOverloadDropdownOpen] = useState(false);
   const [overloadChartView, setOverloadChartView] = useState<'weight' | 'volume'>('weight');
+  const [overloadRangeStart, setOverloadRangeStart] = useState<Date | null>(() => startOfMonth(new Date()));
+  const [overloadRangeEnd,   setOverloadRangeEnd]   = useState<Date | null>(() => new Date());
+  const [overloadCalendarMonth, setOverloadCalendarMonth] = useState(() => startOfMonth(new Date()));
 
   const [newWeight, setNewWeight] = useState('');
   const [weightDate, setWeightDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
@@ -995,25 +998,36 @@ export const Progress: React.FC = () => {
 
               {/* Volume rows card */}
               <div className="rounded-2xl border border-white/8 bg-[linear-gradient(160deg,#16191F_0%,#111419_100%)] p-5">
-                <div className="flex items-start justify-between mb-5">
+                {/* Header */}
+                <div className="flex items-start justify-between mb-4">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-muted)] mb-1">Weekly Volume</p>
                     {setVolumeData.length > 0 && (
                       <p className="text-[26px] font-black text-white tabular-nums leading-none">
                         {setVolumeData.reduce((a, d) => a + d.current, 0)}
-                        <span className="text-[13px] font-medium text-[var(--text-muted)] ml-1.5">sets this week</span>
+                        <span className="text-[13px] font-medium text-[var(--text-muted)] ml-1.5">sets</span>
+                        {totalVolume > 0 && (
+                          <span className="text-[13px] font-medium text-[var(--text-muted)] ml-2">
+                            · {Math.round(totalVolume).toLocaleString()} {displayUnit}
+                          </span>
+                        )}
                       </p>
                     )}
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Balance</p>
-                    <div className="flex items-baseline gap-1">
-                      <span className={`text-[20px] font-black tabular-nums leading-none ${
-                        balanceScore > 80 ? 'text-[var(--accent)]' : balanceScore > 50 ? 'text-[var(--yellow)]' : 'text-[var(--red)]'
-                      }`}>{balanceScore.toFixed(0)}</span>
-                      <span className="text-[11px] text-[var(--text-muted)]">/100</span>
+                  {balanceScore > 0 && (
+                    <div className="flex flex-col items-end gap-0.5">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Balance</p>
+                      <span className={`text-[13px] font-bold px-2 py-0.5 rounded-full ${
+                        balanceScore > 75
+                          ? 'bg-[var(--accent)]/10 text-[var(--accent)]'
+                          : balanceScore > 45
+                          ? 'bg-[var(--yellow)]/10 text-[var(--yellow)]'
+                          : 'bg-[var(--red)]/10 text-[var(--red)]'
+                      }`}>
+                        {balanceScore > 75 ? 'Balanced' : balanceScore > 45 ? 'Uneven' : 'Skewed'}
+                      </span>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {setVolumeData.length === 0 ? (
@@ -1022,50 +1036,90 @@ export const Progress: React.FC = () => {
                     <p className="text-[13px] text-[var(--text-muted)]">Log workouts this week to see volume.</p>
                   </div>
                 ) : (
-                  <>
-                    <div className="grid text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--text-muted)] border-b border-white/8 pb-2 mb-1"
-                      style={{ gridTemplateColumns: '88px 1fr 88px 36px', gap: '12px' }}>
-                      <div>Group</div><div>Sets</div><div>6-week</div><div className="text-right">Δ</div>
-                    </div>
-
-                    {setVolumeData.map((item, idx) => {
-                      const isTop = idx === 0;
-                      const maxSets = setVolumeData[0]?.current || 1;
+                  <div className="space-y-0">
+                    {setVolumeData.map((item) => {
+                      const isActive = item.current > 0;
+                      const maxSets = Math.max(...setVolumeData.filter(d => d.current > 0).map(d => d.current), 1);
                       const pct = item.current / maxSets;
                       const sparkData: number[] = setsByMuscleWeek[item.muscle] || new Array(6).fill(0);
                       const delta = item.current - item.previous;
-                      const sw = 80, sh = 22;
+                      const muscleVol = currentWeekVolume[item.muscle] || 0;
+
+                      // Muscle color via CSS var
+                      const MUSCLE_HEX_MAP: Record<string, string> = {
+                        Chest: palette.chest, Back: palette.back, Legs: palette.legs,
+                        Shoulders: palette.shoulders, Core: palette.core, Biceps: palette.biceps,
+                        Triceps: palette.triceps, Arms: palette.biceps, Cardio: palette.cardio,
+                        Glutes: palette.glutes ?? '#F4B96A', Forearms: palette.forearms ?? '#98D4E8',
+                        Mobility: palette.mobility ?? '#85C9B0', Yoga: palette.yoga ?? '#7CB9C8',
+                      };
+                      const color = MUSCLE_HEX_MAP[item.muscle] ?? palette.accent;
+
+                      // Sparkline
+                      const sw = 72, sh = 24;
                       const sMax = Math.max(...sparkData, 1);
                       const sx = (i: number) => (i / Math.max(sparkData.length - 1, 1)) * sw;
-                      const sy = (v: number) => sh - (v / sMax) * (sh - 2) - 1;
+                      const sy = (v: number) => sh - (v / sMax) * (sh - 3) - 1;
                       const sparkPath = sparkData.map((v, i) => `${i ? 'L' : 'M'}${sx(i).toFixed(1)} ${sy(v).toFixed(1)}`).join(' ');
                       const areaPath = `${sparkPath} L ${sw} ${sh} L 0 ${sh} Z`;
 
+                      // Trend indicator
+                      const trendIcon = delta > 2 ? '↑' : delta < -2 ? '↓' : '→';
+                      const trendColor = delta > 2 ? palette.green : delta < -2 ? palette.red : 'var(--text-muted)';
+
                       return (
-                        <div key={item.muscle} className="grid items-center py-3 border-b border-white/6 last:border-0"
-                          style={{ gridTemplateColumns: '88px 1fr 88px 36px', gap: '12px' }}>
-                          <div className={`text-[13px] font-semibold truncate ${isTop ? 'text-white' : 'text-[var(--text-secondary)]'}`}>
-                            {item.muscle}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-1.5 bg-white/8 rounded-full overflow-hidden">
-                              <div className="h-full rounded-full transition-all duration-500"
-                                style={{ width: `${pct * 100}%`, background: isTop ? 'var(--accent)' : 'rgba(255,255,255,0.28)' }} />
+                        <div
+                          key={item.muscle}
+                          className="py-3 border-b border-white/5 last:border-0"
+                          style={{ opacity: isActive ? 1 : 0.38 }}
+                        >
+                          {/* Row top: name + load + trend */}
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                              <span className="text-[13px] font-semibold text-white truncate">{item.muscle}</span>
+                              {muscleVol > 0 && (
+                                <span className="text-[11px] tabular-nums" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                                  {Math.round(muscleVol).toLocaleString()} {displayUnit}
+                                </span>
+                              )}
                             </div>
-                            <span className="text-[13px] font-bold text-white tabular-nums w-5 text-right">{item.current}</span>
+                            <div className="flex items-center gap-3 shrink-0">
+                              {/* Sparkline */}
+                              <svg viewBox={`0 0 ${sw} ${sh}`} width={sw} height={sh} style={{ display: 'block' }}>
+                                <defs>
+                                  <linearGradient id={`sg-${item.muscle}`} x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor={color} stopOpacity={isActive ? 0.25 : 0.08} />
+                                    <stop offset="100%" stopColor={color} stopOpacity="0" />
+                                  </linearGradient>
+                                </defs>
+                                <path d={areaPath} fill={`url(#sg-${item.muscle})`} />
+                                <path d={sparkPath} fill="none" stroke={isActive ? color : 'rgba(255,255,255,0.18)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                {isActive && (
+                                  <circle cx={sx(sparkData.length - 1).toFixed(1)} cy={sy(sparkData[sparkData.length - 1]).toFixed(1)} r="2.5" fill={color} />
+                                )}
+                              </svg>
+                              {/* Trend */}
+                              <span className="text-[13px] font-bold w-5 text-right" style={{ color: trendColor }}>{trendIcon}</span>
+                            </div>
                           </div>
-                          <svg viewBox={`0 0 ${sw} ${sh}`} width={sw} height={sh} style={{ display: 'block', flexShrink: 0 }}>
-                            <path d={areaPath} fill={isTop ? 'var(--accent)' : 'rgba(255,255,255,0.15)'} fillOpacity={isTop ? 0.15 : 1} />
-                            <path d={sparkPath} fill="none" stroke={isTop ? 'var(--accent)' : 'rgba(255,255,255,0.3)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                            <circle cx={sx(sparkData.length - 1).toFixed(1)} cy={sy(sparkData[sparkData.length - 1]).toFixed(1)} r="2" fill={isTop ? 'var(--accent)' : 'rgba(255,255,255,0.5)'} />
-                          </svg>
-                          <div className={`text-right text-[12px] font-bold tabular-nums ${delta >= 0 ? 'text-[var(--accent)]' : 'text-[var(--red)]'}`}>
-                            {delta > 0 ? '+' : ''}{delta}
+
+                          {/* Progress bar + set count */}
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                              <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{ width: `${pct * 100}%`, background: isActive ? color : 'rgba(255,255,255,0.15)' }}
+                              />
+                            </div>
+                            <span className="text-[11px] font-bold tabular-nums w-14 text-right" style={{ color: isActive ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.3)' }}>
+                              {item.current} sets
+                            </span>
                           </div>
                         </div>
                       );
                     })}
-                  </>
+                  </div>
                 )}
               </div>
             </>
@@ -1112,8 +1166,17 @@ export const Progress: React.FC = () => {
             };
 
             const buildChartData = (name: string) => {
+              const rStart = overloadRangeStart ? startOfDay(overloadRangeStart) : null;
+              const rEnd   = overloadRangeEnd   ? startOfDay(overloadRangeEnd)   : null;
               const rawRows = exercises
-                .filter(ex => ex.name === name && ex.weight > 0)
+                .filter(ex => {
+                  if (ex.name !== name || ex.weight <= 0) return false;
+                  if (rStart && rEnd) {
+                    const d = parseDateAtStartOfDay(ex.workouts.date);
+                    if (!d || d < rStart || d > rEnd) return false;
+                  }
+                  return true;
+                })
                 .sort((a, b) => (parseDateAtStartOfDay(a.workouts.date)?.getTime() ?? 0) - (parseDateAtStartOfDay(b.workouts.date)?.getTime() ?? 0));
               const byDate: Record<string, typeof rawRows> = {};
               rawRows.forEach(ex => {
@@ -1245,6 +1308,179 @@ export const Progress: React.FC = () => {
                     )}
                   </div>
                 )}
+
+                {/* ── Range calendar ── */}
+                {weightedNames.length > 0 && (() => {
+                  const calToday  = new Date();
+                  const calStart  = startOfWeek(startOfMonth(overloadCalendarMonth), { weekStartsOn: 1 });
+                  const calEnd    = endOfWeek(endOfMonth(overloadCalendarMonth), { weekStartsOn: 1 });
+                  const calDays   = eachDayOfInterval({ start: calStart, end: calEnd });
+                  const loggedDates = new Set(
+                    exercises
+                      .filter(ex => ex.name === effectiveExercise && ex.weight > 0)
+                      .map(ex => ex.workouts.date as string)
+                  );
+                  const rStart = overloadRangeStart ? startOfDay(overloadRangeStart) : null;
+                  const rEnd   = overloadRangeEnd   ? startOfDay(overloadRangeEnd)   : null;
+
+                  const handleDayTap = (day: Date) => {
+                    if (!rStart || rEnd) {
+                      setOverloadRangeStart(day);
+                      setOverloadRangeEnd(null);
+                    } else if (isSameDay(day, rStart)) {
+                      setOverloadRangeStart(null);
+                    } else if (day < rStart) {
+                      setOverloadRangeStart(day);
+                    } else {
+                      setOverloadRangeEnd(day);
+                    }
+                  };
+
+                  const hasRange = rStart && rEnd;
+
+                  return (
+                    <div className="border-b border-white/6">
+                      {/* Range label row */}
+                      <div className="flex items-center justify-between px-4 pt-3 pb-1">
+                        <div className="flex items-center gap-2">
+                          {rStart ? (
+                            <span className="text-[12px] font-semibold" style={{ color: 'var(--accent)' }}>
+                              {format(rStart, 'MMM d')}
+                            </span>
+                          ) : (
+                            <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.25)' }}>Pick start</span>
+                          )}
+                          {rStart && (
+                            <>
+                              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.2)' }}>→</span>
+                              {rEnd ? (
+                                <span className="text-[12px] font-semibold" style={{ color: 'var(--accent)' }}>
+                                  {format(rEnd, 'MMM d')}
+                                </span>
+                              ) : (
+                                <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.25)' }}>Pick end</span>
+                              )}
+                            </>
+                          )}
+                        </div>
+                        {(rStart || rEnd) && (
+                          <button
+                            type="button"
+                            onClick={() => { setOverloadRangeStart(null); setOverloadRangeEnd(null); }}
+                            className="text-[10px] font-semibold transition-all active:opacity-50"
+                            style={{ color: 'rgba(255,255,255,0.25)' }}
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Month nav */}
+                      <div className="flex items-center justify-between px-4 py-2">
+                        <button
+                          type="button"
+                          onClick={() => setOverloadCalendarMonth(m => subMonths(m, 1))}
+                          className="h-7 w-7 flex items-center justify-center rounded-lg transition-all active:scale-90"
+                          style={{ color: 'rgba(255,255,255,0.4)' }}
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>
+                          {format(overloadCalendarMonth, 'MMMM yyyy')}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setOverloadCalendarMonth(m => addMonths(m, 1))}
+                          disabled={isSameMonth(overloadCalendarMonth, calToday)}
+                          className="h-7 w-7 flex items-center justify-center rounded-lg transition-all active:scale-90 disabled:opacity-20"
+                          style={{ color: 'rgba(255,255,255,0.4)' }}
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Weekday headers */}
+                      <div className="grid grid-cols-7 px-2">
+                        {['M','T','W','T','F','S','S'].map((d, i) => (
+                          <div key={i} className="pb-1 text-center text-[9px] font-bold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.18)' }}>
+                            {d}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Day grid — no x-gap so range strip is seamless */}
+                      <div className="grid grid-cols-7 px-2 pb-3">
+                        {calDays.map((day, idx) => {
+                          const outside  = !isSameMonth(day, overloadCalendarMonth);
+                          const isToday  = isSameDay(day, calToday);
+                          const isFuture = day > calToday;
+                          const dateStr  = format(day, 'yyyy-MM-dd');
+                          const hasLog   = loggedDates.has(dateStr);
+                          const isStart  = rStart ? isSameDay(day, rStart) : false;
+                          const isEnd    = rEnd   ? isSameDay(day, rEnd)   : false;
+                          const inRange  = hasRange && day >= rStart! && day <= rEnd!;
+                          const colIdx   = idx % 7; // 0=Mon … 6=Sun
+
+                          // Range strip: full-width fill, clipped at start/end with rounded caps
+                          const stripLeft  = isStart || colIdx === 0;
+                          const stripRight = isEnd   || colIdx === 6;
+
+                          return (
+                            <button
+                              key={day.toISOString()}
+                              type="button"
+                              disabled={isFuture || outside}
+                              onClick={() => handleDayTap(day)}
+                              className="relative flex flex-col items-center py-0.5 h-10 transition-all active:scale-90 disabled:pointer-events-none"
+                              style={{ opacity: outside ? 0 : isFuture ? 0.2 : 1 }}
+                            >
+                              {/* Range fill strip (behind the circle) */}
+                              {inRange && !isStart && !isEnd && (
+                                <div
+                                  className="absolute top-1 bottom-1 z-0"
+                                  style={{
+                                    left: stripLeft ? '50%' : 0,
+                                    right: stripRight ? '50%' : 0,
+                                    background: 'rgba(200,255,0,0.10)',
+                                  }}
+                                />
+                              )}
+                              {/* Start cap — right half fill */}
+                              {isStart && rEnd && (
+                                <div className="absolute top-1 bottom-1 z-0" style={{ left: '50%', right: 0, background: 'rgba(200,255,0,0.10)' }} />
+                              )}
+                              {/* End cap — left half fill */}
+                              {isEnd && rStart && (
+                                <div className="absolute top-1 bottom-1 z-0" style={{ right: '50%', left: 0, background: 'rgba(200,255,0,0.10)' }} />
+                              )}
+
+                              {/* Day circle */}
+                              <div
+                                className="relative z-10 h-7 w-7 flex items-center justify-center rounded-full text-[12px] font-semibold transition-all"
+                                style={
+                                  isStart || isEnd
+                                    ? { background: 'var(--accent)', color: '#000' }
+                                    : isToday
+                                    ? { outline: '1.5px solid var(--accent)', color: 'var(--accent)' }
+                                    : inRange && hasLog
+                                    ? { background: 'rgba(200,255,0,0.18)', color: 'var(--accent)' }
+                                    : { color: inRange ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.4)' }
+                                }
+                              >
+                                {format(day, 'd')}
+                              </div>
+
+                              {/* Dot for logged session */}
+                              {hasLog && !isStart && !isEnd && (
+                                <div className="relative z-10 w-1 h-1 rounded-full" style={{ background: inRange ? 'var(--accent)' : 'rgba(200,255,0,0.3)', marginTop: 1 }} />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ── Content ── */}
                 <div className="p-5">
@@ -2650,6 +2886,7 @@ export const Progress: React.FC = () => {
           )}
         </motion.div>
       </div>
+
     </div>
   );
 

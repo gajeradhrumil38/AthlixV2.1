@@ -232,8 +232,8 @@ export const Layout: React.FC = () => {
       {/* ── AI Chat ──────────────────────────────────── */}
       {!isImmersiveRoute && <AiChat />}
 
-      {/* ── Floating Action Button ────────────────────── */}
-      {!isImmersiveRoute && (
+      {/* ── Floating Action Button (hidden on Calendar — it has its own dated + button) ── */}
+      {!isImmersiveRoute && !location.pathname.startsWith('/calendar') && (
         <NavLink
           to="/log?plan=1"
           onClick={() => { if (navigator.vibrate) navigator.vibrate(15); }}

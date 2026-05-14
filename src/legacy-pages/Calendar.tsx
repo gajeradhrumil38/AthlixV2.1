@@ -758,10 +758,10 @@ export const Calendar: React.FC = () => {
                 <AnimatePresence>
                   {showMonthPicker && (
                     <motion.div
-                      initial={{ opacity: 0, y: -8, scale: 0.97 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -8, scale: 0.97 }}
-                      transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.15, ease: 'easeOut' }}
                       className="absolute top-full left-0 mt-2 w-[220px] rounded-2xl shadow-xl z-50 p-3"
                       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
                     >
@@ -885,7 +885,6 @@ export const Calendar: React.FC = () => {
                         background: isAll ? 'var(--bg-elevated)' : `color-mix(in srgb, ${muscleColor(m)} 18%, var(--bg-elevated))`,
                         color: isAll ? 'var(--text-primary)' : muscleColor(m),
                         border: `1px solid ${isAll ? 'var(--border)' : muscleColor(m)}`,
-                        boxShadow: isAll ? 'none' : `0 0 10px color-mix(in srgb, ${muscleColor(m)} 25%, transparent)`,
                       }
                     : {
                         background: 'transparent',
@@ -928,9 +927,9 @@ export const Calendar: React.FC = () => {
                       {dayLabel}
                     </p>
                     <p className="text-[18px] font-bold" style={{ color: 'var(--text-primary)' }}>
-                      {selectedWorkouts.length > 0
-                        ? `${selectedWorkouts.length} workout${selectedWorkouts.length !== 1 ? 's' : ''}`
-                        : isSameDay(selectedDate, today) ? 'Nothing logged yet' : 'Rest day'}
+                      {isSameDay(selectedDate, today)
+                        ? selectedWorkouts.length > 0 ? 'Today' : 'Nothing logged yet'
+                        : selectedWorkouts.length > 0 ? dayLabel : 'Rest day'}
                     </p>
                   </div>
                   {!isSameDay(selectedDate, today) && (
