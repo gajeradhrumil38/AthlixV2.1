@@ -6,24 +6,31 @@ export type MuscleRegion =
   | 'Shoulders'
   | 'Biceps'
   | 'Triceps'
+  | 'Arms'
   | 'Legs'
+  | 'Glutes'
   | 'Core'
+  | 'Forearms'
   | 'Cardio'
-  | 'Yoga';
+  | 'Yoga'
+  | 'Mobility';
 
 export type MuscleSlug = Extract<
   Slug,
   | 'abs'
   | 'adductors'
+  | 'ankles'
   | 'biceps'
   | 'calves'
   | 'chest'
   | 'deltoids'
+  | 'forearm'
   | 'gluteal'
   | 'hamstring'
   | 'lower-back'
   | 'obliques'
   | 'quadriceps'
+  | 'tibialis'
   | 'trapezius'
   | 'triceps'
   | 'upper-back'
@@ -53,15 +60,18 @@ export const SECONDARY_LOAD_WEIGHT = 0.4;
 export const MUSCLE_SLUG_LABELS: Record<MuscleSlug, string> = {
   abs: 'Abs',
   adductors: 'Adductors',
+  ankles: 'Ankles',
   biceps: 'Biceps',
   calves: 'Calves',
   chest: 'Chest',
   deltoids: 'Shoulders',
+  forearm: 'Forearms',
   gluteal: 'Glutes',
   hamstring: 'Hamstrings',
   'lower-back': 'Lower Back',
   obliques: 'Obliques',
   quadriceps: 'Quads',
+  tibialis: 'Tibialis',
   trapezius: 'Traps',
   triceps: 'Triceps',
   'upper-back': 'Upper Back',
@@ -70,15 +80,18 @@ export const MUSCLE_SLUG_LABELS: Record<MuscleSlug, string> = {
 export const MUSCLE_SLUG_REGION_MAP: Record<MuscleSlug, MuscleRegion> = {
   abs: 'Core',
   adductors: 'Legs',
+  ankles: 'Legs',
   biceps: 'Biceps',
   calves: 'Legs',
   chest: 'Chest',
   deltoids: 'Shoulders',
-  gluteal: 'Legs',
+  forearm: 'Forearms',
+  gluteal: 'Glutes',
   hamstring: 'Legs',
   'lower-back': 'Back',
   obliques: 'Core',
   quadriceps: 'Legs',
+  tibialis: 'Legs',
   trapezius: 'Back',
   triceps: 'Triceps',
   'upper-back': 'Back',
@@ -158,11 +171,14 @@ const FALLBACK_TARGETS_BY_GROUP: Record<MuscleRegion, ExerciseMuscleTarget[]> = 
   Shoulders: [target('deltoids', 1), target('trapezius', 0.18)],
   Biceps:    [target('biceps', 1)],
   Triceps:   [target('triceps', 1)],
+  Arms:      [target('biceps', 0.55), target('triceps', 0.55), target('forearm', 0.2)],
   Legs:      [target('quadriceps', 0.8), target('gluteal', 0.55), target('hamstring', 0.45), target('adductors', 0.22), target('calves', 0.15)],
+  Glutes:    [target('gluteal', 1), target('hamstring', 0.45), target('adductors', 0.18)],
   Core:      [target('abs', 0.82), target('obliques', 0.42)],
+  Forearms:  [target('forearm', 1)],
   Cardio:    [target('quadriceps', 0.45), target('calves', 0.42), target('hamstring', 0.22), target('gluteal', 0.18)],
-  // Yoga targets flexibility + isometric strength across the whole body
   Yoga:      [target('lower-back', 0.45), target('hamstring', 0.45), target('abs', 0.38), target('deltoids', 0.3), target('adductors', 0.28), target('gluteal', 0.22)],
+  Mobility:  [target('lower-back', 0.5), target('hamstring', 0.45), target('adductors', 0.4), target('gluteal', 0.3), target('tibialis', 0.2), target('calves', 0.18)],
 };
 
 const EXERCISE_MUSCLE_PATTERNS: ExercisePatternProfile[] = [
@@ -480,6 +496,46 @@ const EXERCISE_MUSCLE_PATTERNS: ExercisePatternProfile[] = [
     primaryRegions: ['Yoga', 'Core'],
     secondaryRegions: ['Back', 'Legs'],
   },
+  // ── Forearms ──────────────────────────────────────────────────────────────
+  {
+    patterns: [/wrist curl/i, /wrist extension/i, /reverse wrist/i, /finger curl/i, /plate pinch/i, /wrist roller/i, /grip training/i, /grip strength/i],
+    targets: [target('forearm', 1)],
+    primaryRegions: ['Forearms'],
+  },
+  {
+    patterns: [/farmers (carry|walk)/i, /farmer'?s (carry|walk)/i, /loaded carry/i],
+    targets: [target('trapezius', 0.86), target('upper-back', 0.4), target('forearm', 0.55), target('abs', 0.35), target('obliques', 0.28), target('quadriceps', 0.24), target('calves', 0.2)],
+    primaryRegions: ['Back', 'Forearms'],
+    secondaryRegions: ['Core', 'Legs'],
+  },
+
+  // ── Ankle / Tibialis ──────────────────────────────────────────────────────
+  {
+    patterns: [/tibialis raise/i, /tibialis/i],
+    targets: [target('tibialis', 1), target('ankles', 0.3)],
+    primaryRegions: ['Legs'],
+  },
+  {
+    patterns: [/ankle circle/i, /ankle dorsiflexion/i, /ankle mobility/i, /calf raise/i],
+    targets: [target('calves', 0.8), target('tibialis', 0.45), target('ankles', 0.35)],
+    primaryRegions: ['Legs'],
+  },
+
+  // ── Glute isolation ───────────────────────────────────────────────────────
+  {
+    patterns: [/glute kickback/i, /donkey kick/i, /fire hydrant/i, /clamshell/i, /side lying (leg|hip) raise/i, /hip abduction/i],
+    targets: [target('gluteal', 1), target('adductors', 0.22)],
+    primaryRegions: ['Glutes'],
+  },
+
+  // ── Mobility / stretching ─────────────────────────────────────────────────
+  {
+    patterns: [/\bmobility\b/i, /foam roll/i, /lacrosse ball/i, /90\/90/i, /couch stretch/i, /pigeon/i, /hip flexor stretch/i, /thoracic/i, /world.?s greatest/i],
+    targets: [target('lower-back', 0.5), target('hamstring', 0.45), target('adductors', 0.4), target('gluteal', 0.3), target('tibialis', 0.15), target('calves', 0.15)],
+    primaryRegions: ['Mobility'],
+    secondaryRegions: ['Legs', 'Back'],
+  },
+
   // ── Running / treadmill ───────────────────────────────────────────────────
   {
     patterns: [/treadmill/i, /elliptical/i, /\brun(ning)?\b/i, /\bwalk(ing)?\b/i, /\bjog(ging)?\b/i, /sprint/i],

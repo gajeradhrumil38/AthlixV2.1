@@ -726,10 +726,14 @@ export const Calendar: React.FC = () => {
         }}
       >
         {/* ── Expanded controls (hidden when scrolled) ── */}
-        <motion.div
-          animate={{ height: isScrolled ? 0 : 'auto', opacity: isScrolled ? 0 : 1 }}
-          transition={{ duration: 0.22, ease: 'easeInOut' }}
-          style={{ overflow: 'hidden' }}
+        <div
+          style={{
+            overflow: 'hidden',
+            maxHeight: isScrolled ? 0 : 600,
+            opacity: isScrolled ? 0 : 1,
+            transition: 'max-height 0.25s ease, opacity 0.2s ease',
+            pointerEvents: isScrolled ? 'none' : 'auto',
+          }}
         >
           <div className="px-4 pt-3">
             {/* Month row */}
@@ -831,13 +835,17 @@ export const Calendar: React.FC = () => {
             {viewMode === 'week' && renderWeekStrip()}
             {viewMode === 'month' && renderMonthGrid()}
           </div>
-        </motion.div>
+        </div>
 
         {/* ── Compact ring strip (visible only when scrolled) ── */}
-        <motion.div
-          animate={{ height: isScrolled ? 'auto' : 0, opacity: isScrolled ? 1 : 0 }}
-          transition={{ duration: 0.22, ease: 'easeInOut' }}
-          style={{ overflow: 'hidden' }}
+        <div
+          style={{
+            overflow: 'hidden',
+            maxHeight: isScrolled ? 80 : 0,
+            opacity: isScrolled ? 1 : 0,
+            transition: 'max-height 0.25s ease, opacity 0.2s ease',
+            pointerEvents: isScrolled ? 'auto' : 'none',
+          }}
         >
           {viewMode !== 'month' && renderCompactStrip()}
           {viewMode === 'month' && (
@@ -850,7 +858,7 @@ export const Calendar: React.FC = () => {
               </span>
             </div>
           )}
-        </motion.div>
+        </div>
       </div>
 
       {/* ── Backdrop to close month picker ── */}

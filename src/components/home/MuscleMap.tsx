@@ -29,10 +29,11 @@ const SLUG_HEX: Record<string, string> = {
   quadriceps:    '#EF9F27',
   hamstring:     '#EF9F27',
   calves:        '#EF9F27',
-  gluteal:       '#EF9F27',
+  gluteal:       '#F4B96A',
   adductors:     '#EF9F27',
-  tibialis:      '#EF9F27',
-  forearm:       '#85B7EB',
+  tibialis:      '#98D4E8',
+  ankles:        '#98D4E8',
+  forearm:       '#98D4E8',
   neck:          '#AFA9EC',
 }
 const SLUG_HEX_FALLBACK = '#8692a4'

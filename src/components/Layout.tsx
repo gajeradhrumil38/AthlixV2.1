@@ -32,6 +32,13 @@ export const Layout: React.FC = () => {
   const [tappedTab, setTappedTab] = useState<string | null>(null);
   const isImmersiveRoute = location.pathname === '/log' || location.pathname.startsWith('/run');
   const isHomeRoute = location.pathname === '/';
+  // Pages that manage their own internal padding — no wrapper padding needed
+  const isSelfPaddedRoute =
+    isHomeRoute ||
+    location.pathname.startsWith('/calendar') ||
+    location.pathname.startsWith('/progress') ||
+    location.pathname.startsWith('/templates') ||
+    location.pathname.startsWith('/timeline');
   const swipeStartRef = useRef<{ x: number; y: number; ts: number } | null>(null);
   const tapTimerRef = useRef<number | null>(null);
 
@@ -213,7 +220,7 @@ export const Layout: React.FC = () => {
       >
         <div
           className={`flex-1 w-full ${
-            isImmersiveRoute || isHomeRoute
+            isImmersiveRoute || isSelfPaddedRoute
               ? ''
               : 'px-3 pt-4 pb-6 sm:px-5 md:px-8 md:pt-8 md:pb-8'
           }`}
