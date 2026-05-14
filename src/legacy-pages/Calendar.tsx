@@ -658,6 +658,58 @@ export const Calendar: React.FC = () => {
     ? 'Yesterday'
     : format(selectedDate, 'EEEE, MMM d');
 
+  const isScrolled = windowScrollY > 80;
+
+  // ── Compact ring strip (shown when scrolled) ─────────────────────────────────
+  const renderCompactStrip = () => {
+    const days = viewMode === 'today'
+      ? ([-2, -1, 0, 1, 2] as const).map((o) => addDays(selectedDate, o))
+      : weekDays;
+
+    return (
+      <div className="flex items-center justify-between px-2 pb-2 pt-1 gap-1">
+        {days.map((day, i) => {
+          const isCenter  = viewMode === 'today' ? i === 2 : isSameDay(day, selectedDate);
+          const isTodayDay = dateFnsIsToday(day);
+          const dots      = getForDay(day);
+          const size      = isCenter ? 38 : 30;
+          const r         = isCenter ? 17 : 13;
+          return (
+            <button
+              key={day.toISOString()}
+              onClick={() => selectDay(day)}
+              className="flex flex-col items-center gap-0.5 flex-1 active:scale-95 transition-all"
+              style={{ opacity: viewMode === 'today' ? (Math.abs(i - 2) === 0 ? 1 : Math.abs(i - 2) === 1 ? 0.6 : 0.3) : 1 }}
+            >
+              <span
+                className="text-[8px] font-bold uppercase tracking-widest"
+                style={{ color: isTodayDay ? 'var(--accent)' : isCenter ? 'var(--text-secondary)' : 'var(--text-muted)' }}
+              >
+                {isTodayDay && !isCenter ? 'NOW' : format(day, 'EEEEE')}
+              </span>
+              <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+                <DayRing workouts={dots} size={size} r={r} strokeWidth={isCenter ? 2.5 : 2} />
+                <div
+                  className="flex items-center justify-center rounded-full font-bold"
+                  style={{
+                    width:  isCenter ? 30 : 22,
+                    height: isCenter ? 30 : 22,
+                    fontSize: isCenter ? 13 : 11,
+                    background: isTodayDay ? 'var(--accent)' : isCenter ? 'var(--bg-elevated)' : 'transparent',
+                    color:      isTodayDay ? '#000'          : isCenter ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    outline: isCenter && !isTodayDay ? '1.5px solid rgba(200,255,0,0.45)' : 'none',
+                  }}
+                >
+                  {format(day, 'd')}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
   // ── JSX ───────────────────────────────────────────────────────────────────────
 
   return (
@@ -665,145 +717,140 @@ export const Calendar: React.FC = () => {
 
       {/* ── Sticky Header ── */}
       <div
-        className="sticky top-0 z-20 px-4 pt-3 scroll-fade-header"
-        style={{ background: 'var(--bg-base)' }}
+        className="sticky top-0 z-20 scroll-fade-header"
+        style={{
+          background: isScrolled ? 'rgba(10,12,16,0.92)' : 'var(--bg-base)',
+          backdropFilter: isScrolled ? 'blur(14px)' : 'none',
+          WebkitBackdropFilter: isScrolled ? 'blur(14px)' : 'none',
+          transition: 'background 0.25s ease, backdrop-filter 0.25s ease',
+        }}
       >
-        {/* Month row */}
-        <div className="flex items-center justify-between mb-3">
-          {/* Month picker trigger */}
-          <div className="relative">
-            <button
-              className="flex items-center gap-1.5"
-              onClick={() => { setShowMonthPicker((p) => !p); setPickerYear(anchor.getFullYear()); }}
-            >
-              <span className="text-[24px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                {format(anchor, 'MMMM')}
-              </span>
-              <span className="text-[16px] font-medium" style={{ color: 'var(--text-muted)' }}>
-                {format(anchor, 'yyyy')}
-              </span>
-              <ChevronDown
-                className="w-4 h-4 transition-transform"
-                style={{ color: 'var(--text-muted)', transform: showMonthPicker ? 'rotate(180deg)' : 'none' }}
-              />
-            </button>
-
-            {/* Month picker dropdown */}
-            <AnimatePresence>
-              {showMonthPicker && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.97 }}
-                  transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                  className="absolute top-full left-0 mt-2 w-[220px] rounded-2xl shadow-xl z-50 p-3"
-                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
-                >
-                  {/* Year nav */}
-                  <div className="flex items-center justify-between mb-2 px-1">
-                    <button
-                      onClick={() => setPickerYear((y) => y - 1)}
-                      className="h-7 w-7 flex items-center justify-center rounded-lg"
-                      style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                    </button>
-                    <span className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>{pickerYear}</span>
-                    <button
-                      onClick={() => setPickerYear((y) => y + 1)}
-                      className="h-7 w-7 flex items-center justify-center rounded-lg"
-                      style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
-                    >
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  {/* Month grid */}
-                  <div className="grid grid-cols-3 gap-1">
-                    {MONTHS.map((mn, idx) => {
-                      const isActive = anchor.getMonth() === idx && anchor.getFullYear() === pickerYear;
-                      return (
-                        <button
-                          key={mn}
-                          onClick={() => {
-                            const next = new Date(pickerYear, idx, 1);
-                            setAnchor(next);
-                            setSelectedDate(next);
-                            setShowMonthPicker(false);
-                          }}
-                          className="py-1.5 rounded-xl text-[12px] font-semibold transition-all"
-                          style={
-                            isActive
-                              ? { background: 'var(--accent)', color: '#000' }
-                              : { background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }
-                          }
-                        >
-                          {mn}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* Right: log */}
-          <div className="flex items-center gap-1.5">
-            <Link
-              to={`/log?date=${format(selectedDate, 'yyyy-MM-dd')}`}
-              className="h-8 w-8 flex items-center justify-center rounded-full"
-              style={{ background: 'var(--accent)', color: '#000' }}
-            >
-              <Plus className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-
-        {/* View tabs */}
-        <div className="flex items-center gap-2 mb-3">
-          <button
-            onClick={prevPeriod}
-            className="h-8 w-8 flex items-center justify-center rounded-full shrink-0"
-            style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <div
-            className="flex flex-1 gap-1 rounded-xl p-1"
-            style={{ background: 'var(--bg-elevated)' }}
-          >
-            {([
-              { id: 'today', label: 'Today', Icon: Sun },
-              { id: 'week',  label: 'Week',  Icon: CalendarDays },
-              { id: 'month', label: 'Month', Icon: LayoutGrid },
-            ] as const).map(({ id, label, Icon }) => {
-              const active = viewMode === id;
-              return (
+        {/* ── Expanded controls (hidden when scrolled) ── */}
+        <motion.div
+          animate={{ height: isScrolled ? 0 : 'auto', opacity: isScrolled ? 0 : 1 }}
+          transition={{ duration: 0.22, ease: 'easeInOut' }}
+          style={{ overflow: 'hidden' }}
+        >
+          <div className="px-4 pt-3">
+            {/* Month row */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="relative">
                 <button
-                  key={id}
-                  onClick={() => changeViewMode(id)}
-                  className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-[12px] font-semibold transition-all"
-                  style={active ? { background: 'var(--bg-surface)', color: 'var(--text-primary)' } : { color: 'var(--text-muted)' }}
+                  className="flex items-center gap-1.5"
+                  onClick={() => { setShowMonthPicker((p) => !p); setPickerYear(anchor.getFullYear()); }}
                 >
-                  <Icon className="w-3 h-3" />
-                  {label}
+                  <span className="text-[24px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                    {format(anchor, 'MMMM')}
+                  </span>
+                  <span className="text-[16px] font-medium" style={{ color: 'var(--text-muted)' }}>
+                    {format(anchor, 'yyyy')}
+                  </span>
+                  <ChevronDown
+                    className="w-4 h-4 transition-transform"
+                    style={{ color: 'var(--text-muted)', transform: showMonthPicker ? 'rotate(180deg)' : 'none' }}
+                  />
                 </button>
-              );
-            })}
-          </div>
-          <button
-            onClick={nextPeriod}
-            className="h-8 w-8 flex items-center justify-center rounded-full shrink-0"
-            style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
 
-        {/* Calendar (today strip, week strip, or month grid) */}
-        {viewMode === 'today' && renderTodayStrip()}
-        {viewMode === 'week' && renderWeekStrip()}
-        {viewMode === 'month' && renderMonthGrid()}
+                <AnimatePresence>
+                  {showMonthPicker && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                      transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                      className="absolute top-full left-0 mt-2 w-[220px] rounded-2xl shadow-xl z-50 p-3"
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+                    >
+                      <div className="flex items-center justify-between mb-2 px-1">
+                        <button onClick={() => setPickerYear((y) => y - 1)} className="h-7 w-7 flex items-center justify-center rounded-lg" style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>{pickerYear}</span>
+                        <button onClick={() => setPickerYear((y) => y + 1)} className="h-7 w-7 flex items-center justify-center rounded-lg" style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1">
+                        {MONTHS.map((mn, idx) => {
+                          const isActive = anchor.getMonth() === idx && anchor.getFullYear() === pickerYear;
+                          return (
+                            <button
+                              key={mn}
+                              onClick={() => { const next = new Date(pickerYear, idx, 1); setAnchor(next); setSelectedDate(next); setShowMonthPicker(false); }}
+                              className="py-1.5 rounded-xl text-[12px] font-semibold transition-all"
+                              style={isActive ? { background: 'var(--accent)', color: '#000' } : { background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+                            >
+                              {mn}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <Link
+                  to={`/log?date=${format(selectedDate, 'yyyy-MM-dd')}`}
+                  className="h-8 w-8 flex items-center justify-center rounded-full"
+                  style={{ background: 'var(--accent)', color: '#000' }}
+                >
+                  <Plus className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+
+            {/* View tabs */}
+            <div className="flex items-center gap-2 mb-3">
+              <button onClick={prevPeriod} className="h-8 w-8 flex items-center justify-center rounded-full shrink-0" style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <div className="flex flex-1 gap-1 rounded-xl p-1" style={{ background: 'var(--bg-elevated)' }}>
+                {([
+                  { id: 'today', label: 'Today', Icon: Sun },
+                  { id: 'week',  label: 'Week',  Icon: CalendarDays },
+                  { id: 'month', label: 'Month', Icon: LayoutGrid },
+                ] as const).map(({ id, label, Icon }) => {
+                  const active = viewMode === id;
+                  return (
+                    <button key={id} onClick={() => changeViewMode(id)} className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-[12px] font-semibold transition-all" style={active ? { background: 'var(--bg-surface)', color: 'var(--text-primary)' } : { color: 'var(--text-muted)' }}>
+                      <Icon className="w-3 h-3" />
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <button onClick={nextPeriod} className="h-8 w-8 flex items-center justify-center rounded-full shrink-0" style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Full calendar strip (today / week / month) */}
+            {viewMode === 'today' && renderTodayStrip()}
+            {viewMode === 'week' && renderWeekStrip()}
+            {viewMode === 'month' && renderMonthGrid()}
+          </div>
+        </motion.div>
+
+        {/* ── Compact ring strip (visible only when scrolled) ── */}
+        <motion.div
+          animate={{ height: isScrolled ? 'auto' : 0, opacity: isScrolled ? 1 : 0 }}
+          transition={{ duration: 0.22, ease: 'easeInOut' }}
+          style={{ overflow: 'hidden' }}
+        >
+          {viewMode !== 'month' && renderCompactStrip()}
+          {viewMode === 'month' && (
+            <div className="px-4 py-2 flex items-center justify-between">
+              <span className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>
+                {format(anchor, 'MMMM yyyy')}
+              </span>
+              <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                {format(selectedDate, 'MMM d')}
+              </span>
+            </div>
+          )}
+        </motion.div>
       </div>
 
       {/* ── Backdrop to close month picker ── */}
@@ -815,23 +862,35 @@ export const Calendar: React.FC = () => {
       <div className="px-4 pt-4 space-y-4">
 
         {/* Muscle filter strip */}
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+        <div className="flex flex-wrap gap-1.5">
           {MUSCLE_FILTERS.map((m) => {
-            const isAll    = m === 'All';
-            const active   = isAll ? activeFilter === null : activeFilter === m;
+            const isAll  = m === 'All';
+            const active = isAll ? activeFilter === null : activeFilter === m;
             return (
               <button
                 key={m}
                 onClick={() => setActiveFilter(isAll ? null : active ? null : m)}
-                className="flex-shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider transition-all"
+                className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-all active:scale-95"
                 style={
                   active
-                    ? { background: isAll ? 'var(--bg-elevated)' : muscleColor(m), color: isAll ? 'var(--text-primary)' : '#000', border: `1px solid ${isAll ? 'var(--border)' : muscleColor(m)}` }
-                    : { background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)' }
+                    ? {
+                        background: isAll ? 'var(--bg-elevated)' : `color-mix(in srgb, ${muscleColor(m)} 18%, var(--bg-elevated))`,
+                        color: isAll ? 'var(--text-primary)' : muscleColor(m),
+                        border: `1px solid ${isAll ? 'var(--border)' : muscleColor(m)}`,
+                        boxShadow: isAll ? 'none' : `0 0 10px color-mix(in srgb, ${muscleColor(m)} 25%, transparent)`,
+                      }
+                    : {
+                        background: 'transparent',
+                        color: 'var(--text-secondary)',
+                        border: '1px solid var(--border)',
+                      }
                 }
               >
                 {!isAll && (
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: active ? '#000' : muscleColor(m) }} />
+                  <span
+                    className="h-1.5 w-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: active ? muscleColor(m) : muscleColor(m), opacity: active ? 1 : 0.6 }}
+                  />
                 )}
                 {m}
               </button>
