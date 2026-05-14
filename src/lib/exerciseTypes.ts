@@ -73,7 +73,7 @@ const EXACT_TYPE_MAP: Record<string, ExerciseInputType> = {
   yoga:             'time_only',
   meditation:       'time_only',
   'hollow hold':    'time_only',
-  'dead bug':       'time_only',
+  'dead bug':       'reps_only',
 
   // ── Yoga poses / flows ──
   'sun salutation':         'time_only',
@@ -188,11 +188,96 @@ const EXACT_TYPE_MAP: Record<string, ExerciseInputType> = {
   'box jump':  'height_reps',
   'box jumps': 'height_reps',
 
+  // ── Glutes / bodyweight reps ──
+  'glute bridge':               'reps_only',
+  'single leg hip thrust':      'reps_only',
+  'clamshell':                  'reps_only',
+  'clamshells':                 'reps_only',
+  'side lying hip abduction':   'reps_only',
+  'hip abduction (lying)':      'reps_only',
+
+  // ── Legs bodyweight / reps only ──
+  'sissy squat':                'reps_only',
+  'reverse nordic':             'reps_only',
+  'terminal knee extension':    'reps_only',
+  'tke':                        'reps_only',
+  'ankle circles':              'reps_only',
+  'ankle dorsiflexion':         'reps_only',
+  'tibialis raise':             'reps_only',
+  'hip circle':                 'reps_only',
+
+  // ── Core timed holds ──
+  'side plank':                 'time_only',
+  'copenhagen plank':           'time_only',
+  'l-sit':                      'time_only',
+  'l sit':                      'time_only',
+
+  // ── Core reps ──
+  'bird dog':                   'reps_only',
+  'reverse crunch':             'reps_only',
+  'reverse crunches':           'reps_only',
+  'decline crunch':             'reps_only',
+  'decline crunches':           'reps_only',
+
+  // ── Shoulder bodyweight ──
+  'band pull apart':            'reps_only',
+  'band pull aparts':           'reps_only',
+  'pike push-up':               'reps_only',
+  'pike push ups':              'reps_only',
+  'pike pushup':                'reps_only',
+
+  // ── Back bodyweight ──
+  'inverted row':               'reps_only',
+  'inverted rows':              'reps_only',
+  'neutral grip pull-up':       'reps_only',
+  'neutral grip pullup':        'reps_only',
+
+  // ── Triceps bodyweight ──
+  'tricep dips':                'reps_only',
+
+  // ── Mobility — timed ──
+  'ankle dorsiflexion stretch': 'time_only',
+  'calf stretch':               'time_only',
+  '90/90 hip stretch':          'time_only',
+  'couch stretch':              'time_only',
+  'figure 4 stretch':           'time_only',
+  'thoracic extension':         'time_only',
+  'thread the needle':          'time_only',
+  'band distraction hip':       'time_only',
+  'lacrosse ball massage':      'time_only',
+  'lateral lunge stretch':      'time_only',
+  'doorway chest stretch':      'time_only',
+
+  // ── Mobility — reps ──
+  'neck rolls':                 'reps_only',
+  'shoulder circles':           'reps_only',
+  'wrist circles':              'reps_only',
+
+  // ── Cardio timed ──
+  'boxing':                     'time_only',
+  'hiit':                       'time_only',
+  'sprint intervals':           'time_only',
+
+  // ── Forearms ──
+  'wrist curl':                 'weight_reps',
+  'reverse wrist curl':         'weight_reps',
+  'wrist roller':               'reps_only',
+  'plate pinch':                'time_only',
+  'finger curls':               'weight_reps',
+  'wrist extension':            'weight_reps',
+  'grip training':              'time_only',
+  'farmers carry':              'distance_only',
+
   // ── Weight + reps (explicit to prevent false pattern matches) ──
-  'walking lunge':    'weight_reps',
-  'walking lunges':   'weight_reps',
-  'reverse lunge':    'weight_reps',
-  'dumbbell walking lunge': 'weight_reps',
+  'walking lunge':              'weight_reps',
+  'walking lunges':             'weight_reps',
+  'reverse lunge':              'weight_reps',
+  'dumbbell walking lunge':     'weight_reps',
+  'step up':                    'weight_reps',
+  'step ups':                   'weight_reps',
+  'vmo squat':                  'weight_reps',
+  'goblet squat':               'weight_reps',
+  'split squat':                'weight_reps',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

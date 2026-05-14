@@ -16,8 +16,12 @@ export const MUSCLE_COLOR: Record<string, string> = {
   Core:       'var(--core)',
   Biceps:     'var(--biceps)',
   Triceps:    'var(--triceps)',
-  Arms:       'var(--biceps)',       // alias → biceps tone
+  Arms:       'var(--biceps)',
   Cardio:     'var(--cardio)',
+  Glutes:     'var(--glutes)',
+  Forearms:   'var(--forearms)',
+  Yoga:       'var(--yoga)',
+  Mobility:   'var(--mobility)',
   'Full Body':'var(--text-secondary)',
 };
 
