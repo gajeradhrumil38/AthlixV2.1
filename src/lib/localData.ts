@@ -404,7 +404,7 @@ const readDb = (): LocalDatabase => {
       start_workout_enabled: Boolean((profile as any).start_workout_enabled),
       show_start_sheet: Boolean((profile as any).show_start_sheet),
       body_weight: typeof (profile as any).body_weight === 'number' ? (profile as any).body_weight : null,
-      body_weight_unit: (profile as any).body_weight_unit === 'lbs' ? 'lbs' : 'kg',
+      body_weight_unit: (profile as any).body_weight_unit === 'kg' ? 'kg' : 'lbs',
       height_feet: typeof (profile as any).height_feet === 'number' ? (profile as any).height_feet : null,
       height_inches: typeof (profile as any).height_inches === 'number' ? (profile as any).height_inches : null,
     })) as LocalProfile[];
@@ -471,12 +471,12 @@ export const signUpLocal = async (email: string, password: string, fullName?: st
   const profile: LocalProfile = {
     id: user.id,
     full_name: fullName || normalizedEmail.split('@')[0],
-    unit_preference: 'kg',
+    unit_preference: 'lbs',
     theme_preference: 'dark',
     start_workout_enabled: false,
     show_start_sheet: false,
     body_weight: null,
-    body_weight_unit: 'kg',
+    body_weight_unit: 'lbs',
     height_feet: null,
     height_inches: null,
     created_at: nowIso(),
