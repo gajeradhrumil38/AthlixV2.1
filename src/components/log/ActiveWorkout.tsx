@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Activity, ArrowLeft, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Pause, Play, Plus, Timer, Trash2, Weight, X } from 'lucide-react';
+import { Activity, ArrowLeft, Bookmark, BookmarkCheck, CalendarDays, Check, ChevronLeft, ChevronRight, Pause, Play, Plus, Timer, Trash2, Weight, X } from 'lucide-react';
 import { muscleColor } from '../../lib/muscleColors';
 import toast from 'react-hot-toast';
-import type { WorkoutState, ExerciseEntry, Set } from '../../legacy-pages/Log';
+import type { WorkoutState, ExerciseEntry, Set as WorkoutSet } from '../../legacy-pages/Log';
 import { ExerciseContent } from './ExerciseContent';
 import { ExercisePicker } from './ExercisePicker';
 import { DialPicker } from './DialPicker';
@@ -126,6 +126,12 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const [loadedPlan, setLoadedPlan] = useState<{ id: string; title: string } | null>(null);
+  const [pendingPlanExercises, setPendingPlanExercises] = useState<ExerciseEntry[]>([]);
+  const [workoutOnlyExerciseIds, setWorkoutOnlyExerciseIds] = useState<Set<string>>(new Set());
+  const [showPlanSaveOptions, setShowPlanSaveOptions] = useState(false);
+  const loadedPlanRef = useRef<{ id: string; title: string } | null>(null);
+  useEffect(() => { loadedPlanRef.current = loadedPlan; }, [loadedPlan]);
 
   // ── Rest timer ────────────────────────────────────────────────────────────
   const REST_DURATION = 90; // seconds
@@ -156,33 +162,107 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
   useEffect(() => () => { if (restIntervalRef.current) window.clearInterval(restIntervalRef.current); }, []);
 
+  const GENERIC_TITLES = ['workout', 'morning workout', 'afternoon workout', 'evening workout'];
+
+  const buildTemplateExercises = (exs: ExerciseEntry[]) =>
+    exs.map((ex, i) => ({
+      name: ex.name,
+      muscle_group: ex.muscleGroup,
+      default_sets: ex.sets.length || 3,
+      default_reps: Math.round(ex.sets.reduce((s, r) => s + (r.reps ?? 0), 0) / (ex.sets.length || 1)) || 10,
+      default_weight: Math.round(ex.sets.reduce((s, r) => s + (r.weight ?? 0), 0) / (ex.sets.length || 1)) || 0,
+      exercise_db_id: ex.exercise_db_id ?? null,
+      order_index: i,
+    }));
+
   const handleSaveAsTemplate = useCallback(async () => {
     if (!user || workout.exercises.length === 0) return;
+    const plan = loadedPlanRef.current;
+    if (plan) {
+      setShowPlanSaveOptions(true);
+      return;
+    }
     setSavingTemplate(true);
     try {
       await saveTemplate(user.id, {
         title: workout.title,
-        exercises: workout.exercises.map((ex, i) => ({
-          name: ex.name,
-          muscle_group: ex.muscleGroup,
-          default_sets: ex.sets.length || 3,
-          default_reps: Math.round(
-            ex.sets.reduce((sum, s) => sum + (s.reps ?? 0), 0) / (ex.sets.length || 1),
-          ) || 10,
-          default_weight: Math.round(
-            ex.sets.reduce((sum, s) => sum + (s.weight ?? 0), 0) / (ex.sets.length || 1),
-          ) || 0,
-          exercise_db_id: ex.exercise_db_id ?? null,
-          order_index: i,
-        })),
+        exercises: buildTemplateExercises(workout.exercises),
       });
-      toast.success('Saved as template!');
+      toast.success('Saved as plan!');
     } catch {
-      toast.error('Could not save template');
+      toast.error('Could not save plan');
     } finally {
       setSavingTemplate(false);
     }
-  }, [user, workout]);
+  }, [user, workout]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleLoadPlan = useCallback((tmpl: { id: string; title: string; template_exercises: Array<{ name: string; muscle_group?: string | null; exercise_db_id?: string | null; default_sets?: number; default_reps?: number; default_weight?: number }> }) => {
+    const newEntries: ExerciseEntry[] = tmpl.template_exercises.map((te) => ({
+      id: createSetId(),
+      name: te.name,
+      muscleGroup: te.muscle_group || 'Core',
+      exercise_db_id: te.exercise_db_id || undefined,
+      sets: Array.from({ length: te.default_sets || 3 }, () => ({
+        id: createSetId(),
+        weight: te.default_weight ?? null,
+        reps: te.default_reps ?? null,
+        done: false,
+        planned_weight: te.default_weight ?? null,
+        planned_reps: te.default_reps ?? null,
+      })),
+    }));
+    setLoadedPlan({ id: tmpl.id, title: tmpl.title });
+    setPendingPlanExercises([]);
+    setWorkoutOnlyExerciseIds(new Set());
+    setWorkout((prev) => {
+      if (!prev) return prev;
+      const existing = new Set(prev.exercises.map((e) => e.name.toLowerCase()));
+      const toAdd = newEntries.filter((e) => !existing.has(e.name.toLowerCase()));
+      const isGeneric = GENERIC_TITLES.includes(prev.title.trim().toLowerCase());
+      return { ...prev, title: isGeneric ? tmpl.title : prev.title, exercises: [...prev.exercises, ...toAdd] };
+    });
+    setShowExercisePicker(false);
+  }, [setWorkout]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const doUpdatePlan = useCallback(async (exs: ExerciseEntry[], plan: { id: string; title: string }) => {
+    if (!user) return;
+    setSavingTemplate(true);
+    try {
+      await saveTemplate(user.id, {
+        templateId: plan.id,
+        title: plan.title,
+        exercises: buildTemplateExercises(exs),
+      });
+      toast.success('Plan updated!');
+      setPendingPlanExercises([]);
+    } catch {
+      toast.error('Failed to update plan');
+    } finally {
+      setSavingTemplate(false);
+    }
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handlePendingUpdatePlan = () => {
+    const plan = loadedPlanRef.current;
+    if (!plan) return;
+    const planExercises = workout.exercises.filter((e) => !workoutOnlyExerciseIds.has(e.id));
+    doUpdatePlan(planExercises, plan);
+  };
+
+  const handlePendingWorkoutOnly = () => {
+    const pendingIds = new Set(pendingPlanExercises.map((e) => e.id));
+    setWorkoutOnlyExerciseIds((prev) => new Set([...prev, ...pendingIds]));
+    setPendingPlanExercises([]);
+  };
+
+  const handlePendingCancel = () => {
+    const pendingIds = new Set(pendingPlanExercises.map((e) => e.id));
+    setWorkout((prev) => {
+      if (!prev) return prev;
+      return { ...prev, exercises: prev.exercises.filter((e) => !pendingIds.has(e.id)) };
+    });
+    setPendingPlanExercises([]);
+  };
 
   const createSetId = () =>
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -329,7 +409,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       }
 
       const previousSet = activeExercise.sets[activeExercise.sets.length - 1];
-      const nextSet: Set = {
+      const nextSet: WorkoutSet = {
         id: createSetId(),
         weight: previousSet?.weight ?? 0,
         reps: previousSet?.reps ?? 0,
@@ -362,7 +442,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       }
       const source = activeExercise.sets[setIndex];
       if (!source) return prev;
-      const copy: Set = { id: createSetId(), weight: source.weight, reps: source.reps, done: false };
+      const copy: WorkoutSet = { id: createSetId(), weight: source.weight, reps: source.reps, done: false };
       const newSets = [...activeExercise.sets];
       newSets.splice(setIndex + 1, 0, copy);
       haptics.tick();
@@ -468,6 +548,11 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
 
         if (summary) {
           setHiddenPrefillExerciseIds((prev) => prev.filter((entry) => entry !== nextExercise.id));
+        }
+
+        // When a plan is loaded, track manually-added exercises for the "Update Plan?" popup
+        if (loadedPlanRef.current) {
+          setPendingPlanExercises((prev) => [...prev, nextExercise]);
         }
 
         setActiveIndex(nextIndex);
@@ -695,10 +780,15 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             type="button"
             onClick={handleSaveAsTemplate}
             disabled={savingTemplate || workout.exercises.length === 0}
-            title="Save as template"
-            className="inline-flex shrink-0 h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-[var(--bg-surface)] text-[var(--text-secondary)] disabled:opacity-40"
+            title={loadedPlan ? `Update "${loadedPlan.title}"` : 'Save as plan'}
+            className="inline-flex shrink-0 h-8 items-center justify-center rounded-xl border disabled:opacity-40"
+            style={loadedPlan
+              ? { width: 'auto', paddingLeft: 10, paddingRight: 10, gap: 4, background: 'rgba(200,255,0,0.12)', borderColor: 'rgba(200,255,0,0.3)', color: 'var(--accent)' }
+              : { width: 32, background: 'var(--bg-surface)', borderColor: 'rgba(255,255,255,0.1)', color: 'var(--text-secondary)' }
+            }
           >
-            <Bookmark className="w-3.5 h-3.5" />
+            {loadedPlan ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
+            {loadedPlan && <span className="text-[11px] font-bold max-w-[80px] truncate">{loadedPlan.title}</span>}
           </button>
         </div>
 
@@ -997,6 +1087,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             onClose={() => setShowExercisePicker(false)}
             recentExercises={[]}
             onEditTemplate={onEditTemplate}
+            onLoadPlan={handleLoadPlan}
             onLoadTemplate={(exercises, planTitle) => {
               const newEntries: ExerciseEntry[] = exercises.map((ex) => ({
                 id: createSetId(),
@@ -1049,6 +1140,145 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             onSelect={handleWorkoutDateChange}
             onClose={() => setShowCalendar(false)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ── "Added exercise — update plan?" popup ── */}
+      <AnimatePresence>
+        {pendingPlanExercises.length > 0 && loadedPlan && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-end justify-center"
+            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+          >
+            <motion.div
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 60, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+              className="w-full max-w-[480px] rounded-t-[24px] p-5 pb-[max(28px,env(safe-area-inset-bottom))]"
+              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)' }}
+            >
+              <div className="w-9 h-1 rounded-full mx-auto mb-5 opacity-30" style={{ background: 'var(--text-muted)' }} />
+              <p className="text-[13px] font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>Added to workout</p>
+              <p className="text-[18px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                {pendingPlanExercises.length === 1 ? pendingPlanExercises[0].name : `${pendingPlanExercises.length} exercises`}
+              </p>
+              <p className="text-[13px] mb-6" style={{ color: 'var(--text-muted)' }}>
+                Save {pendingPlanExercises.length > 1 ? 'them' : 'it'} to{' '}
+                <strong style={{ color: 'var(--text-secondary)' }}>"{loadedPlan.title}"</strong> permanently?
+              </p>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handlePendingUpdatePlan}
+                  disabled={savingTemplate}
+                  className="w-full py-3.5 rounded-xl text-[14px] font-bold text-black active:scale-[0.98] transition-all disabled:opacity-50"
+                  style={{ background: 'var(--accent)' }}
+                >
+                  {savingTemplate ? 'Saving…' : 'Update Plan'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePendingWorkoutOnly}
+                  className="w-full py-3.5 rounded-xl text-[14px] font-semibold active:scale-[0.98] transition-all"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                >
+                  This Workout Only
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePendingCancel}
+                  className="w-full py-3 text-[13px] font-semibold active:opacity-70"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  Cancel (Remove {pendingPlanExercises.length > 1 ? 'them' : 'it'})
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Plan save options popup (bookmark button when plan loaded) ── */}
+      <AnimatePresence>
+        {showPlanSaveOptions && loadedPlan && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[220] flex items-end justify-center"
+            style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setShowPlanSaveOptions(false)}
+          >
+            <motion.div
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 60, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+              className="w-full max-w-[480px] rounded-t-[24px] p-5 pb-[max(28px,env(safe-area-inset-bottom))]"
+              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-9 h-1 rounded-full mx-auto mb-5 opacity-30" style={{ background: 'var(--text-muted)' }} />
+              <p className="text-[16px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Save plan</p>
+              <p className="text-[13px] mb-5" style={{ color: 'var(--text-muted)' }}>
+                Choose how to save <strong style={{ color: 'var(--text-secondary)' }}>"{loadedPlan.title}"</strong>
+              </p>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPlanSaveOptions(false);
+                    const plan = loadedPlanRef.current;
+                    if (!plan) return;
+                    const planExercises = workout.exercises.filter((e) => !workoutOnlyExerciseIds.has(e.id));
+                    doUpdatePlan(planExercises, plan);
+                  }}
+                  disabled={savingTemplate}
+                  className="w-full py-3.5 rounded-xl text-[14px] font-bold text-black active:scale-[0.98] transition-all disabled:opacity-50"
+                  style={{ background: 'var(--accent)' }}
+                >
+                  <Check className="inline w-4 h-4 mr-1.5 mb-0.5" />
+                  {savingTemplate ? 'Saving…' : 'Update Plan'}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowPlanSaveOptions(false);
+                    if (!user || workout.exercises.length === 0) return;
+                    setSavingTemplate(true);
+                    try {
+                      await saveTemplate(user.id, {
+                        title: workout.title,
+                        exercises: buildTemplateExercises(workout.exercises),
+                      });
+                      setLoadedPlan(null);
+                      toast.success('Saved as new plan!');
+                    } catch {
+                      toast.error('Could not save plan');
+                    } finally {
+                      setSavingTemplate(false);
+                    }
+                  }}
+                  className="w-full py-3.5 rounded-xl text-[14px] font-semibold active:scale-[0.98] transition-all"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                >
+                  Save as New Plan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPlanSaveOptions(false)}
+                  className="w-full py-3 text-[13px] font-semibold active:opacity-70"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
