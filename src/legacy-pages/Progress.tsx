@@ -18,7 +18,6 @@ import {
   startOfWeek,
   subDays,
   subMonths,
-  subWeeks,
 } from 'date-fns';
 
 import { LineChart, AreaChart, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, ReferenceDot } from 'recharts';
@@ -216,6 +215,7 @@ export const Progress: React.FC = () => {
   const [overloadRangeStart, setOverloadRangeStart] = useState<Date | null>(() => startOfMonth(new Date()));
   const [overloadRangeEnd,   setOverloadRangeEnd]   = useState<Date | null>(() => new Date());
   const [overloadCalendarMonth, setOverloadCalendarMonth] = useState(() => startOfMonth(new Date()));
+  const [volumeMonth, setVolumeMonth] = useState(() => startOfMonth(new Date()));
 
   const [newWeight, setNewWeight] = useState('');
   const [weightDate, setWeightDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
@@ -749,16 +749,17 @@ export const Progress: React.FC = () => {
     if (day.count > 0) { tempStreak++; if (tempStreak > maxStreak) maxStreak = tempStreak; } else tempStreak = 0;
   });
 
-  const today = new Date();
-  const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 });
-  const previousWeekStart = subWeeks(currentWeekStart, 1);
+  const currentMonthStart = volumeMonth;
+  const currentMonthEnd = endOfMonth(volumeMonth);
+  const previousMonthStart = startOfMonth(subMonths(volumeMonth, 1));
+  const previousMonthEnd = endOfMonth(subMonths(volumeMonth, 1));
   const currentWeekWorkouts = workouts.filter((w) => {
     const d = parseDateAtStartOfDay(w.date);
-    return Boolean(d && d >= currentWeekStart);
+    return Boolean(d && d >= currentMonthStart && d <= currentMonthEnd);
   });
   const previousWeekWorkouts = workouts.filter((w) => {
     const d = parseDateAtStartOfDay(w.date);
-    return Boolean(d && d >= previousWeekStart && d < currentWeekStart);
+    return Boolean(d && d >= previousMonthStart && d <= previousMonthEnd);
   });
 
   const calculateMuscleVolume = (workoutList: any[]) => {
@@ -791,23 +792,22 @@ export const Progress: React.FC = () => {
 
   const setsByMuscleWeek = useMemo(() => {
     const result: Record<string, number[]> = {};
-    const weeks = Array.from({ length: 6 }, (_, i) => {
-      const start = startOfWeek(subWeeks(new Date(), 5 - i), { weekStartsOn: 1 });
-      const end = endOfWeek(subWeeks(new Date(), 5 - i), { weekStartsOn: 1 });
-      return { start, end };
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const m = subMonths(volumeMonth, 5 - i);
+      return { start: startOfMonth(m), end: endOfMonth(m) };
     });
     exercises.forEach((ex) => {
       const date = parseDateAtStartOfDay(ex.workouts?.date);
       if (!date) return;
       const mg = ex.muscle_group;
       if (!mg) return;
-      const wi = weeks.findIndex((w) => date >= w.start && date <= w.end);
-      if (wi === -1) return;
+      const mi = months.findIndex((m) => date >= m.start && date <= m.end);
+      if (mi === -1) return;
       if (!result[mg]) result[mg] = new Array(6).fill(0);
-      result[mg][wi] += ex.sets || 0;
+      result[mg][mi] += ex.sets || 0;
     });
     return result;
-  }, [exercises]);
+  }, [exercises, volumeMonth]);
 
   const setVolumeData = useMemo(() => {
     const computeSets = (wList: any[]) => {
@@ -1001,7 +1001,7 @@ export const Progress: React.FC = () => {
                 {/* Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-muted)] mb-1">Weekly Volume</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-muted)] mb-1">Monthly Volume</p>
                     {setVolumeData.length > 0 && (
                       <p className="text-[26px] font-black text-white tabular-nums leading-none">
                         {setVolumeData.reduce((a, d) => a + d.current, 0)}
@@ -1014,10 +1014,28 @@ export const Progress: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  {balanceScore > 0 && (
-                    <div className="flex flex-col items-end gap-0.5">
-                      <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Balance</p>
-                      <span className={`text-[13px] font-bold px-2 py-0.5 rounded-full ${
+                  <div className="flex flex-col items-end gap-1.5">
+                    {/* Month picker */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setVolumeMonth(m => startOfMonth(subMonths(m, 1)))}
+                        className="w-6 h-6 flex items-center justify-center rounded-full text-[var(--text-muted)] hover:text-white hover:bg-white/8 transition-colors"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="text-[12px] font-semibold text-[var(--text-secondary)] tabular-nums min-w-[68px] text-center">
+                        {format(volumeMonth, 'MMM yyyy')}
+                      </span>
+                      <button
+                        onClick={() => setVolumeMonth(m => startOfMonth(addMonths(m, 1)))}
+                        disabled={volumeMonth >= startOfMonth(new Date())}
+                        className="w-6 h-6 flex items-center justify-center rounded-full text-[var(--text-muted)] hover:text-white hover:bg-white/8 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {balanceScore > 0 && (
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
                         balanceScore > 75
                           ? 'bg-[var(--accent)]/10 text-[var(--accent)]'
                           : balanceScore > 45
@@ -1026,14 +1044,14 @@ export const Progress: React.FC = () => {
                       }`}>
                         {balanceScore > 75 ? 'Balanced' : balanceScore > 45 ? 'Uneven' : 'Skewed'}
                       </span>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
 
                 {setVolumeData.length === 0 ? (
                   <div className="py-10 text-center">
                     <Activity className="w-8 h-8 mx-auto mb-3 text-[var(--text-muted)] opacity-30" />
-                    <p className="text-[13px] text-[var(--text-muted)]">Log workouts this week to see volume.</p>
+                    <p className="text-[13px] text-[var(--text-muted)]">No workouts logged in {format(volumeMonth, 'MMMM')}.</p>
                   </div>
                 ) : (
                   <div className="space-y-0">
@@ -1050,8 +1068,7 @@ export const Progress: React.FC = () => {
                         Chest: palette.chest, Back: palette.back, Legs: palette.legs,
                         Shoulders: palette.shoulders, Core: palette.core, Biceps: palette.biceps,
                         Triceps: palette.triceps, Arms: palette.biceps, Cardio: palette.cardio,
-                        Glutes: '#F4B96A', Forearms: '#98D4E8',
-                        Mobility: '#85C9B0', Yoga: '#7CB9C8',
+                        Glutes: '#F4B96A', Forearms: '#98D4E8', Mobility: '#85C9B0', Yoga: '#7CB9C8',
                       };
                       const color = MUSCLE_HEX_MAP[item.muscle] ?? palette.accent;
 
@@ -1134,6 +1151,7 @@ export const Progress: React.FC = () => {
               Chest: palette.chest, Back: palette.back, Legs: palette.legs,
               Shoulders: palette.shoulders, Core: palette.core, Biceps: palette.biceps,
               Triceps: palette.triceps, Arms: palette.biceps, Cardio: palette.cardio,
+              Glutes: '#F4B96A', Forearms: '#98D4E8', Mobility: '#85C9B0', Yoga: '#7CB9C8',
             };
             const getMuscleHex = (mg: string) => MUSCLE_HEX[mg] ?? palette.accent;
 
