@@ -206,6 +206,15 @@ const EXACT_TYPE_MAP: Record<string, ExerciseInputType> = {
   'tibialis raise':             'reps_only',
   'hip circle':                 'reps_only',
 
+  // ── Core reps / bodyweight ──
+  'ghd sit-up':                 'reps_only',
+  'oblique knee raise':         'reps_only',
+  "captain's chair leg raise":  'reps_only',
+  'decline sit-up':             'reps_only',
+  'decline oblique crunch':     'reps_only',
+  'leg raise on decline':       'reps_only',
+  'oblique crunch':             'reps_only',
+
   // ── Core timed holds ──
   'side plank':                 'time_only',
   'copenhagen plank':           'time_only',
@@ -226,14 +235,20 @@ const EXACT_TYPE_MAP: Record<string, ExerciseInputType> = {
   'pike push ups':              'reps_only',
   'pike pushup':                'reps_only',
 
-  // ── Back bodyweight ──
+  // ── Back bodyweight / assisted machine ──
   'inverted row':               'reps_only',
   'inverted rows':              'reps_only',
   'neutral grip pull-up':       'reps_only',
   'neutral grip pullup':        'reps_only',
+  'assisted pull-up':           'reps_only',
+  'assisted chin-up':           'reps_only',
+  'wide grip pull-up':          'reps_only',
+  'close grip chin-up':         'reps_only',
 
-  // ── Triceps bodyweight ──
+  // ── Triceps bodyweight / assisted ──
   'tricep dips':                'reps_only',
+  'assisted tricep dip':        'reps_only',
+  'close grip dip':             'reps_only',
 
   // ── Mobility — timed ──
   'ankle dorsiflexion stretch': 'time_only',
@@ -257,6 +272,30 @@ const EXACT_TYPE_MAP: Record<string, ExerciseInputType> = {
   'boxing':                     'time_only',
   'hiit':                       'time_only',
   'sprint intervals':           'time_only',
+  'tabata protocol':            'time_only',
+  'steady climb':               'time_only',
+  'interval climb':             'time_only',
+  'stair sprint':               'time_only',
+  'side step climb':            'time_only',
+  'hill climb':                 'distance_time',
+  'incline walk':               'distance_time',
+  'forward elliptical':         'distance_time',
+  'reverse elliptical':         'distance_time',
+  'incline elliptical':         'distance_time',
+  'high resistance elliptical': 'distance_time',
+  'steady state cycling':       'distance_time',
+  'interval cycling':           'distance_time',
+  'high resistance cycling':    'distance_time',
+  'sprint cycling':             'distance_time',
+  'endurance cycling':          'distance_time',
+  'rowing':                     'distance_time',
+  'endurance row':              'distance_time',
+  'sprint row intervals':       'distance_time',
+  'power strokes':              'distance_time',
+  'arm cycling':                'distance_time',
+  'forward arm cycle':          'distance_time',
+  'reverse arm cycle':          'distance_time',
+  'interval arm cycling':       'time_only',
 
   // ── Forearms ──
   'wrist curl':                 'weight_reps',

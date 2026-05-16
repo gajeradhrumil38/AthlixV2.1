@@ -523,9 +523,53 @@ const EXERCISE_MUSCLE_PATTERNS: ExercisePatternProfile[] = [
 
   // ── Glute isolation ───────────────────────────────────────────────────────
   {
-    patterns: [/glute kickback/i, /donkey kick/i, /fire hydrant/i, /clamshell/i, /side lying (leg|hip) raise/i, /hip abduction/i],
+    patterns: [/glute kickback/i, /donkey kick/i, /fire hydrant/i, /clamshell/i, /side lying (leg|hip) raise/i, /hip abduction/i, /seated hip abduction/i, /single leg kickback/i, /standing rear kick/i],
     targets: [target('gluteal', 1), target('adductors', 0.22)],
     primaryRegions: ['Glutes'],
+  },
+  {
+    patterns: [/hip adduction/i, /inner thigh/i, /adductor machine/i],
+    targets: [target('adductors', 1), target('gluteal', 0.22)],
+    primaryRegions: ['Legs'],
+  },
+  {
+    patterns: [/reverse hyper/i, /glute ham raise/i, /ghd/i],
+    targets: [target('gluteal', 0.88), target('hamstring', 0.78), target('lower-back', 0.42)],
+    primaryRegions: ['Glutes', 'Legs'],
+    secondaryRegions: ['Back'],
+  },
+  {
+    patterns: [/torso rotation/i, /torso twist/i],
+    targets: [target('obliques', 1), target('abs', 0.35)],
+    primaryRegions: ['Core'],
+  },
+  {
+    patterns: [/belt squat/i, /pendulum squat/i, /sissy squat/i],
+    targets: [target('quadriceps', 0.95), target('gluteal', 0.45), target('adductors', 0.2)],
+    primaryRegions: ['Legs'],
+  },
+  {
+    patterns: [/arm cycling/i, /arm cycle/i, /arm ergometer/i, /arm bike/i],
+    targets: [target('deltoids', 0.72), target('biceps', 0.5), target('triceps', 0.45), target('chest', 0.28)],
+    primaryRegions: ['Cardio', 'Shoulders'],
+    secondaryRegions: ['Arms'],
+  },
+  {
+    patterns: [/pec deck/i, /chest fly/i, /cable crossover/i, /cable chest fly/i],
+    targets: [target('chest', 1), target('deltoids', 0.28)],
+    primaryRegions: ['Chest'],
+    secondaryRegions: ['Shoulders'],
+  },
+  {
+    patterns: [/t-bar row/i, /t bar row/i],
+    targets: [target('upper-back', 0.88), target('biceps', 0.35), target('lower-back', 0.32)],
+    primaryRegions: ['Back'],
+    secondaryRegions: ['Biceps'],
+  },
+  {
+    patterns: [/forearm pronation/i, /forearm supination/i, /forearm curl/i],
+    targets: [target('forearm', 1)],
+    primaryRegions: ['Forearms'],
   },
 
   // ── Mobility / stretching ─────────────────────────────────────────────────

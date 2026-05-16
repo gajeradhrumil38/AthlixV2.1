@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, X, Plus, History, LayoutGrid, ChevronLeft, ClipboardList, Play, Check, Pencil, Trash2 } from 'lucide-react';
+import { getMachineLabel } from '../../lib/machineLabels';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -108,6 +109,7 @@ const ExerciseRow: React.FC<{
 }> = ({ exercise, isSelected, onToggle }) => {
   const cssVar = MUSCLE_CSS_VAR[exercise.muscleGroup];
   const [baseName, variant] = splitVariant(exercise.name);
+  const machineLabel = getMachineLabel(exercise.name);
   return (
     <button
       onClick={() => onToggle(exercise)}
@@ -137,8 +139,15 @@ const ExerciseRow: React.FC<{
             </span>
           )}
         </div>
-        <div className="mt-0.5 text-[11px] font-medium" style={{ color: cssVar ? `var(${cssVar})` : 'var(--text-secondary)' }}>
-          {exercise.muscleGroup}
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          <span className="text-[11px] font-medium" style={{ color: cssVar ? `var(${cssVar})` : 'var(--text-secondary)' }}>
+            {exercise.muscleGroup}
+          </span>
+          {machineLabel && (
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)', opacity: 0.55 }}>
+              · {machineLabel}
+            </span>
+          )}
         </div>
       </div>
       {exercise.lastSession && !isSelected && (
