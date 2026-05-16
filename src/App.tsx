@@ -14,7 +14,6 @@ import { Auth } from './legacy-pages/Auth';
 import { Home } from './legacy-pages/Home';
 import { Calendar } from './legacy-pages/Calendar';
 import { Log } from './legacy-pages/Log';
-import { Templates } from './legacy-pages/Templates';
 import { Timeline } from './legacy-pages/Timeline';
 import { Settings } from './legacy-pages/Settings';
 import { Progress } from './legacy-pages/Progress';
@@ -54,7 +53,6 @@ const AppRoutes = () => {
         <Route index element={<Home />} />
         <Route path="calendar" element={<Calendar />} />
         <Route path="log" element={<Log />} />
-        <Route path="templates" element={<Templates />} />
         <Route path="timeline" element={<Timeline />} />
         <Route path="progress" element={<Progress />} />
         <Route path="settings" element={<Settings />} />

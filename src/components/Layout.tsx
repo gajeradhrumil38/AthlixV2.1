@@ -8,7 +8,6 @@ const navItems: { path: string; icon: IconName; label: string }[] = [
   { path: '/',          icon: 'Home',      label: 'Home'      },
   { path: '/calendar',  icon: 'Calendar',  label: 'Calendar'  },
   { path: '/log',       icon: 'Plus',      label: 'Log'       },
-  { path: '/templates', icon: 'Clipboard', label: 'Templates' },
   { path: '/timeline',  icon: 'History',   label: 'Timeline'  },
   { path: '/progress',  icon: 'Trending',  label: 'Progress'  },
   { path: '/run',       icon: 'Run',       label: 'Run'       },
@@ -37,7 +36,6 @@ export const Layout: React.FC = () => {
     isHomeRoute ||
     location.pathname.startsWith('/calendar') ||
     location.pathname.startsWith('/progress') ||
-    location.pathname.startsWith('/templates') ||
     location.pathname.startsWith('/timeline');
   const swipeStartRef = useRef<{ x: number; y: number; ts: number } | null>(null);
   const tapTimerRef = useRef<number | null>(null);
