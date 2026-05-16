@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Trash2, Check, Copy, BookmarkCheck, Bookmark } from 'lucide-react';
 import { ExercisePicker } from './ExercisePicker';
 import { DialPicker } from './DialPicker';
 import { useAuth } from '../../contexts/AuthContext';
 import { saveTemplate, getLastExerciseSession } from '../../lib/supabaseData';
-import type { ExerciseEntry, Set } from '../../legacy-pages/Log';
+import type { ExerciseEntry } from '../../legacy-pages/Log';
 import toast from 'react-hot-toast';
 
 interface PlannedSet {
@@ -46,6 +46,8 @@ const MUSCLE_COLORS: Record<string, string> = {
   Biceps: 'var(--biceps)',
   Triceps: 'var(--triceps)',
   Cardio: 'var(--cardio)',
+  Glutes: '#F4B96A',
+  Forearms: '#98D4E8',
 };
 const muscleColor = (mg: string) => MUSCLE_COLORS[mg] ?? 'var(--text-muted)';
 
@@ -54,12 +56,8 @@ const createId = () =>
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-/* ── Value box — identical style to ActiveWorkout SetRow ── */
-const ValueBox: React.FC<{
-  label: string;
-  value: number;
-  onTap: () => void;
-}> = ({ label, value, onTap }) => (
+/* ── Value box ── */
+const ValueBox: React.FC<{ label: string; value: number; onTap: () => void }> = ({ label, value, onTap }) => (
   <button
     type="button"
     onClick={onTap}
@@ -67,16 +65,12 @@ const ValueBox: React.FC<{
     style={{ background: 'var(--bg-base)', borderColor: 'var(--border)' }}
   >
     <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/8 to-transparent" />
-    <div className="font-victory tabular-nums text-[36px] leading-none font-black text-[var(--text-primary)]">
-      {value}
-    </div>
-    <div className="text-[10px] font-bold tracking-[0.16em] uppercase text-[var(--text-secondary)]">
-      {label}
-    </div>
+    <div className="font-victory tabular-nums text-[36px] leading-none font-black text-[var(--text-primary)]">{value}</div>
+    <div className="text-[10px] font-bold tracking-[0.16em] uppercase text-[var(--text-secondary)]">{label}</div>
   </button>
 );
 
-/* ── Subtle separator between sets with copy / remove actions ── */
+/* ── Set separator ── */
 const SetSeparator: React.FC<{ onCopy: () => void; onRemove: () => void }> = ({ onCopy, onRemove }) => (
   <div className="flex items-center gap-2 py-0.5 px-4 my-1">
     <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.05)' }} />
@@ -102,7 +96,7 @@ const SetSeparator: React.FC<{ onCopy: () => void; onRemove: () => void }> = ({ 
   </div>
 );
 
-/* ── One set row — matches ActiveWorkout SetRow layout ── */
+/* ── One set row ── */
 const PlanSetRow: React.FC<{
   index: number;
   set: PlannedSet;
@@ -113,10 +107,7 @@ const PlanSetRow: React.FC<{
     className="relative overflow-hidden rounded-2xl border mx-4"
     style={{ background: 'var(--bg-base)', borderColor: 'var(--border)' }}
   >
-    {/* Left accent bar */}
     <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: 'var(--border)' }} />
-
-    {/* Header */}
     <div className="flex items-center px-4 pt-3 pb-2 pl-5">
       <div
         className="rounded-lg px-2 py-[3px] text-[10px] font-bold tracking-[0.14em] uppercase"
@@ -132,8 +123,6 @@ const PlanSetRow: React.FC<{
         </span>
       )}
     </div>
-
-    {/* Value boxes */}
     <div className="grid grid-cols-2 gap-2 px-3 pb-3 pl-4">
       <ValueBox label={weightUnit} value={set.weight} onTap={() => onOpenDial('weight')} />
       <ValueBox label="reps" value={set.reps} onTap={() => onOpenDial('reps')} />
@@ -145,10 +134,11 @@ const PlanSetRow: React.FC<{
 const PlanExerciseCard: React.FC<{
   ex: PlannedExercise;
   weightUnit: string;
+  isWorkoutOnly?: boolean;
   onChange: (updated: PlannedExercise) => void;
   onRemove: () => void;
   onOpenDial: (setIdx: number, field: 'weight' | 'reps') => void;
-}> = ({ ex, weightUnit, onChange, onRemove, onOpenDial }) => {
+}> = ({ ex, weightUnit, isWorkoutOnly, onChange, onRemove, onOpenDial }) => {
   const color = muscleColor(ex.muscleGroup);
   const [confirmRemoveIdx, setConfirmRemoveIdx] = useState<number | null>(null);
 
@@ -173,13 +163,18 @@ const PlanExerciseCard: React.FC<{
 
   return (
     <div style={{ borderBottom: '1px solid var(--border)' }}>
-      {/* Exercise header */}
       <div className="flex items-start justify-between px-4 pt-5 pb-4">
-        <div>
+        <div className="min-w-0 flex-1">
           <h3 className="text-[20px] font-bold text-[var(--text-primary)] leading-tight">{ex.name}</h3>
-          <p className="text-[10px] font-bold uppercase tracking-[1.6px] mt-0.5" style={{ color }}>
-            {ex.muscleGroup}
-          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-[10px] font-bold uppercase tracking-[1.6px]" style={{ color }}>{ex.muscleGroup}</p>
+            {isWorkoutOnly && (
+              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+                style={{ background: 'rgba(200,255,0,0.1)', color: 'var(--accent)', border: '1px solid rgba(200,255,0,0.2)' }}>
+                Session only
+              </span>
+            )}
+          </div>
         </div>
         <button
           type="button"
@@ -191,25 +186,15 @@ const PlanExerciseCard: React.FC<{
         </button>
       </div>
 
-      {/* Set rows with separators between them */}
       <div className="flex flex-col gap-2 pb-2">
         {ex.sets.map((s, i) => (
           <React.Fragment key={i}>
-            <PlanSetRow
-              index={i + 1}
-              set={s}
-              weightUnit={weightUnit}
-              onOpenDial={(field) => onOpenDial(i, field)}
-            />
-            <SetSeparator
-              onCopy={() => copySet(i)}
-              onRemove={() => setConfirmRemoveIdx(i)}
-            />
+            <PlanSetRow index={i + 1} set={s} weightUnit={weightUnit} onOpenDial={(field) => onOpenDial(i, field)} />
+            <SetSeparator onCopy={() => copySet(i)} onRemove={() => setConfirmRemoveIdx(i)} />
           </React.Fragment>
         ))}
       </div>
 
-      {/* Footer */}
       <div className="flex items-center justify-between px-4 pt-1 pb-5">
         <button
           type="button"
@@ -230,24 +215,16 @@ const PlanExerciseCard: React.FC<{
         </button>
       </div>
 
-      {/* Remove set confirmation */}
       {confirmRemoveIdx !== null && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-6"
-          onClick={() => setConfirmRemoveIdx(null)}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-6" onClick={() => setConfirmRemoveIdx(null)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
             className="relative w-full max-w-[320px] rounded-2xl p-5"
             style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.08)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-[15px] font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
-              Remove Set {confirmRemoveIdx + 1}?
-            </p>
-            <p className="text-[13px] mb-5" style={{ color: 'var(--text-muted)' }}>
-              This action cannot be undone.
-            </p>
+            <p className="text-[15px] font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Remove Set {confirmRemoveIdx + 1}?</p>
+            <p className="text-[13px] mb-5" style={{ color: 'var(--text-muted)' }}>This action cannot be undone.</p>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -278,31 +255,40 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
   const { user } = useAuth();
   const [title, setTitle] = useState(initialTemplate?.title ?? '');
   const [exercises, setExercises] = useState<PlannedExercise[]>(initialTemplate?.exercises ?? []);
-  // Auto-open picker immediately when creating a brand new plan (no template loaded)
   const [showPicker, setShowPicker] = useState(!initialTemplate);
   const [saving, setSaving] = useState(false);
   const [dialState, setDialState] = useState<DialState | null>(null);
   const [templateId, setTemplateId] = useState<string | null>(initialTemplate?.id ?? null);
   const [isSaved, setIsSaved] = useState(!!initialTemplate?.id);
+  // Tracks exercises added for this workout session only (not saved to template)
+  const [workoutOnlyIds, setWorkoutOnlyIds] = useState<Set<string>>(new Set());
+  // Shows the "Added exercise — update plan?" action popup
+  const [pendingActionExercise, setPendingActionExercise] = useState<PlannedExercise | null>(null);
+  // Prevents dirty-flag trigger when adding workout-only exercise
+  const skipDirtyRef = useRef(false);
 
   const inferPlanName = (exs: PlannedExercise[]) => {
     const muscles = new Set(exs.map((e) => e.muscleGroup));
     if (muscles.has('Chest') || muscles.has('Triceps')) return 'Push Day';
     if (muscles.has('Back') || muscles.has('Biceps')) return 'Pull Day';
-    if (muscles.has('Legs')) return 'Leg Day';
+    if (muscles.has('Legs') || muscles.has('Glutes')) return 'Leg Day';
     if (muscles.has('Shoulders')) return 'Shoulder Day';
     if (muscles.has('Core') || muscles.has('Cardio')) return 'Cardio Day';
     return 'My Plan';
   };
   const defaultTitle = inferPlanName(exercises);
 
-  // Mark unsaved whenever plan content changes after a save
+  // Mark unsaved whenever plan content changes, unless we're adding a workout-only exercise
   useEffect(() => {
+    if (skipDirtyRef.current) { skipDirtyRef.current = false; return; }
     if (isSaved) setIsSaved(false);
   }, [exercises, title]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Exercises that count toward the saved plan (exclude session-only additions)
+  const planExercises = exercises.filter((ex) => !workoutOnlyIds.has(ex.id));
+
   const handleSavePlan = async () => {
-    if (!exercises.length) { toast.error('Add at least one exercise'); return; }
+    if (!planExercises.length) { toast.error('Add at least one exercise'); return; }
     if (!user) { toast.error('Sign in to save plans'); return; }
     const planTitle = title.trim() || defaultTitle;
     setSaving(true);
@@ -310,7 +296,7 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
       const saved = await saveTemplate(user.id, {
         templateId,
         title: planTitle,
-        exercises: exercises.map((ex, i) => ({
+        exercises: planExercises.map((ex, i) => ({
           name: ex.name,
           muscle_group: ex.muscleGroup,
           default_sets: ex.sets.length,
@@ -339,13 +325,8 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
     const { exId, setIdx, field } = dialState;
     setExercises((prev) =>
       prev.map((ex) =>
-        ex.id !== exId
-          ? ex
-          : {
-              ...ex,
-              sets: ex.sets.map((s, idx) => (idx === setIdx ? { ...s, [field]: value } : s)),
-            },
-      ),
+        ex.id !== exId ? ex : { ...ex, sets: ex.sets.map((s, idx) => (idx === setIdx ? { ...s, [field]: value } : s)) }
+      )
     );
     setDialState(null);
   };
@@ -384,10 +365,22 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
       sets = Array.from({ length: n }, () => ({ weight: w, reps: r }));
     }
 
-    setExercises((prev) => [
-      ...prev,
-      { id: createId(), name: ex.name, muscleGroup: ex.muscleGroup, exercise_db_id: ex.exercise_db_id, sets },
-    ]);
+    const newEx: PlannedExercise = {
+      id: createId(),
+      name: ex.name,
+      muscleGroup: ex.muscleGroup,
+      exercise_db_id: ex.exercise_db_id,
+      sets,
+    };
+
+    // If this is an already-saved plan, ask what to do with the new exercise
+    if (templateId && isSaved) {
+      skipDirtyRef.current = true; // don't mark dirty yet — let user decide
+      setExercises((prev) => [...prev, newEx]);
+      setPendingActionExercise(newEx);
+    } else {
+      setExercises((prev) => [...prev, newEx]);
+    }
   };
 
   const handleStart = async () => {
@@ -399,11 +392,12 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
     const planTitle = title.trim() || defaultTitle;
     setSaving(true);
     try {
-      if (user) {
+      // Auto-save only if updating an existing saved plan
+      if (user && templateId) {
         await saveTemplate(user.id, {
           templateId,
           title: planTitle,
-          exercises: exercises.map((ex, i) => ({
+          exercises: planExercises.map((ex, i) => ({
             name: ex.name,
             muscle_group: ex.muscleGroup,
             default_sets: ex.sets.length,
@@ -432,13 +426,16 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
         done: false,
         planned_weight: s.weight || null,
         planned_reps: s.reps || null,
-      })) as Set[],
+      })) as ExerciseEntry['sets'],
     }));
 
     onStartPlan(workoutExercises, planTitle);
   };
 
-  /* ── Dial picker active state ── */
+  // Save button label & style
+  const saveLabel = isSaved ? 'Saved' : templateId ? 'Update' : 'Save';
+  const saveIcon = isSaved ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />;
+
   const dialExercise = dialState ? exercises.find((e) => e.id === dialState.exId) : null;
   const dialSet = dialExercise ? dialExercise.sets[dialState!.setIdx] : null;
 
@@ -454,13 +451,9 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
           style={{ background: 'var(--bg-base)', height: '92%' }}
         >
           {/* Handle + header */}
-          <div
-            className="shrink-0 px-5 pt-3 pb-4 border-b"
-            style={{ borderColor: 'var(--border)' }}
-          >
+          <div className="shrink-0 px-5 pt-3 pb-4 border-b" style={{ borderColor: 'var(--border)' }}>
             <div className="w-10 h-1 bg-[var(--text-muted)] rounded-full mx-auto mb-4 opacity-40" />
             <div className="flex items-center gap-2">
-              {/* Editable plan name — takes all remaining space */}
               <div className="flex-1 min-w-0">
                 <input
                   type="text"
@@ -477,20 +470,19 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
                 </p>
               </div>
 
-              {/* Save to My Plans */}
+              {/* Save / Update button */}
               <button
                 type="button"
                 onClick={handleSavePlan}
                 disabled={saving || exercises.length === 0}
-                title={isSaved ? 'Plan saved' : 'Save to My Plans'}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl active:scale-95 transition-all disabled:opacity-40"
+                title={saveLabel}
+                className="flex items-center gap-1.5 h-9 px-3 shrink-0 rounded-xl active:scale-95 transition-all disabled:opacity-40"
                 style={isSaved
                   ? { background: 'rgba(200,255,0,0.12)', border: '1px solid rgba(200,255,0,0.3)', color: 'var(--accent)' }
-                  : { background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                  : { background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
               >
-                {isSaved
-                  ? <BookmarkCheck className="w-4 h-4" />
-                  : <Bookmark className="w-4 h-4" />}
+                {saveIcon}
+                <span className="text-[12px] font-bold">{saveLabel}</span>
               </button>
 
               {/* Close */}
@@ -522,9 +514,7 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
                   >
                     <Plus className="w-6 h-6" style={{ color: 'var(--accent)' }} />
                   </div>
-                  <p className="text-[14px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                    No exercises yet
-                  </p>
+                  <p className="text-[14px] font-semibold" style={{ color: 'var(--text-secondary)' }}>No exercises yet</p>
                 </motion.div>
               ) : (
                 exercises.map((ex) => (
@@ -538,10 +528,12 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
                     <PlanExerciseCard
                       ex={ex}
                       weightUnit="lbs"
-                      onChange={(updated) =>
-                        setExercises((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
-                      }
-                      onRemove={() => setExercises((prev) => prev.filter((e) => e.id !== ex.id))}
+                      isWorkoutOnly={workoutOnlyIds.has(ex.id)}
+                      onChange={(updated) => setExercises((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))}
+                      onRemove={() => {
+                        setExercises((prev) => prev.filter((e) => e.id !== ex.id));
+                        setWorkoutOnlyIds((prev: Set<string>) => { const s = new Set(prev); s.delete(ex.id); return s; });
+                      }}
                       onOpenDial={(setIdx, field) => openDial(ex.id, setIdx, field)}
                     />
                   </motion.div>
@@ -587,7 +579,91 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
         </motion.div>
       </div>
 
-      {/* ExercisePicker — z-[300] in ExercisePicker itself, always above this sheet */}
+      {/* "Added exercise — what to do?" action popup */}
+      <AnimatePresence>
+        {pendingActionExercise && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-end justify-center"
+            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+          >
+            <motion.div
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 60, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+              className="w-full max-w-[480px] rounded-t-[24px] p-5 pb-[max(28px,env(safe-area-inset-bottom))]"
+              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)' }}
+            >
+              {/* Drag handle */}
+              <div className="w-9 h-1 rounded-full mx-auto mb-5 opacity-30" style={{ background: 'var(--text-muted)' }} />
+
+              <p className="text-[13px] font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>
+                Added to workout
+              </p>
+              <p className="text-[18px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                {pendingActionExercise.name}
+              </p>
+              <p className="text-[13px] mb-6" style={{ color: 'var(--text-muted)' }}>
+                Update <strong style={{ color: 'var(--text-secondary)' }}>"{title || defaultTitle}"</strong> to include this exercise?
+              </p>
+
+              <div className="space-y-2">
+                {/* Update plan */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingActionExercise(null);
+                    // Mark as dirty so user sees "Update" button
+                    setIsSaved(false);
+                    // Auto-save immediately
+                    setTimeout(handleSavePlan, 50);
+                  }}
+                  className="w-full py-3.5 rounded-xl text-[14px] font-bold text-black active:scale-[0.98] transition-all"
+                  style={{ background: 'var(--accent)' }}
+                >
+                  Update Plan
+                </button>
+
+                {/* This workout only */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Mark exercise as session-only — plan stays saved
+                    skipDirtyRef.current = false; // already consumed
+                    setWorkoutOnlyIds((prev: Set<string>) => new Set([...prev, pendingActionExercise.id]));
+                    setPendingActionExercise(null);
+                    // isSaved stays true since we track it as workout-only
+                    setIsSaved(true);
+                  }}
+                  className="w-full py-3.5 rounded-xl text-[14px] font-semibold active:scale-[0.98] transition-all"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                >
+                  This Workout Only
+                </button>
+
+                {/* Cancel — remove the exercise */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExercises((prev) => prev.filter((e) => e.id !== pendingActionExercise.id));
+                    setPendingActionExercise(null);
+                    setIsSaved(true);
+                  }}
+                  className="w-full py-3 text-[13px] font-semibold active:opacity-70 transition-opacity"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ExercisePicker */}
       {showPicker && (
         <ExercisePicker
           onSelect={handleAddExercise}
@@ -597,7 +673,7 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
         />
       )}
 
-      {/* Dial Picker — z-[400] in DialPicker itself */}
+      {/* Dial Picker */}
       {dialState && dialSet && (
         <DialPicker
           title={dialState.field === 'weight' ? 'Weight' : 'Reps'}
