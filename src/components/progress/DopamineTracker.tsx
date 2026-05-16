@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format, subDays, parseISO, differenceInDays, getDay, startOfWeek, endOfWeek, eachDayOfInterval, addDays } from 'date-fns';
+import { format, subDays, parseISO, differenceInDays, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { ShieldAlert, CheckCircle2, XCircle, X, Flame, Wind, Droplets, Zap, Target } from 'lucide-react';
 
 const STORAGE_KEY = 'athlix_dopamine_log';
@@ -18,7 +18,7 @@ const RELAPSE_COLOR  = '#f87171';
 const EMPTY_COLOR    = 'rgba(255,255,255,0.05)';
 const TODAY_BORDER   = '#FAC775';
 
-const getEntryColor = (entry: DopamineEntry | undefined, isToday: boolean): string => {
+const getEntryColor = (entry: DopamineEntry | undefined): string => {
   if (!entry) return EMPTY_COLOR;
   if (entry.status === 'relapse') return RELAPSE_COLOR;
   return SUCCESS_COLORS[Math.max(1, Math.min(5, entry.urge))] ?? '#C8FF00';
@@ -94,6 +94,7 @@ export const DopamineTracker: React.FC = () => {
 
   const [showCheckin, setShowCheckin] = useState(false);
   const [showSOS, setShowSOS] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<{ date: string; entry: DopamineEntry } | null>(null);
   const [checkinStep, setCheckinStep] = useState<'status' | 'details'>('status');
   const [pendingStatus, setPendingStatus] = useState<'success' | 'relapse' | null>(null);
   const [pendingUrge, setPendingUrge] = useState(2);
@@ -275,24 +276,30 @@ export const DopamineTracker: React.FC = () => {
                 {week.map((cell, di) => {
                   const bg = cell.isFuture || !cell.isInRange
                     ? 'transparent'
-                    : getEntryColor(cell.entry, cell.isToday);
+                    : getEntryColor(cell.entry);
                   const borderStyle = cell.isToday
                     ? `2px solid ${TODAY_BORDER}`
                     : cell.isFuture || !cell.isInRange
                     ? 'none'
                     : '1px solid rgba(255,255,255,0.04)';
 
+                  const hasEntry = !!cell.entry && !cell.isFuture && cell.isInRange;
+
                   return (
                     <div
                       key={di}
-                      title={`${cell.date}${cell.entry ? ` · ${cell.entry.status === 'success' ? '✓' : '✗'} urge ${cell.entry.urge}` : ''}`}
-                      className="rounded-[5px] transition-opacity"
+                      onClick={() => hasEntry && setSelectedDay({ date: cell.date, entry: cell.entry! })}
+                      className="rounded-[5px] transition-all"
                       style={{
                         height: 28,
                         background: bg,
                         border: borderStyle,
                         opacity: cell.isFuture ? 0 : 1,
+                        cursor: hasEntry ? 'pointer' : 'default',
+                        transform: 'scale(1)',
                       }}
+                      onMouseEnter={(e) => { if (hasEntry) (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.15)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'; }}
                     />
                   );
                 })}
@@ -352,6 +359,107 @@ export const DopamineTracker: React.FC = () => {
             ))}
         </div>
       )}
+
+      {/* ── Day detail popup ── */}
+      <AnimatePresence>
+        {selectedDay && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center px-5"
+            style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)' }}
+            onClick={() => setSelectedDay(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+              className="w-full max-w-[340px] rounded-2xl p-5"
+              style={{ background: '#111419', border: '1px solid rgba(255,255,255,0.1)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.16em] mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                    {format(parseISO(selectedDay.date), 'EEEE')}
+                  </p>
+                  <p className="text-[18px] font-bold" style={{ color: '#fff' }}>
+                    {format(parseISO(selectedDay.date), 'MMM d, yyyy')}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedDay(null)}
+                  className="h-8 w-8 rounded-full flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(255,255,255,0.08)' }}
+                >
+                  <X className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.5)' }} />
+                </button>
+              </div>
+
+              {/* Status badge */}
+              <div
+                className="flex items-center gap-2.5 rounded-xl px-4 py-3 mb-4"
+                style={selectedDay.entry.status === 'success'
+                  ? { background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.2)' }
+                  : { background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}
+              >
+                {selectedDay.entry.status === 'success'
+                  ? <CheckCircle2 className="w-5 h-5 shrink-0" style={{ color: '#C8FF00' }} />
+                  : <XCircle className="w-5 h-5 shrink-0" style={{ color: '#f87171' }} />}
+                <span className="text-[14px] font-bold" style={{ color: selectedDay.entry.status === 'success' ? '#C8FF00' : '#f87171' }}>
+                  {selectedDay.entry.status === 'success' ? 'Stayed Strong' : 'Relapsed'}
+                </span>
+              </div>
+
+              {/* Urge level (only for successes) */}
+              {selectedDay.entry.status === 'success' && (
+                <div className="mb-4">
+                  <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'rgba(255,255,255,0.35)' }}>Urge Level</p>
+                  <div className="flex gap-1.5">
+                    {[1, 2, 3, 4, 5].map((u) => (
+                      <div
+                        key={u}
+                        className="flex-1 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold"
+                        style={u <= selectedDay.entry.urge
+                          ? { background: SUCCESS_COLORS[u] ?? '#C8FF00', color: '#000' }
+                          : { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.2)' }}
+                      >
+                        {u}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] mt-1.5 text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                    {URGE_LABELS[selectedDay.entry.urge]} urge
+                  </p>
+                </div>
+              )}
+
+              {/* Note */}
+              {selectedDay.entry.note ? (
+                <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <p className="text-[10px] uppercase tracking-wider mb-1.5" style={{ color: 'rgba(255,255,255,0.3)' }}>Note</p>
+                  <p className="text-[13px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                    {selectedDay.entry.note}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-[12px] text-center" style={{ color: 'rgba(255,255,255,0.2)' }}>No note added</p>
+              )}
+
+              <button
+                onClick={() => setSelectedDay(null)}
+                className="w-full mt-5 py-3 rounded-xl text-[13px] font-semibold active:scale-[0.98] transition-all"
+                style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.6)' }}
+              >
+                Close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Check-in modal ── */}
       <AnimatePresence>
