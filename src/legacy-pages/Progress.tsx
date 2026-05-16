@@ -1050,8 +1050,8 @@ export const Progress: React.FC = () => {
                         Chest: palette.chest, Back: palette.back, Legs: palette.legs,
                         Shoulders: palette.shoulders, Core: palette.core, Biceps: palette.biceps,
                         Triceps: palette.triceps, Arms: palette.biceps, Cardio: palette.cardio,
-                        Glutes: palette.glutes ?? '#F4B96A', Forearms: palette.forearms ?? '#98D4E8',
-                        Mobility: palette.mobility ?? '#85C9B0', Yoga: palette.yoga ?? '#7CB9C8',
+                        Glutes: '#F4B96A', Forearms: '#98D4E8',
+                        Mobility: '#85C9B0', Yoga: '#7CB9C8',
                       };
                       const color = MUSCLE_HEX_MAP[item.muscle] ?? palette.accent;
 
@@ -2763,11 +2763,11 @@ export const Progress: React.FC = () => {
                               domain={[(min: number) => Math.max(0, Math.floor(min - 6)), (max: number) => Math.ceil(max + 6)]} />
                             <Tooltip
                               contentStyle={{ backgroundColor: '#0F1520', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#fff' }}
-                              formatter={(value: number, name: string, payload: any) => {
+                              formatter={(value: any, name: any, payload: any) => {
                                 if (name === 'gapGuide' || payload?.payload?.isGap) return ['No data', 'Gap'];
                                 return [value == null ? 'No data' : `${value} bpm`, payload?.payload?.zoneLabel || 'Heart Rate'];
                               }}
-                              labelFormatter={(v: number) => format(new Date(v), 'h:mm:ss a')} />
+                              labelFormatter={(v: any) => format(new Date(v as number), 'h:mm:ss a')} />
                             <Area type="monotone" dataKey={activeWaveDataKey} stroke="none" fill="url(#liveWaveFill2)" connectNulls={false} isAnimationActive={false} />
                             <Line type="linear" dataKey="gapGuide" stroke="rgba(143,157,177,0.3)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls={false} isAnimationActive={false} />
                             <Line type="monotone" dataKey="bpm" stroke="rgba(255,255,255,0.12)" strokeWidth={1.5} dot={false} connectNulls={false} isAnimationActive={false} />
@@ -2831,7 +2831,7 @@ export const Progress: React.FC = () => {
                           <YAxis stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={34} />
                           <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }}
                             contentStyle={{ backgroundColor: '#0F1520', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#fff' }}
-                            formatter={(value: number, _name: string, payload: any) => [
+                            formatter={(value: any, _name: any, payload: any) => [
                               payload?.payload?.avgBpm ? `${value} bpm` : 'No data', payload?.payload?.longLabel || 'Average HR',
                             ]} />
                           <Bar dataKey={(entry) => entry.avgBpm ?? 0} radius={[8, 8, 3, 3]}>
