@@ -2240,7 +2240,7 @@ export const getRecentExerciseOptions = async (
     const latestDate = row.workouts.date;
     const latestWorkoutId = row.workout_id;
     const sessionRows = allRowsForExercise
-      .filter((r) => r.workout_id === latestWorkoutId || r.workouts.date === latestDate)
+      .filter((r) => r.workout_id === latestWorkoutId)
       .sort((a, b) => a.order_index - b.order_index);
 
     const lastRow = sessionRows[sessionRows.length - 1] || row;

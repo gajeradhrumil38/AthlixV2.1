@@ -76,7 +76,6 @@ export const SetRow: React.FC<SetRowProps> = ({
         className="absolute left-0 top-0 bottom-0 w-[3px] transition-all duration-300"
         style={{
           background: set.done ? 'var(--accent)' : 'var(--border)',
-          boxShadow: set.done ? '2px 0 10px rgba(200,255,0,0.30)' : 'none',
         }}
       />
 
@@ -116,7 +115,6 @@ export const SetRow: React.FC<SetRowProps> = ({
                   background: 'rgba(200,255,0,0.10)',
                   borderColor: 'rgba(200,255,0,0.50)',
                   color: 'var(--accent)',
-                  boxShadow: '0 0 14px rgba(200,255,0,0.25)',
                 }
               : {
                   background: 'var(--bg-elevated)',

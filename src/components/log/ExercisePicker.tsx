@@ -190,6 +190,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'recent' | 'muscle' | 'plans' | 'search'>('recent');
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
+  const [filterMuscle, setFilterMuscle] = useState<string | null>(null);
   const [libraryExercises, setLibraryExercises] = useState<Exercise[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
   const [recentLibraryExercises, setRecentLibraryExercises] = useState<Exercise[]>(() => {
@@ -271,7 +272,10 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  const filteredExercises = useMemo(() => libraryExercises, [libraryExercises]);
+  const filteredExercises = useMemo(() => {
+    if (!filterMuscle) return libraryExercises;
+    return libraryExercises.filter(ex => ex.muscleGroup === filterMuscle);
+  }, [libraryExercises, filterMuscle]);
   const isNestedView = Boolean(search.trim()) || Boolean(selectedMuscle);
 
   const handleToggle = (exercise: Exercise) => {
@@ -377,31 +381,68 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
               type="text"
               placeholder="Search exercises"
               value={search}
-              onChange={(e) => { setSearch(e.target.value); if (e.target.value) setActiveTab('search' as any); }}
-              className="w-full h-11 rounded-xl pl-10 pr-4 text-[14px] transition-colors focus:outline-none"
+              onChange={(e) => { setSearch(e.target.value); if (e.target.value) setActiveTab('search' as any); else setFilterMuscle(null); }}
+              className="w-full h-11 rounded-xl pl-10 pr-4 text-[16px] transition-colors focus:outline-none"
               style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
             />
+            {search && (
+              <button
+                onClick={() => { setSearch(''); setFilterMuscle(null); setActiveTab('recent'); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full"
+                style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
-          <div className="flex gap-1.5 rounded-xl p-1" style={{ background: 'var(--bg-elevated)' }}>
-            {[
-              { id: 'recent', label: 'Recent',   Icon: History       },
-              { id: 'muscle', label: 'Muscle',   Icon: LayoutGrid    },
-              { id: 'plans',  label: 'My Plans', Icon: ClipboardList },
-            ].map(({ id, label, Icon }) => {
-              const isActive = activeTab === id && !search;
-              return (
-                <button
-                  key={id}
-                  onClick={() => { setActiveTab(id as any); setSearch(''); setSelectedMuscle(null); }}
-                  className="flex-1 h-8 rounded-lg text-[12px] font-semibold flex items-center justify-center gap-1.5 transition-all"
-                  style={isActive ? { background: 'var(--accent)', color: '#000' } : { background: 'transparent', color: 'var(--text-secondary)' }}
-                >
-                  <Icon className="w-3 h-3" />
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+
+          {/* Muscle filter chips — shown only when searching */}
+          {search && (
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-2 -mx-1 px-1">
+              {['All', ...MUSCLE_GROUPS.map(m => m.name)].map((m) => {
+                const isAll = m === 'All';
+                const active = isAll ? filterMuscle === null : filterMuscle === m;
+                const cssVar = isAll ? null : MUSCLE_CSS_VAR[m];
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setFilterMuscle(isAll ? null : m === filterMuscle ? null : m)}
+                    className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all"
+                    style={active
+                      ? { background: cssVar ? `color-mix(in srgb, var(${cssVar}) 18%, transparent)` : 'rgba(200,255,0,0.12)', color: cssVar ? `var(${cssVar})` : 'var(--accent)', border: `1px solid ${cssVar ? `color-mix(in srgb, var(${cssVar}) 35%, transparent)` : 'rgba(200,255,0,0.3)'}` }
+                      : { background: 'var(--bg-elevated)', color: 'var(--text-muted)', border: '1px solid transparent' }
+                    }
+                  >
+                    {m}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Tabs — hidden when searching */}
+          {!search && (
+            <div className="flex gap-1.5 rounded-xl p-1" style={{ background: 'var(--bg-elevated)' }}>
+              {[
+                { id: 'recent', label: 'Recent',   Icon: History       },
+                { id: 'muscle', label: 'Muscle',   Icon: LayoutGrid    },
+                { id: 'plans',  label: 'My Plans', Icon: ClipboardList },
+              ].map(({ id, label, Icon }) => {
+                const isActive = activeTab === id && !search;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => { setActiveTab(id as any); setSearch(''); setSelectedMuscle(null); }}
+                    className="flex-1 h-8 rounded-lg text-[12px] font-semibold flex items-center justify-center gap-1.5 transition-all"
+                    style={isActive ? { background: 'var(--accent)', color: '#000' } : { background: 'transparent', color: 'var(--text-secondary)' }}
+                  >
+                    <Icon className="w-3 h-3" />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* ── Content ── */}
@@ -409,7 +450,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
 
           {/* Recent tab */}
           {activeTab === 'recent' && !search && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
               {recentLoading && recentLibraryExercises.length === 0
                 ? Array.from({ length: 6 }).map((_, i) => (
                     <div
@@ -424,9 +465,30 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
                       </div>
                     </div>
                   ))
-                : (recentExercises.length > 0 ? recentExercises : recentLibraryExercises).map((exercise) => (
-                    <ExerciseRow key={exercise.id} exercise={exercise} isSelected={selectedMap.has(exercise.name)} onToggle={handleToggle} />
-                  ))
+                : (() => {
+                    const list = recentExercises.length > 0 ? recentExercises : recentLibraryExercises;
+                    // Group by muscle
+                    const groups = new Map<string, Exercise[]>();
+                    list.forEach(ex => {
+                      const g = ex.muscleGroup || 'Other';
+                      if (!groups.has(g)) groups.set(g, []);
+                      groups.get(g)!.push(ex);
+                    });
+                    return Array.from(groups.entries()).map(([group, exercises]) => {
+                      const cssVar = MUSCLE_CSS_VAR[group] ?? '--text-muted';
+                      return (
+                        <div key={group} className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2 px-1">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: `var(${cssVar})` }}>{group}</span>
+                            <div className="flex-1 h-px" style={{ background: `color-mix(in srgb, var(${cssVar}) 20%, transparent)` }} />
+                          </div>
+                          {exercises.map(exercise => (
+                            <ExerciseRow key={exercise.id} exercise={exercise} isSelected={selectedMap.has(exercise.name)} onToggle={handleToggle} />
+                          ))}
+                        </div>
+                      );
+                    });
+                  })()
               }
               {!recentLoading && recentExercises.length === 0 && recentLibraryExercises.length === 0 && (
                 <div className="flex flex-col items-center justify-center gap-2 py-16 text-center" style={{ color: 'var(--text-muted)' }}>

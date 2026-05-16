@@ -1152,10 +1152,9 @@ export const getLastExerciseSession = async (userId: string, exerciseName: strin
 
   if (matches.length === 0) return null;
 
-  const latestDate = matches[0].workouts.date;
   const latestWorkoutId = matches[0].workout_id;
   const sessionRows = matches
-    .filter((row) => row.workout_id === latestWorkoutId || row.workouts.date === latestDate)
+    .filter((row) => row.workout_id === latestWorkoutId)
     .sort((a, b) => a.order_index - b.order_index);
 
   const lastRow = sessionRows[sessionRows.length - 1];
