@@ -959,12 +959,12 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                 <div className="shrink-0 px-4 py-3 border-b border-white/5 flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p
-                      className="text-[11px] font-semibold uppercase mb-1"
-                      style={{ letterSpacing: '0.18em', color: '#5DCAA5' }}
+                      className="text-[10px] font-bold uppercase mb-1.5"
+                      style={{ letterSpacing: '0.2em', color: muscleColor(currentExercise.muscleGroup) }}
                     >
                       {currentExercise.muscleGroup || 'Exercise'}
                     </p>
-                    <p className="text-[26px] font-bold text-[var(--text-primary)] leading-[1.1] truncate">
+                    <p className="text-[32px] font-black text-[var(--text-primary)] leading-[1.05] tracking-tight" style={{ wordBreak: 'break-word' }}>
                       {currentExercise.name}
                     </p>
                   </div>
