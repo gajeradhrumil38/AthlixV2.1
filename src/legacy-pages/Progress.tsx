@@ -201,7 +201,7 @@ const formatStoredDate = (value: unknown, pattern: string) => {
 
 export const Progress: React.FC = () => {
   const { user, profile } = useAuth();
-  const displayUnit = profile?.unit_preference || 'kg';
+  const displayUnit = profile?.unit_preference || 'lbs';
   const [activeTab, setActiveTab] = useState<'overview' | 'overload' | 'dopamine' | 'weight' | 'livehr'>('livehr');
   const [loading, setLoading] = useState(true);
 

@@ -94,7 +94,7 @@ const BACK_VIEW_SLUGS = new Set([
 // --- Main Component ---
 export const Home: React.FC = () => {
   const { user, profile } = useAuth();
-  const displayUnit = profile?.unit_preference || 'kg';
+  const displayUnit = profile?.unit_preference || 'lbs';
   const location = useLocation();
   const navigate = useNavigate();
   const { visibleWidgets, loading: layoutLoading } = useDashboardLayout();

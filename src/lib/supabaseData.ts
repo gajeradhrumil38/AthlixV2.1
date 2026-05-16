@@ -1658,7 +1658,7 @@ export const saveWorkout = async (
         sets: 1,
         reps: set.reps,
         weight: set.weight || 0,
-        unit: set.unit || 'kg',
+        unit: set.unit || 'lbs',
         order_index: orderIndex++,
         exercise_db_id: exercise.exercise_db_id || null,
       });
@@ -1882,7 +1882,7 @@ export const logBodyWeight = async (
   const rpcPayload = {
     p_date: input.date,
     p_weight: input.weight,
-    p_unit: input.unit || 'kg',
+    p_unit: input.unit || 'lbs',
     p_notes: input.notes || null,
   };
 
@@ -1913,7 +1913,7 @@ export const logBodyWeight = async (
       .from('body_weight_logs')
       .update({
         weight: input.weight,
-        unit: input.unit || 'kg',
+        unit: input.unit || 'lbs',
         notes: input.notes ?? null,
       })
       .eq('id', existing.id)
@@ -1932,7 +1932,7 @@ export const logBodyWeight = async (
       user_id: userId,
       date: input.date,
       weight: input.weight,
-      unit: input.unit || 'kg',
+      unit: input.unit || 'lbs',
       notes: input.notes || null,
       created_at: nowIso(),
     },

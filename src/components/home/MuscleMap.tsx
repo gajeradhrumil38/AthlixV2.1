@@ -66,7 +66,7 @@ const loadToIntensity = (load: number, maxLoad: number): number => {
 const getMetric = (entry: MuscleEntry) => entry.relativeLoad || entry.load || entry.sets || 0
 
 export const MuscleMap: React.FC<MuscleMapProps> = ({
-  muscleData, view, onViewChange, title, unit = 'kg'
+  muscleData, view, onViewChange, title, unit = 'lbs'
 }) => {
   const [tooltip, setTooltip] = useState<{ slug: string; x: number; y: number } | null>(null)
 

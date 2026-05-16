@@ -164,7 +164,7 @@ const ExerciseChip: React.FC<{ name: string; color: string }> = ({ name, color }
 
 export const Calendar: React.FC = () => {
   const { user, profile } = useAuth();
-  const unit = (profile?.unit_preference || 'kg') as WeightUnit;
+  const unit = (profile?.unit_preference || 'lbs') as WeightUnit;
   const navigate = useNavigate();
 
   const today = useMemo(() => new Date(), []);

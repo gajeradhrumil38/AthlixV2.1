@@ -341,7 +341,7 @@ export const Settings: React.FC = () => {
     save(
       {
         body_weight: draftProfile?.body_weight ?? null,
-        body_weight_unit: draftProfile?.body_weight_unit || 'kg',
+        body_weight_unit: draftProfile?.body_weight_unit || 'lbs',
         height_feet: draftProfile?.height_feet ?? null,
         height_inches: draftProfile?.height_inches ?? null,
       },
@@ -488,7 +488,7 @@ export const Settings: React.FC = () => {
           />
           <SegmentControl
             options={['kg', 'lbs']}
-            value={draftProfile?.unit_preference || 'kg'}
+            value={draftProfile?.unit_preference || 'lbs'}
             onChange={handleUnitChange}
             disabled={saving}
           />
@@ -582,7 +582,7 @@ export const Settings: React.FC = () => {
               />
               <SegmentControl
                 options={['kg', 'lbs']}
-                value={draftProfile?.body_weight_unit || 'kg'}
+                value={draftProfile?.body_weight_unit || 'lbs'}
                 onChange={(v) => handleBodyWeightUnitChange(v as WeightUnit)}
               />
             </div>

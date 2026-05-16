@@ -283,7 +283,7 @@ const Skeleton = () => (
 
 export const Timeline: React.FC = () => {
   const { user, profile } = useAuth();
-  const displayUnit = (profile?.unit_preference || 'kg') as WeightUnit;
+  const displayUnit = (profile?.unit_preference || 'lbs') as WeightUnit;
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
 

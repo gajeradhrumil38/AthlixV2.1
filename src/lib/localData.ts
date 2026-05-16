@@ -924,7 +924,7 @@ export const saveWorkout = async (
         sets: 1,
         reps: set.reps,
         weight: set.weight || 0,
-        unit: set.unit || 'kg',
+        unit: set.unit || 'lbs',
         order_index: orderIndex++,
         exercise_db_id: exercise.exercise_db_id || null,
       });
@@ -1062,7 +1062,7 @@ export const logBodyWeight = async (userId: string, input: { date: string; weigh
     user_id: userId,
     date: input.date,
     weight: input.weight,
-    unit: input.unit || 'kg',
+    unit: input.unit || 'lbs',
     notes: input.notes || null,
     created_at: existingIndex >= 0 ? db.bodyWeightLogs[existingIndex].created_at : nowIso(),
   };
