@@ -13,6 +13,7 @@ import { parseDateAtStartOfDay } from '../lib/dates';
 import { getExerciseMuscleProfile, getMuscleSlugLabel, PRIMARY_LOAD_WEIGHT, SECONDARY_LOAD_WEIGHT } from '../lib/exerciseMuscles';
 import { convertWeight, isWeightUnit, type WeightUnit } from '../lib/units';
 import { WhoopDashboard } from '../components/whoop/WhoopDashboard';
+import { MuscleRadar } from '../components/home/MuscleRadar';
 
 // --- Utility Functions ---
 const calculateStreak = (workouts: { date: string }[]) => {
@@ -827,34 +828,7 @@ export const Home: React.FC = () => {
     week_strip: (
       <div key="week_strip" className="flex flex-col gap-2">
         <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl p-3 animate-card-enter" style={{ animationDelay: '270ms' }}>
-          <h3 className="text-[10px] uppercase tracking-[0.8px] text-[var(--text-secondary)] font-semibold mb-3">MUSCLE LOAD</h3>
-          <div className="flex flex-col gap-2.5">
-            {trainedMuscleGroups.length > 0 ? (
-              trainedMuscleGroups.map(m => {
-                const load = Math.min(((muscleData[m]?.sets || 0) / 10) * 100, 100);
-                const colorVar = m.toLowerCase() === 'cardio' ? 'var(--accent)' : `var(--${m.toLowerCase()})`;
-                return (
-                  <div key={m} className="flex flex-col gap-1">
-                    <div className="flex justify-between text-[9px]">
-                      <span className="text-[var(--text-primary)]">{m}</span>
-                      <span className="text-[var(--text-secondary)]">{load.toFixed(0)}%</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-[var(--bg-elevated)] rounded-full overflow-hidden">
-                      <motion.div 
-                        className="h-full rounded-full" 
-                        style={{ backgroundColor: colorVar }}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${load}%` }}
-                        transition={{ duration: 1, delay: 0.5 }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="text-[10px] text-[var(--text-secondary)] text-center py-2">No data yet</div>
-            )}
-          </div>
+          <MuscleRadar muscleData={muscleData} />
         </div>
       </div>
     ),
