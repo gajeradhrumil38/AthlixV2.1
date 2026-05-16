@@ -90,6 +90,7 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
     bodyWeightForMath = null,
     onWeightUnitChange,
     onDistanceUnitChange,
+    onUpdateSet,
     onMarkSetDone,
     onAddSet,
     onCopySet,
@@ -231,6 +232,11 @@ export const ExerciseContent: React.FC<ExerciseContentProps> = (props) => {
                 set={set}
                 onMarkDone={() => onMarkSetDone(set.id)}
                 onOpenDial={(field) => onOpenDial(set.id, field)}
+                onAdjust={(field, delta) => {
+                  const cur = set[field] ?? 0;
+                  onUpdateSet(set.id, field, Math.max(0, parseFloat((cur + delta).toFixed(2))));
+                }}
+                weightUnit={weightUnit}
                 primary={{
                   field: primaryField,
                   label: inputLabels.primary,

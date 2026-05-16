@@ -15,6 +15,7 @@ interface SetRowProps {
   primary: SetRowField;
   secondary?: SetRowField | null;
   onOpenDial: (field: 'weight' | 'reps') => void;
+  onAdjust: (field: 'weight' | 'reps', delta: number) => void;
   onMarkDone: () => void;
   weightUnit?: string;
 }
@@ -22,26 +23,59 @@ interface SetRowProps {
 const ValueBox: React.FC<{
   field: SetRowField;
   isDone: boolean;
+  step: number;
   onTap: () => void;
-}> = ({ field, isDone, onTap }) => {
+  onAdjust: (delta: number) => void;
+}> = ({ field, isDone, step, onTap, onAdjust }) => {
+  const stepLabel = Number.isInteger(step) ? `${step}` : step % 1 === 0.5 ? `${step}` : `${step}`;
+
   return (
-    <button
-      onClick={onTap}
-      className="relative flex h-[82px] w-full flex-col items-center justify-center gap-[3px] overflow-hidden rounded-xl border text-center transition-all active:scale-[0.97]"
+    <div
+      className="relative flex h-[82px] w-full overflow-hidden rounded-xl border transition-colors duration-200"
       style={{
         background: 'var(--bg-base)',
         borderColor: isDone ? 'rgba(200,255,0,0.12)' : 'var(--border)',
       }}
     >
-      {/* faint top shimmer */}
+      {/* shimmer line */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/8 to-transparent" />
-      <div className="font-victory tabular-nums text-[36px] leading-none font-black text-[var(--text-primary)]">
-        {field.displayValue}
-      </div>
-      <div className="text-[10px] font-bold tracking-[0.16em] uppercase text-[var(--text-secondary)]">
-        {field.label}
-      </div>
-    </button>
+
+      {/* − button */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onAdjust(-step); }}
+        className="flex h-full w-[48px] shrink-0 flex-col items-center justify-center gap-0.5 active:bg-white/[0.04] transition-colors"
+        style={{ color: 'var(--text-muted)', borderRight: '1px solid rgba(255,255,255,0.05)' }}
+      >
+        <span className="text-[22px] font-light leading-none select-none">−</span>
+        <span className="text-[9px] font-semibold leading-none opacity-50 select-none">{stepLabel}</span>
+      </button>
+
+      {/* Center — tap to open full dial */}
+      <button
+        type="button"
+        onClick={onTap}
+        className="flex flex-1 flex-col items-center justify-center gap-[3px]"
+      >
+        <div className="font-victory tabular-nums text-[34px] leading-none font-black text-[var(--text-primary)]">
+          {field.displayValue}
+        </div>
+        <div className="text-[10px] font-bold tracking-[0.16em] uppercase text-[var(--text-secondary)]">
+          {field.label}
+        </div>
+      </button>
+
+      {/* + button */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onAdjust(step); }}
+        className="flex h-full w-[48px] shrink-0 flex-col items-center justify-center gap-0.5 active:bg-white/[0.04] transition-colors"
+        style={{ color: 'var(--accent)', borderLeft: '1px solid rgba(255,255,255,0.05)' }}
+      >
+        <span className="text-[22px] font-light leading-none select-none">+</span>
+        <span className="text-[9px] font-semibold leading-none opacity-50 select-none">{stepLabel}</span>
+      </button>
+    </div>
   );
 };
 
@@ -51,18 +85,32 @@ export const SetRow: React.FC<SetRowProps> = ({
   primary,
   secondary,
   onOpenDial,
+  onAdjust,
   onMarkDone,
   weightUnit = 'lbs',
 }) => {
-  const hasPlanned = (set.planned_weight != null && set.planned_weight > 0) || (set.planned_reps != null && set.planned_reps > 0);
+  const weightStep = weightUnit === 'kg' ? 1.25 : 2.5;
+  const repsStep = 1;
+
+  const stepFor = (field: 'weight' | 'reps') => (field === 'weight' ? weightStep : repsStep);
+
+  const hasPlanned =
+    (set.planned_weight != null && set.planned_weight > 0) ||
+    (set.planned_reps != null && set.planned_reps > 0);
+
   const plannedLabel = hasPlanned
     ? [
-        set.planned_weight != null && set.planned_weight > 0 ? `${set.planned_weight}${weightUnit}` : null,
-        set.planned_reps != null && set.planned_reps > 0 ? `${set.planned_reps} reps` : null,
+        set.planned_weight != null && set.planned_weight > 0
+          ? `${set.planned_weight}${weightUnit}`
+          : null,
+        set.planned_reps != null && set.planned_reps > 0
+          ? `${set.planned_reps} reps`
+          : null,
       ]
         .filter(Boolean)
         .join(' × ')
     : null;
+
   return (
     <div
       className="relative overflow-hidden rounded-2xl border transition-all duration-200"
@@ -74,9 +122,7 @@ export const SetRow: React.FC<SetRowProps> = ({
       {/* Left accent bar */}
       <div
         className="absolute left-0 top-0 bottom-0 w-[3px] transition-all duration-300"
-        style={{
-          background: set.done ? 'var(--accent)' : 'var(--border)',
-        }}
+        style={{ background: set.done ? 'var(--accent)' : 'var(--border)' }}
       />
 
       {/* Header row */}
@@ -93,7 +139,10 @@ export const SetRow: React.FC<SetRowProps> = ({
             Set {index}
           </div>
           {set.done && (
-            <span className="text-[10px] font-semibold tracking-[0.08em] uppercase" style={{ color: 'rgba(200,255,0,0.70)' }}>
+            <span
+              className="text-[10px] font-semibold tracking-[0.08em] uppercase"
+              style={{ color: 'rgba(200,255,0,0.70)' }}
+            >
               Done
             </span>
           )}
@@ -104,7 +153,6 @@ export const SetRow: React.FC<SetRowProps> = ({
           )}
         </div>
 
-        {/* Check button — square (8px radius) matching design */}
         <button
           onClick={onMarkDone}
           aria-label={set.done ? `Mark set ${index} incomplete` : `Mark set ${index} complete`}
@@ -127,11 +175,23 @@ export const SetRow: React.FC<SetRowProps> = ({
         </button>
       </div>
 
-      {/* Value boxes */}
+      {/* Value boxes with steppers */}
       <div className={`grid gap-2 px-3 pb-3 pl-4 ${secondary ? 'grid-cols-2' : 'grid-cols-1'}`}>
-        <ValueBox field={primary} isDone={set.done} onTap={() => onOpenDial(primary.field)} />
+        <ValueBox
+          field={primary}
+          isDone={set.done}
+          step={stepFor(primary.field)}
+          onTap={() => onOpenDial(primary.field)}
+          onAdjust={(delta) => onAdjust(primary.field, delta)}
+        />
         {secondary && (
-          <ValueBox field={secondary} isDone={set.done} onTap={() => onOpenDial(secondary.field)} />
+          <ValueBox
+            field={secondary}
+            isDone={set.done}
+            step={stepFor(secondary.field)}
+            onTap={() => onOpenDial(secondary.field)}
+            onAdjust={(delta) => onAdjust(secondary.field, delta)}
+          />
         )}
       </div>
     </div>

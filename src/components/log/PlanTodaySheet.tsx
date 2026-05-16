@@ -4,7 +4,7 @@ import { X, Plus, Trash2, Check, Copy, BookmarkCheck, Bookmark, ChevronDown } fr
 import { ExercisePicker } from './ExercisePicker';
 import { DialPicker } from './DialPicker';
 import { useAuth } from '../../contexts/AuthContext';
-import { saveTemplate, getLastExerciseSession } from '../../lib/supabaseData';
+import { saveTemplate, checkTemplateNameExists, getLastExerciseSession } from '../../lib/supabaseData';
 import type { ExerciseEntry } from '../../legacy-pages/Log';
 import toast from 'react-hot-toast';
 
@@ -272,6 +272,9 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
   // Save-as-new: name input state
   const [saveAsNewName, setSaveAsNewName] = useState('');
   const [showSaveAsNewInput, setShowSaveAsNewInput] = useState(false);
+  // Duplicate name: rename before save
+  const [dupNameInput, setDupNameInput] = useState('');
+  const [pendingDupSave, setPendingDupSave] = useState<null | { exs: PlannedExercise[]; tid: string | null; isNew: boolean }>(null);
 
   // Skip dirty-flag on first mount AND when we deliberately bypass it
   const isMountedRef = useRef(false);
@@ -313,6 +316,17 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
   ): Promise<string | null> => {
     if (!exsToSave.length) { toast.error('Add at least one exercise'); return null; }
     if (!user) { toast.error('Sign in to save plans'); return null; }
+
+    // Duplicate name check — only when creating a new plan (not updating existing)
+    const isCreatingNew = isNew || !tid;
+    if (isCreatingNew) {
+      const exists = await checkTemplateNameExists(user.id, saveTitle, tid);
+      if (exists) {
+        setDupNameInput(saveTitle);
+        setPendingDupSave({ exs: exsToSave, tid, isNew });
+        return null;
+      }
+    }
     setSaving(true);
     try {
       const saved = await saveTemplate(user.id, {
@@ -813,6 +827,76 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
                   type="button"
                   onClick={confirmSaveAsNew}
                   className="flex-1 h-11 rounded-xl text-[13px] font-bold text-black"
+                  style={{ background: 'var(--accent)' }}
+                >
+                  Save
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* ── Duplicate plan name — rename before saving ── */}
+        {pendingDupSave && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[230] flex items-center justify-center px-5"
+            style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)' }}
+            onClick={() => setPendingDupSave(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className="w-full max-w-[340px] rounded-2xl p-5"
+              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-[16px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Name already taken</p>
+              <p className="text-[12px] mb-4" style={{ color: 'var(--text-muted)' }}>
+                A plan called <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>"{dupNameInput}"</span> already exists. Rename it to save.
+              </p>
+              <input
+                type="text"
+                autoFocus
+                value={dupNameInput}
+                onChange={(e) => setDupNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && dupNameInput.trim()) {
+                    const p = pendingDupSave;
+                    setPendingDupSave(null);
+                    doSavePlan(p.exs, p.tid, dupNameInput.trim(), p.isNew);
+                  }
+                }}
+                className="w-full px-3 py-2.5 rounded-xl text-[14px] font-semibold mb-4 focus:outline-none"
+                style={{
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
+                  caretColor: 'var(--accent)',
+                }}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPendingDupSave(null)}
+                  className="flex-1 h-11 rounded-xl text-[13px] font-semibold"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!dupNameInput.trim()}
+                  onClick={() => {
+                    const p = pendingDupSave;
+                    setPendingDupSave(null);
+                    doSavePlan(p.exs, p.tid, dupNameInput.trim(), p.isNew);
+                  }}
+                  className="flex-1 h-11 rounded-xl text-[13px] font-bold text-black disabled:opacity-40"
                   style={{ background: 'var(--accent)' }}
                 >
                   Save

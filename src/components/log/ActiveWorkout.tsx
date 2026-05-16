@@ -8,7 +8,7 @@ import { ExerciseContent } from './ExerciseContent';
 import { ExercisePicker } from './ExercisePicker';
 import { DialPicker } from './DialPicker';
 import { useAuth } from '../../contexts/AuthContext';
-import { getLastExerciseSession, saveTemplate } from '../../lib/supabaseData';
+import { getLastExerciseSession, saveTemplate, checkTemplateNameExists } from '../../lib/supabaseData';
 import {
   DistanceUnit,
   DialFieldKind,
@@ -130,6 +130,8 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   const [pendingPlanExercises, setPendingPlanExercises] = useState<ExerciseEntry[]>([]);
   const [workoutOnlyExerciseIds, setWorkoutOnlyExerciseIds] = useState<Set<string>>(new Set());
   const [showPlanSaveOptions, setShowPlanSaveOptions] = useState(false);
+  const [dupNameInput, setDupNameInput] = useState('');
+  const [showDupNamePopup, setShowDupNamePopup] = useState(false);
   const loadedPlanRef = useRef<{ id: string; title: string } | null>(null);
   useEffect(() => { loadedPlanRef.current = loadedPlan; }, [loadedPlan]);
 
@@ -175,19 +177,19 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       order_index: i,
     }));
 
-  const handleSaveAsTemplate = useCallback(async () => {
+  const doSaveNewTemplate = useCallback(async (nameOverride?: string) => {
     if (!user || workout.exercises.length === 0) return;
-    const plan = loadedPlanRef.current;
-    if (plan) {
-      setShowPlanSaveOptions(true);
+    const name = nameOverride ?? workout.title;
+    const exists = await checkTemplateNameExists(user.id, name);
+    if (exists) {
+      setDupNameInput(name);
+      setShowDupNamePopup(true);
       return;
     }
     setSavingTemplate(true);
     try {
-      await saveTemplate(user.id, {
-        title: workout.title,
-        exercises: buildTemplateExercises(workout.exercises),
-      });
+      await saveTemplate(user.id, { title: name, exercises: buildTemplateExercises(workout.exercises) });
+      setLoadedPlan(null);
       toast.success('Saved as plan!');
     } catch {
       toast.error('Could not save plan');
@@ -195,6 +197,16 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
       setSavingTemplate(false);
     }
   }, [user, workout]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSaveAsTemplate = useCallback(async () => {
+    if (!user || workout.exercises.length === 0) return;
+    const plan = loadedPlanRef.current;
+    if (plan) {
+      setShowPlanSaveOptions(true);
+      return;
+    }
+    doSaveNewTemplate();
+  }, [user, workout, doSaveNewTemplate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLoadPlan = useCallback((tmpl: { id: string; title: string; template_exercises: Array<{ name: string; muscle_group?: string | null; exercise_db_id?: string | null; default_sets?: number; default_reps?: number; default_weight?: number }> }) => {
     const newEntries: ExerciseEntry[] = tmpl.template_exercises.map((te) => ({
@@ -1246,23 +1258,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={async () => {
-                    setShowPlanSaveOptions(false);
-                    if (!user || workout.exercises.length === 0) return;
-                    setSavingTemplate(true);
-                    try {
-                      await saveTemplate(user.id, {
-                        title: workout.title,
-                        exercises: buildTemplateExercises(workout.exercises),
-                      });
-                      setLoadedPlan(null);
-                      toast.success('Saved as new plan!');
-                    } catch {
-                      toast.error('Could not save plan');
-                    } finally {
-                      setSavingTemplate(false);
-                    }
-                  }}
+                  onClick={() => { setShowPlanSaveOptions(false); doSaveNewTemplate(); }}
                   className="w-full py-3.5 rounded-xl text-[14px] font-semibold active:scale-[0.98] transition-all"
                   style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
                 >
@@ -1275,6 +1271,68 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                   style={{ color: 'var(--text-muted)' }}
                 >
                   Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Duplicate plan name — rename before saving ── */}
+      <AnimatePresence>
+        {showDupNamePopup && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[230] flex items-center justify-center px-5"
+            style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)' }}
+            onClick={() => setShowDupNamePopup(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className="w-full max-w-[340px] rounded-2xl p-5"
+              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-[16px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Name already taken</p>
+              <p className="text-[12px] mb-4" style={{ color: 'var(--text-muted)' }}>
+                A plan called <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>"{dupNameInput}"</span> already exists. Rename it to save.
+              </p>
+              <input
+                type="text"
+                autoFocus
+                value={dupNameInput}
+                onChange={(e) => setDupNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && dupNameInput.trim()) {
+                    setShowDupNamePopup(false);
+                    doSaveNewTemplate(dupNameInput.trim());
+                  }
+                }}
+                className="w-full px-3 py-2.5 rounded-xl text-[14px] font-semibold mb-4 focus:outline-none"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)', caretColor: 'var(--accent)' }}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDupNamePopup(false)}
+                  className="flex-1 h-11 rounded-xl text-[13px] font-semibold"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!dupNameInput.trim()}
+                  onClick={() => { setShowDupNamePopup(false); doSaveNewTemplate(dupNameInput.trim()); }}
+                  className="flex-1 h-11 rounded-xl text-[13px] font-bold text-black disabled:opacity-40"
+                  style={{ background: 'var(--accent)' }}
+                >
+                  Save
                 </button>
               </div>
             </motion.div>

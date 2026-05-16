@@ -984,6 +984,20 @@ export const getTemplates = async (userId: string) => {
     }));
 };
 
+export const checkTemplateNameExists = async (
+  userId: string,
+  title: string,
+  excludeId?: string | null,
+): Promise<boolean> => {
+  const db = readDb();
+  return db.templates.some(
+    (t) =>
+      t.user_id === userId &&
+      t.title.trim().toLowerCase() === title.trim().toLowerCase() &&
+      t.id !== excludeId,
+  );
+};
+
 export const saveTemplate = async (
   userId: string,
   input: {

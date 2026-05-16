@@ -1766,6 +1766,22 @@ export const getTemplates = async (userId: string) => {
   }));
 };
 
+export const checkTemplateNameExists = async (
+  userId: string,
+  title: string,
+  excludeId?: string | null,
+): Promise<boolean> => {
+  if (!hasSupabaseConfig) return localData.checkTemplateNameExists(userId, title, excludeId);
+  let query = supabase
+    .from('templates')
+    .select('id')
+    .eq('user_id', userId)
+    .ilike('title', title.trim());
+  if (excludeId) query = query.neq('id', excludeId);
+  const { data } = await query.limit(1);
+  return (data?.length ?? 0) > 0;
+};
+
 export const saveTemplate = async (
   userId: string,
   input: {
@@ -1784,19 +1800,23 @@ export const saveTemplate = async (
 ) => {
   if (!hasSupabaseConfig) return localData.saveTemplate(userId, input);
 
-  const rpcPayload = {
-    p_template_id: input.templateId || null,
-    p_title: input.title,
-    p_exercises: input.exercises,
-  };
+  // When updating an existing template, skip the RPC (it may always INSERT a new row)
+  // and go directly to the safe JS update path.
+  if (!input.templateId) {
+    const rpcPayload = {
+      p_template_id: null,
+      p_title: input.title,
+      p_exercises: input.exercises,
+    };
 
-  const { data: templateIdFromRpc, error: rpcError } = await supabase.rpc(
-    'save_template_with_exercises',
-    rpcPayload,
-  );
+    const { data: templateIdFromRpc, error: rpcError } = await supabase.rpc(
+      'save_template_with_exercises',
+      rpcPayload,
+    );
 
-  if (!rpcError && templateIdFromRpc) {
-    return templateIdFromRpc as string;
+    if (!rpcError && templateIdFromRpc) {
+      return templateIdFromRpc as string;
+    }
   }
 
   const templateId = input.templateId || createId();
