@@ -52,6 +52,7 @@ interface ExercisePickerProps {
   onLoadTemplate?: (exercises: Exercise[], title?: string) => void;
   onStartTemplate?: (exercises: Exercise[], title: string) => void;
   onEditTemplate?: (template: any) => void;
+  onLoadPlan?: (template: Template) => void;
   multiSelect?: boolean;
 }
 
@@ -183,6 +184,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
   onLoadTemplate,
   onStartTemplate,
   onEditTemplate,
+  onLoadPlan,
   multiSelect = false,
 }) => {
   const { user } = useAuth();
@@ -642,16 +644,17 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
                       type="button"
                       onClick={() => {
                         const exs = templateToExercises(tmpl);
-                        if (onStartTemplate) { onStartTemplate(exs, tmpl.title); onClose(); }
+                        if (onLoadPlan) { onLoadPlan(tmpl); onClose(); }
+                        else if (onStartTemplate) { onStartTemplate(exs, tmpl.title); onClose(); }
                         else if (onLoadTemplate) { onLoadTemplate(exs, tmpl.title); onClose(); }
                         else { exs.forEach((ex) => onSelect(ex)); onClose(); }
                       }}
                       className="flex h-8 items-center gap-1.5 px-3 rounded-lg shrink-0 text-[11px] font-bold active:scale-95 transition-transform text-black"
                       style={{ background: 'var(--accent)' }}
-                      title={onStartTemplate ? 'Start workout' : onLoadTemplate ? 'Load exercises' : 'Add exercises'}
+                      title={onLoadPlan ? 'Load plan' : onStartTemplate ? 'Start workout' : onLoadTemplate ? 'Load exercises' : 'Add exercises'}
                     >
                       <Play className="w-3 h-3 fill-black" />
-                      {onStartTemplate ? 'Start' : onLoadTemplate ? 'Load' : 'Add'}
+                      {onLoadPlan ? 'Load' : onStartTemplate ? 'Start' : onLoadTemplate ? 'Load' : 'Add'}
                     </button>
                   </div>
                 );

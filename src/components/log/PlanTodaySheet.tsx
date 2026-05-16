@@ -534,6 +534,28 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
     setIsSaved(true);
   };
 
+  // Load a plan from My Plans into the editor (sets templateId so save = UPDATE not INSERT)
+  const handleLoadPlan = (tmpl: { id: string; title: string; template_exercises: Array<{ name: string; muscle_group?: string | null; exercise_db_id?: string | null; default_sets?: number; default_reps?: number; default_weight?: number }> }) => {
+    skipDirtyRef.current = true;
+    const converted: PlannedExercise[] = tmpl.template_exercises.map((te) => ({
+      id: createId(),
+      name: te.name,
+      muscleGroup: te.muscle_group || 'Core',
+      exercise_db_id: te.exercise_db_id || undefined,
+      sets: Array.from({ length: te.default_sets || 3 }, () => ({
+        weight: te.default_weight || 0,
+        reps: te.default_reps || 10,
+      })),
+    }));
+    setExercises(converted);
+    setTitle(tmpl.title);
+    setTemplateId(tmpl.id);
+    setIsSaved(true);
+    setWorkoutOnlyIds(new Set());
+    setPendingActionExercises([]);
+    setShowPicker(false);
+  };
+
   const dialExercise = dialState ? exercises.find((e) => e.id === dialState.exId) : null;
   const dialSet = dialExercise ? dialExercise.sets[dialState!.setIdx] : null;
 
@@ -876,6 +898,8 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
           onClose={() => setShowPicker(false)}
           recentExercises={[]}
           multiSelect
+          onLoadPlan={handleLoadPlan}
+          onEditTemplate={handleLoadPlan}
         />
       )}
 
