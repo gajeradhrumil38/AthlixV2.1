@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Trash2, Check, Copy, BookmarkCheck, Bookmark } from 'lucide-react';
+import { X, Plus, Trash2, Check, Copy, BookmarkCheck, Bookmark, ChevronDown } from 'lucide-react';
 import { ExercisePicker } from './ExercisePicker';
 import { DialPicker } from './DialPicker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -169,8 +169,10 @@ const PlanExerciseCard: React.FC<{
           <div className="flex items-center gap-2 mt-0.5">
             <p className="text-[10px] font-bold uppercase tracking-[1.6px]" style={{ color }}>{ex.muscleGroup}</p>
             {isWorkoutOnly && (
-              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
-                style={{ background: 'rgba(200,255,0,0.1)', color: 'var(--accent)', border: '1px solid rgba(200,255,0,0.2)' }}>
+              <span
+                className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+                style={{ background: 'rgba(200,255,0,0.1)', color: 'var(--accent)', border: '1px solid rgba(200,255,0,0.2)' }}
+              >
                 Session only
               </span>
             )}
@@ -260,11 +262,19 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
   const [dialState, setDialState] = useState<DialState | null>(null);
   const [templateId, setTemplateId] = useState<string | null>(initialTemplate?.id ?? null);
   const [isSaved, setIsSaved] = useState(!!initialTemplate?.id);
-  // Tracks exercises added for this workout session only (not saved to template)
+
+  // Tracks exercises added for this session only (not persisted to the plan)
   const [workoutOnlyIds, setWorkoutOnlyIds] = useState<Set<string>>(new Set());
-  // Shows the "Added exercise — update plan?" action popup
-  const [pendingActionExercise, setPendingActionExercise] = useState<PlannedExercise | null>(null);
-  // Prevents dirty-flag trigger when adding workout-only exercise
+  // Batch of exercises pending the "Update Plan?" popup
+  const [pendingActionExercises, setPendingActionExercises] = useState<PlannedExercise[]>([]);
+  // Save-options popup (Update vs Save as New) for existing saved plans
+  const [showSaveOptions, setShowSaveOptions] = useState(false);
+  // Save-as-new: name input state
+  const [saveAsNewName, setSaveAsNewName] = useState('');
+  const [showSaveAsNewInput, setShowSaveAsNewInput] = useState(false);
+
+  // Skip dirty-flag on first mount AND when we deliberately bypass it
+  const isMountedRef = useRef(false);
   const skipDirtyRef = useRef(false);
 
   const inferPlanName = (exs: PlannedExercise[]) => {
@@ -278,25 +288,37 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
   };
   const defaultTitle = inferPlanName(exercises);
 
-  // Mark unsaved whenever plan content changes, unless we're adding a workout-only exercise
+  // Mark unsaved when content changes — but skip on first mount and when explicitly bypassed
   useEffect(() => {
-    if (skipDirtyRef.current) { skipDirtyRef.current = false; return; }
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      return;
+    }
+    if (skipDirtyRef.current) {
+      skipDirtyRef.current = false;
+      return;
+    }
     if (isSaved) setIsSaved(false);
   }, [exercises, title]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Exercises that count toward the saved plan (exclude session-only additions)
   const planExercises = exercises.filter((ex) => !workoutOnlyIds.has(ex.id));
 
-  const handleSavePlan = async () => {
-    if (!planExercises.length) { toast.error('Add at least one exercise'); return; }
-    if (!user) { toast.error('Sign in to save plans'); return; }
-    const planTitle = title.trim() || defaultTitle;
+  // ── Core save function (explicit params to avoid stale closures) ──────────
+  const doSavePlan = useCallback(async (
+    exsToSave: PlannedExercise[],
+    tid: string | null,
+    saveTitle: string,
+    isNew = false,
+  ): Promise<string | null> => {
+    if (!exsToSave.length) { toast.error('Add at least one exercise'); return null; }
+    if (!user) { toast.error('Sign in to save plans'); return null; }
     setSaving(true);
     try {
       const saved = await saveTemplate(user.id, {
-        templateId,
-        title: planTitle,
-        exercises: planExercises.map((ex, i) => ({
+        templateId: isNew ? null : tid,  // null = always create new
+        title: saveTitle,
+        exercises: exsToSave.map((ex, i) => ({
           name: ex.name,
           muscle_group: ex.muscleGroup,
           default_sets: ex.sets.length,
@@ -306,14 +328,52 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
           order_index: i,
         })),
       });
-      if (saved && !templateId) setTemplateId(saved as string);
+      const newId = saved as string | null;
+      if (newId) {
+        if (isNew) {
+          // "Save as New" keeps the current plan editing state but links to new id
+          setTemplateId(newId);
+          setTitle(saveTitle);
+        } else if (!tid) {
+          setTemplateId(newId);
+        }
+      }
       setIsSaved(true);
-      toast.success(templateId ? 'Plan updated!' : 'Plan saved to My Plans!');
+      toast.success(isNew ? `Saved as "${saveTitle}"!` : tid ? 'Plan updated!' : 'Plan saved to My Plans!');
+      return newId;
     } catch (e: any) {
       toast.error(e?.message || 'Failed to save plan');
+      return null;
     } finally {
       setSaving(false);
     }
+  }, [user]);
+
+  const handleSavePlan = () => {
+    // If has existing saved plan, show options (Update vs Save as New)
+    if (templateId && isSaved) {
+      setShowSaveOptions(true);
+      return;
+    }
+    doSavePlan(planExercises, templateId, title.trim() || defaultTitle);
+  };
+
+  const handleUpdateExisting = () => {
+    setShowSaveOptions(false);
+    doSavePlan(planExercises, templateId, title.trim() || defaultTitle);
+  };
+
+  const handleSaveAsNew = () => {
+    setShowSaveOptions(false);
+    setSaveAsNewName(title.trim() || defaultTitle);
+    setShowSaveAsNewInput(true);
+  };
+
+  const confirmSaveAsNew = () => {
+    const newName = saveAsNewName.trim() || defaultTitle;
+    setShowSaveAsNewInput(false);
+    setSaveAsNewName('');
+    doSavePlan(planExercises, null, newName, true);
   };
 
   const openDial = (exId: string, setIdx: number, field: 'weight' | 'reps') => {
@@ -373,11 +433,11 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
       sets,
     };
 
-    // If this is an already-saved plan, ask what to do with the new exercise
     if (templateId && isSaved) {
-      skipDirtyRef.current = true; // don't mark dirty yet — let user decide
+      // Saved plan: batch the new exercise into pending popup
+      skipDirtyRef.current = true;
       setExercises((prev) => [...prev, newEx]);
-      setPendingActionExercise(newEx);
+      setPendingActionExercises((prev) => [...prev, newEx]);
     } else {
       setExercises((prev) => [...prev, newEx]);
     }
@@ -392,7 +452,7 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
     const planTitle = title.trim() || defaultTitle;
     setSaving(true);
     try {
-      // Auto-save only if updating an existing saved plan
+      // Auto-save only when updating an existing saved plan
       if (user && templateId) {
         await saveTemplate(user.id, {
           templateId,
@@ -409,7 +469,7 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
         });
       }
     } catch {
-      // Non-fatal
+      // Non-fatal — still start the workout
     } finally {
       setSaving(false);
     }
@@ -433,8 +493,46 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
   };
 
   // Save button label & style
-  const saveLabel = isSaved ? 'Saved' : templateId ? 'Update' : 'Save';
-  const saveIcon = isSaved ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />;
+  const saveLabel = isSaved
+    ? 'Saved'
+    : templateId
+      ? 'Update'
+      : 'Save';
+  const saveIcon = isSaved
+    ? <BookmarkCheck className="w-3.5 h-3.5" />
+    : templateId
+      ? <Bookmark className="w-3.5 h-3.5" />
+      : <Bookmark className="w-3.5 h-3.5" />;
+
+  // Pending popup helpers
+  const pendingExNames = pendingActionExercises.map((e) => e.name);
+  const pendingLabel =
+    pendingExNames.length === 1
+      ? pendingExNames[0]
+      : `${pendingExNames.length} exercises`;
+
+  const handlePendingUpdatePlan = async () => {
+    // All pending exercises are already in `exercises` (not in workoutOnlyIds), so they'll be saved
+    const currentExercises = exercises.filter((ex) => !workoutOnlyIds.has(ex.id));
+    setPendingActionExercises([]);
+    await doSavePlan(currentExercises, templateId, title.trim() || defaultTitle);
+  };
+
+  const handlePendingWorkoutOnly = () => {
+    // Move all pending exercises to session-only
+    const pendingIds = new Set(pendingActionExercises.map((e) => e.id));
+    setWorkoutOnlyIds((prev: Set<string>) => new Set([...prev, ...pendingIds]));
+    setPendingActionExercises([]);
+    setIsSaved(true); // plan itself unchanged
+  };
+
+  const handlePendingCancel = () => {
+    // Remove all pending exercises from the list
+    const pendingIds = new Set(pendingActionExercises.map((e) => e.id));
+    setExercises((prev) => prev.filter((e) => !pendingIds.has(e.id)));
+    setPendingActionExercises([]);
+    setIsSaved(true);
+  };
 
   const dialExercise = dialState ? exercises.find((e) => e.id === dialState.exId) : null;
   const dialSet = dialExercise ? dialExercise.sets[dialState!.setIdx] : null;
@@ -477,12 +575,18 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
                 disabled={saving || exercises.length === 0}
                 title={saveLabel}
                 className="flex items-center gap-1.5 h-9 px-3 shrink-0 rounded-xl active:scale-95 transition-all disabled:opacity-40"
-                style={isSaved
-                  ? { background: 'rgba(200,255,0,0.12)', border: '1px solid rgba(200,255,0,0.3)', color: 'var(--accent)' }
-                  : { background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+                style={
+                  isSaved
+                    ? { background: 'rgba(200,255,0,0.12)', border: '1px solid rgba(200,255,0,0.3)', color: 'var(--accent)' }
+                    : { background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }
+                }
               >
                 {saveIcon}
                 <span className="text-[12px] font-bold">{saveLabel}</span>
+                {/* Dropdown arrow when saved — shows options on tap */}
+                {isSaved && templateId && (
+                  <ChevronDown className="w-3 h-3 opacity-60" />
+                )}
               </button>
 
               {/* Close */}
@@ -533,6 +637,8 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
                       onRemove={() => {
                         setExercises((prev) => prev.filter((e) => e.id !== ex.id));
                         setWorkoutOnlyIds((prev: Set<string>) => { const s = new Set(prev); s.delete(ex.id); return s; });
+                        // If removing a pending exercise, also clear from pending
+                        setPendingActionExercises((prev) => prev.filter((e) => e.id !== ex.id));
                       }}
                       onOpenDial={(setIdx, field) => openDial(ex.id, setIdx, field)}
                     />
@@ -579,9 +685,125 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
         </motion.div>
       </div>
 
-      {/* "Added exercise — what to do?" action popup */}
+      {/* ── Save options popup (Update vs Save as New) ── */}
       <AnimatePresence>
-        {pendingActionExercise && (
+        {showSaveOptions && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[220] flex items-end justify-center"
+            style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setShowSaveOptions(false)}
+          >
+            <motion.div
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 60, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+              className="w-full max-w-[480px] rounded-t-[24px] p-5 pb-[max(28px,env(safe-area-inset-bottom))]"
+              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-9 h-1 rounded-full mx-auto mb-5 opacity-30" style={{ background: 'var(--text-muted)' }} />
+              <p className="text-[16px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Save options</p>
+              <p className="text-[13px] mb-5" style={{ color: 'var(--text-muted)' }}>
+                Choose how to save <strong style={{ color: 'var(--text-secondary)' }}>"{title || defaultTitle}"</strong>
+              </p>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handleUpdateExisting}
+                  className="w-full py-3.5 rounded-xl text-[14px] font-bold text-black active:scale-[0.98] transition-all"
+                  style={{ background: 'var(--accent)' }}
+                >
+                  Update Plan
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAsNew}
+                  className="w-full py-3.5 rounded-xl text-[14px] font-semibold active:scale-[0.98] transition-all"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                >
+                  Save as New Plan…
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSaveOptions(false)}
+                  className="w-full py-3 text-[13px] font-semibold active:opacity-70"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Save as New — name input popup ── */}
+      <AnimatePresence>
+        {showSaveAsNewInput && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[230] flex items-center justify-center px-5"
+            style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)' }}
+            onClick={() => setShowSaveAsNewInput(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className="w-full max-w-[340px] rounded-2xl p-5"
+              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-[16px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>New plan name</p>
+              <p className="text-[12px] mb-4" style={{ color: 'var(--text-muted)' }}>This saves a copy without changing the original.</p>
+              <input
+                type="text"
+                autoFocus
+                value={saveAsNewName}
+                onChange={(e) => setSaveAsNewName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') confirmSaveAsNew(); }}
+                placeholder={defaultTitle}
+                className="w-full px-3 py-2.5 rounded-xl text-[14px] font-semibold mb-4 focus:outline-none"
+                style={{
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
+                  caretColor: 'var(--accent)',
+                }}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSaveAsNewInput(false)}
+                  className="flex-1 h-11 rounded-xl text-[13px] font-semibold"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmSaveAsNew}
+                  className="flex-1 h-11 rounded-xl text-[13px] font-bold text-black"
+                  style={{ background: 'var(--accent)' }}
+                >
+                  Save
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── "Added exercise — what to do?" popup (batched for multi-select) ── */}
+      <AnimatePresence>
+        {pendingActionExercises.length > 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -597,65 +819,49 @@ export const PlanTodaySheet: React.FC<PlanTodaySheetProps> = ({ onClose, onStart
               className="w-full max-w-[480px] rounded-t-[24px] p-5 pb-[max(28px,env(safe-area-inset-bottom))]"
               style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)' }}
             >
-              {/* Drag handle */}
               <div className="w-9 h-1 rounded-full mx-auto mb-5 opacity-30" style={{ background: 'var(--text-muted)' }} />
 
               <p className="text-[13px] font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>
                 Added to workout
               </p>
               <p className="text-[18px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
-                {pendingActionExercise.name}
+                {pendingLabel}
               </p>
               <p className="text-[13px] mb-6" style={{ color: 'var(--text-muted)' }}>
-                Update <strong style={{ color: 'var(--text-secondary)' }}>"{title || defaultTitle}"</strong> to include this exercise?
+                Save {pendingActionExercises.length > 1 ? 'them' : 'it'} to{' '}
+                <strong style={{ color: 'var(--text-secondary)' }}>"{title || defaultTitle}"</strong> permanently?
               </p>
 
               <div className="space-y-2">
                 {/* Update plan */}
                 <button
                   type="button"
-                  onClick={() => {
-                    setPendingActionExercise(null);
-                    // Mark as dirty so user sees "Update" button
-                    setIsSaved(false);
-                    // Auto-save immediately
-                    setTimeout(handleSavePlan, 50);
-                  }}
-                  className="w-full py-3.5 rounded-xl text-[14px] font-bold text-black active:scale-[0.98] transition-all"
+                  onClick={handlePendingUpdatePlan}
+                  disabled={saving}
+                  className="w-full py-3.5 rounded-xl text-[14px] font-bold text-black active:scale-[0.98] transition-all disabled:opacity-50"
                   style={{ background: 'var(--accent)' }}
                 >
-                  Update Plan
+                  {saving ? 'Saving…' : 'Update Plan'}
                 </button>
 
                 {/* This workout only */}
                 <button
                   type="button"
-                  onClick={() => {
-                    // Mark exercise as session-only — plan stays saved
-                    skipDirtyRef.current = false; // already consumed
-                    setWorkoutOnlyIds((prev: Set<string>) => new Set([...prev, pendingActionExercise.id]));
-                    setPendingActionExercise(null);
-                    // isSaved stays true since we track it as workout-only
-                    setIsSaved(true);
-                  }}
+                  onClick={handlePendingWorkoutOnly}
                   className="w-full py-3.5 rounded-xl text-[14px] font-semibold active:scale-[0.98] transition-all"
                   style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
                 >
                   This Workout Only
                 </button>
 
-                {/* Cancel — remove the exercise */}
+                {/* Cancel — remove the exercises */}
                 <button
                   type="button"
-                  onClick={() => {
-                    setExercises((prev) => prev.filter((e) => e.id !== pendingActionExercise.id));
-                    setPendingActionExercise(null);
-                    setIsSaved(true);
-                  }}
+                  onClick={handlePendingCancel}
                   className="w-full py-3 text-[13px] font-semibold active:opacity-70 transition-opacity"
                   style={{ color: 'var(--text-muted)' }}
                 >
-                  Cancel
+                  Cancel (Remove {pendingActionExercises.length > 1 ? 'them' : 'it'})
                 </button>
               </div>
             </motion.div>

@@ -261,14 +261,15 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
     setLibraryExercises([]);
   }, [user, search, selectedMuscle]);
 
+  // Always re-fetch when the plans tab becomes active — ensures newly created/edited plans appear
   useEffect(() => {
-    if (activeTab !== 'plans' || !user || templates.length > 0) return;
+    if (activeTab !== 'plans' || !user) return;
     setTemplatesLoading(true);
     getTemplates(user.id)
       .then((data) => setTemplates((data as Template[]) || []))
       .catch(() => setTemplates([]))
       .finally(() => setTemplatesLoading(false));
-  }, [activeTab, user, templates.length]);
+  }, [activeTab, user]); // intentionally omits templates.length so it re-fetches every time tab is opened
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -580,7 +581,7 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
                 <div className="flex flex-col items-center justify-center gap-2 py-16 text-center" style={{ color: 'var(--text-muted)' }}>
                   <ClipboardList className="w-8 h-8 opacity-40" />
                   <p className="text-[13px] font-medium">No plans yet</p>
-                  <p className="text-[11px] opacity-60">Create a plan from the home screen</p>
+                  <p className="text-[11px] opacity-60">Close this and tap "Plan Today" to create your first plan</p>
                 </div>
               )}
 

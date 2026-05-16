@@ -45,11 +45,22 @@ export const QuickStartSheet: React.FC<QuickStartSheetProps> = ({
       getTemplates(user.id),
     ]);
     if (workoutData) setRecentWorkouts(workoutData);
-    if (templateData) setTemplates(templateData);
+    if (templateData) {
+      // Deduplicate by id in case of server-side duplicates
+      const seen = new Set<string>();
+      const unique = (templateData as any[]).filter((t) => {
+        if (seen.has(t.id)) return false;
+        seen.add(t.id);
+        return true;
+      });
+      setTemplates(unique);
+    }
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Re-fetch every time this sheet mounts (covers the case where a plan was created/edited
+  // while PlanTodaySheet was open and QuickStartSheet was unmounted)
+  useEffect(() => { fetchData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLoadRecent = async (workout: any) => {
     if (!user) return;
