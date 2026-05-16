@@ -21,15 +21,16 @@ import {
 } from 'date-fns';
 
 import { LineChart, AreaChart, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, ReferenceDot } from 'recharts';
-import { Trophy, TrendingUp, Activity, Scale, ChevronLeft, ChevronRight, CalendarDays, Pencil, Heart, Bluetooth, PlugZap, Unplug, Info, Flame } from 'lucide-react';
+import { Target, TrendingUp, Activity, Scale, ChevronLeft, ChevronRight, CalendarDays, Pencil, Heart, Bluetooth, PlugZap, Unplug, Info, Flame } from 'lucide-react';
+import { DopamineTracker } from '../components/progress/DopamineTracker';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { ExerciseImage } from '../components/shared/ExerciseImage';
+
 import {
   getBodyWeightLogs,
   getExerciseRowsWithWorkoutDates,
   getHeartRateSamples,
-  getPersonalRecords,
+
   getWorkouts,
   logBodyWeight,
   updateBodyWeightLog,
@@ -201,10 +202,9 @@ const formatStoredDate = (value: unknown, pattern: string) => {
 export const Progress: React.FC = () => {
   const { user, profile } = useAuth();
   const displayUnit = profile?.unit_preference || 'kg';
-  const [activeTab, setActiveTab] = useState<'overview' | 'overload' | 'prs' | 'weight' | 'livehr'>('livehr');
+  const [activeTab, setActiveTab] = useState<'overview' | 'overload' | 'dopamine' | 'weight' | 'livehr'>('livehr');
   const [loading, setLoading] = useState(true);
 
-  const [prs, setPrs] = useState<any[]>([]);
   const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [exercises, setExercises] = useState<any[]>([]);
@@ -645,20 +645,14 @@ export const Progress: React.FC = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      if (!user) { setPrs([]); setWeightLogs([]); setWorkouts([]); setExercises([]); return; }
+      if (!user) { setWeightLogs([]); setWorkouts([]); setExercises([]); return; }
       const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
-      const [prData, weightData, workoutData, exerciseData] = await Promise.all([
-        getPersonalRecords(user.id),
+      const [weightData, workoutData, exerciseData] = await Promise.all([
         getBodyWeightLogs(user.id),
         getWorkouts(user.id, { startDate: thirtyDaysAgo }),
         getExerciseRowsWithWorkoutDates(user.id),
       ]);
       const targetUnit = displayUnit as WeightUnit;
-      setPrs((prData || []).map((pr: any) => ({
-        ...pr,
-        best_weight: convertWeight(Number(pr.best_weight || 0), (pr.unit || targetUnit) as WeightUnit, targetUnit, 0.1),
-        unit: targetUnit,
-      })));
       setWeightLogs(
         (weightData || [])
           .map((log: any) => ({
@@ -842,7 +836,7 @@ export const Progress: React.FC = () => {
   const TABS = [
     { id: 'overview',  label: 'Overview',  Icon: Activity  },
     { id: 'overload',  label: 'Overload',  Icon: TrendingUp },
-    { id: 'prs',       label: 'Records',   Icon: Trophy    },
+    { id: 'dopamine',  label: 'Dopamine',  Icon: Target    },
     { id: 'weight',    label: 'Weight',    Icon: Scale     },
   ] as const;
 
@@ -1841,48 +1835,7 @@ export const Progress: React.FC = () => {
           {/* ════════════════════════════════════════════════
               PERSONAL RECORDS
           ════════════════════════════════════════════════ */}
-          {activeTab === 'prs' && (
-            <>
-              {prs.length === 0 ? (
-                <div className="rounded-2xl border border-white/8 bg-[linear-gradient(160deg,#16191F_0%,#111419_100%)] flex flex-col items-center justify-center py-20 text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-4">
-                    <Trophy className="w-7 h-7 text-[var(--text-muted)] opacity-40" />
-                  </div>
-                  <p className="text-[16px] font-bold text-white mb-1">No records yet</p>
-                  <p className="text-[13px] text-[var(--text-muted)]">Keep training — PRs will appear here.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {prs.map((pr, idx) => (
-                    <motion.div
-                      key={pr.id}
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.04 }}
-                      className="rounded-2xl border border-white/8 bg-[linear-gradient(160deg,#16191F_0%,#111419_100%)] p-4 flex items-center gap-4 hover:border-white/14 transition-colors"
-                    >
-                      <div className="flex-shrink-0">
-                        <ExerciseImage exerciseId={pr.exercise_db_id} exerciseName={pr.exercise_name} size="md" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-bold text-white truncate">{pr.exercise_name}</p>
-                        <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{formatStoredDate(pr.achieved_date, 'MMM d, yyyy')}</p>
-                      </div>
-                      <div className="flex-shrink-0 text-right">
-                        <div className="inline-flex items-baseline gap-1">
-                          <span className="text-[22px] font-black text-[var(--accent)] tabular-nums leading-none">{pr.best_weight}</span>
-                          <span className="text-[11px] font-medium text-[var(--text-muted)]">{displayUnit}</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-1 mt-0.5">
-                          <span className="text-[11px] text-[var(--text-muted)]">{pr.best_reps} reps</span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
+          {activeTab === 'dopamine' && <DopamineTracker />}
 
           {/* ════════════════════════════════════════════════
               WEIGHT
