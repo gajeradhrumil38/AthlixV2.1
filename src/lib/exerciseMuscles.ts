@@ -533,10 +533,16 @@ const EXERCISE_MUSCLE_PATTERNS: ExercisePatternProfile[] = [
     primaryRegions: ['Legs'],
   },
   {
-    patterns: [/reverse hyper/i, /glute ham raise/i, /ghd/i],
-    targets: [target('gluteal', 0.88), target('hamstring', 0.78), target('lower-back', 0.42)],
-    primaryRegions: ['Glutes', 'Legs'],
-    secondaryRegions: ['Back'],
+    patterns: [/reverse hyper/i],
+    targets: [target('gluteal', 1), target('hamstring', 0.45), target('lower-back', 0.28)],
+    primaryRegions: ['Glutes'],
+    secondaryRegions: ['Legs'],
+  },
+  {
+    patterns: [/glute ham raise/i, /\bghd\b/i, /nordic hamstring/i],
+    targets: [target('hamstring', 1), target('gluteal', 0.55), target('lower-back', 0.35)],
+    primaryRegions: ['Legs'],
+    secondaryRegions: ['Glutes', 'Back'],
   },
   {
     patterns: [/torso rotation/i, /torso twist/i],
