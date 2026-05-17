@@ -21,7 +21,7 @@ import {
 } from 'date-fns';
 
 import { LineChart, AreaChart, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, ReferenceDot } from 'recharts';
-import { Target, TrendingUp, Activity, Scale, ChevronLeft, ChevronRight, CalendarDays, Pencil, Heart, Bluetooth, PlugZap, Unplug, Info, Flame } from 'lucide-react';
+import { Target, TrendingUp, Activity, Scale, ChevronLeft, ChevronRight, CalendarDays, Pencil, Heart, Bluetooth, PlugZap, Unplug, Info, Flame, X } from 'lucide-react';
 import { DopamineTracker } from '../components/progress/DopamineTracker';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -2063,38 +2063,6 @@ export const Progress: React.FC = () => {
                 );
               })()}
 
-              {/* Entries list — shown only when "Edit entries" is toggled */}
-              {weightLogs.length > 0 && showEditEntries && (
-                <div className="rounded-2xl border border-white/8 bg-[linear-gradient(160deg,#16191F_0%,#111419_100%)] overflow-hidden">
-                  <div className="px-5 pt-4 pb-3 flex items-center justify-between">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-muted)]">All Entries</p>
-                    <span className="text-[11px] text-[var(--text-muted)]">{weightLogs.length}</span>
-                  </div>
-                  <div className="max-h-52 overflow-y-auto divide-y divide-white/[0.05]">
-                    {[...weightLogs].reverse().map((log) => (
-                      <div key={log.id} className="flex items-center justify-between px-5 py-3">
-                        <div>
-                          <p className="text-[13px] font-semibold text-white">
-                            {formatStoredDate(log.date, 'EEE, MMM d yyyy')}
-                          </p>
-                          <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                            {log.weight.toFixed(1)} {log.unit ?? displayUnit}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => { setEditEntry(log); setEditWeight(String(log.weight)); }}
-                          className="flex h-8 w-8 items-center justify-center rounded-xl transition-all active:scale-90"
-                          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.09)' }}
-                          aria-label="Edit entry"
-                        >
-                          <Pencil className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Chart */}
               {weightLogs.length > 0 ? (() => {
@@ -2170,16 +2138,16 @@ export const Progress: React.FC = () => {
                       </ResponsiveContainer>
                     </div>
 
-                    {/* View tabs + edit entries button */}
+                    {/* View tabs + edit icon */}
                     <div className="mt-4 flex items-center justify-between">
                       <button
                         type="button"
-                        onClick={() => setShowEditEntries((v) => !v)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all active:scale-95"
-                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: showEditEntries ? 'var(--accent)' : 'var(--text-muted)' }}
+                        onClick={() => setShowEditEntries(true)}
+                        aria-label="Edit weight entries"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg transition-all active:scale-90"
+                        style={{ color: 'var(--accent)' }}
                       >
-                        <Pencil className="w-3 h-3" />
-                        {showEditEntries ? 'Hide entries' : 'Edit entries'}
+                        <Pencil className="w-4 h-4" />
                       </button>
                       <div
                         className="flex items-center gap-1 p-1 rounded-xl"
@@ -2471,6 +2439,78 @@ export const Progress: React.FC = () => {
                   </div>
                 );
               })()}
+
+              {/* ── All entries popup ── */}
+              {showEditEntries && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[65] flex items-end justify-center"
+                  style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)' }}
+                  onClick={() => setShowEditEntries(false)}
+                >
+                  <motion.div
+                    initial={{ y: 80, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 80, opacity: 0 }}
+                    transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full max-w-[480px] rounded-t-[24px] flex flex-col"
+                    style={{ background: '#13171e', border: '1px solid rgba(255,255,255,0.09)', maxHeight: '75vh' }}
+                  >
+                    {/* Handle */}
+                    <div className="w-9 h-1 rounded-full mx-auto mt-3 mb-1 opacity-30" style={{ background: 'var(--text-muted)' }} />
+
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+                      <div>
+                        <p className="text-[15px] font-black text-white">Weight Entries</p>
+                        <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{weightLogs.length} {weightLogs.length === 1 ? 'entry' : 'entries'} — tap pencil to edit</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowEditEntries(false)}
+                        className="h-8 w-8 flex items-center justify-center rounded-xl transition-all active:scale-90"
+                        style={{ background: 'rgba(255,255,255,0.07)', color: 'var(--text-muted)' }}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Scrollable list */}
+                    <div className="overflow-y-auto flex-1 divide-y divide-white/[0.05] pb-[env(safe-area-inset-bottom)]">
+                      {[...weightLogs].reverse().map((log, i) => (
+                        <div key={log.id} className="flex items-center justify-between px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-1.5 h-8 rounded-full shrink-0"
+                              style={{ background: i === 0 ? 'var(--accent)' : 'rgba(255,255,255,0.1)' }}
+                            />
+                            <div>
+                              <p className="text-[13px] font-semibold text-white leading-tight">
+                                {formatStoredDate(log.date, 'EEE, MMM d yyyy')}
+                              </p>
+                              <p className="text-[12px] font-black tabular-nums mt-0.5" style={{ color: i === 0 ? 'var(--accent)' : 'rgba(255,255,255,0.55)' }}>
+                                {log.weight.toFixed(1)} <span className="text-[10px] font-semibold">{log.unit ?? displayUnit}</span>
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => { setEditEntry(log); setEditWeight(log.weight.toFixed(1)); }}
+                            className="flex h-8 w-8 items-center justify-center rounded-xl transition-all active:scale-90"
+                            style={{ background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.18)' }}
+                            aria-label="Edit entry"
+                          >
+                            <Pencil className="h-3.5 w-3.5" style={{ color: 'var(--accent)' }} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
 
               {/* ── Edit weight entry modal ── */}
               {editEntry && (
