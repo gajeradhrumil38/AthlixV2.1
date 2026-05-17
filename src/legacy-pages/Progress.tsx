@@ -1978,32 +1978,38 @@ export const Progress: React.FC = () => {
                       className="flex flex-col items-center justify-between shrink-0 rounded-2xl py-2 px-1 gap-1"
                       style={{ width: 58, background: 'rgba(200,255,0,0.08)', border: '1.5px solid rgba(200,255,0,0.30)' }}
                     >
-                      <button
+                      <motion.button
                         type="button"
+                        whileTap={{ scale: 0.80, y: -2 }}
+                        whileHover={{ scale: 1.06 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 18 }}
                         onClick={() => setNewWeight((v) => {
                           const cur = parseFloat(v) || 0;
                           return String(parseFloat((cur + 0.1).toFixed(1)));
                         })}
-                        className="flex flex-col items-center gap-0.5 w-full active:scale-95 transition-all py-1"
+                        className="flex flex-col items-center gap-0.5 w-full py-1"
                         style={{ color: 'var(--accent)' }}
                       >
                         <ChevronUp className="w-5 h-5 stroke-[2.5]" />
-                        <span className="text-[11px] font-black leading-none">0.1</span>
-                      </button>
+                        <span className="text-[11px] font-black leading-none">+0.1</span>
+                      </motion.button>
                       <div className="w-8 h-px" style={{ background: 'rgba(200,255,0,0.20)' }} />
-                      <button
+                      <motion.button
                         type="button"
+                        whileTap={{ scale: 0.80, y: 2 }}
+                        whileHover={{ scale: 1.06 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 18 }}
                         onClick={() => setNewWeight((v) => {
                           const cur = parseFloat(v) || 0;
                           const next = parseFloat((cur - 0.1).toFixed(1));
                           return String(Math.max(0, next));
                         })}
-                        className="flex flex-col items-center gap-0.5 w-full active:scale-95 transition-all py-1"
+                        className="flex flex-col items-center gap-0.5 w-full py-1"
                         style={{ color: 'var(--accent)' }}
                       >
-                        <span className="text-[11px] font-black leading-none">0.1</span>
+                        <span className="text-[11px] font-black leading-none">−0.1</span>
                         <ChevronDown className="w-5 h-5 stroke-[2.5]" />
-                      </button>
+                      </motion.button>
                     </div>
 
                     {/* ±1 tall pill */}
@@ -2011,32 +2017,38 @@ export const Progress: React.FC = () => {
                       className="flex flex-col items-center justify-between shrink-0 rounded-2xl py-2 px-1 gap-1"
                       style={{ width: 58, background: 'rgba(200,255,0,0.08)', border: '1.5px solid rgba(200,255,0,0.30)' }}
                     >
-                      <button
+                      <motion.button
                         type="button"
+                        whileTap={{ scale: 0.80, y: -2 }}
+                        whileHover={{ scale: 1.06 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 18 }}
                         onClick={() => setNewWeight((v) => {
                           const cur = parseFloat(v) || 0;
                           return String(parseFloat((cur + 1).toFixed(1)));
                         })}
-                        className="flex flex-col items-center gap-0.5 w-full active:scale-95 transition-all py-1"
+                        className="flex flex-col items-center gap-0.5 w-full py-1"
                         style={{ color: 'var(--accent)' }}
                       >
                         <ChevronUp className="w-5 h-5 stroke-[2.5]" />
-                        <span className="text-[11px] font-black leading-none">1</span>
-                      </button>
+                        <span className="text-[11px] font-black leading-none">+1</span>
+                      </motion.button>
                       <div className="w-8 h-px" style={{ background: 'rgba(200,255,0,0.20)' }} />
-                      <button
+                      <motion.button
                         type="button"
+                        whileTap={{ scale: 0.80, y: 2 }}
+                        whileHover={{ scale: 1.06 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 18 }}
                         onClick={() => setNewWeight((v) => {
                           const cur = parseFloat(v) || 0;
                           const next = parseFloat((cur - 1).toFixed(1));
                           return String(Math.max(0, next));
                         })}
-                        className="flex flex-col items-center gap-0.5 w-full active:scale-95 transition-all py-1"
+                        className="flex flex-col items-center gap-0.5 w-full py-1"
                         style={{ color: 'var(--accent)' }}
                       >
-                        <span className="text-[11px] font-black leading-none">1</span>
+                        <span className="text-[11px] font-black leading-none">−1</span>
                         <ChevronDown className="w-5 h-5 stroke-[2.5]" />
-                      </button>
+                      </motion.button>
                     </div>
                   </div>
 
