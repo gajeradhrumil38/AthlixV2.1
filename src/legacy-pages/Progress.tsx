@@ -648,7 +648,7 @@ export const Progress: React.FC = () => {
   // Pre-fill weight input with most recent log so user can just nudge +/-
   useEffect(() => {
     if (weightLogs.length > 0) {
-      setNewWeight(String(weightLogs[weightLogs.length - 1].weight));
+      setNewWeight(weightLogs[weightLogs.length - 1].weight.toFixed(1));
     }
   }, [weightLogs]);
 
@@ -1951,59 +1951,65 @@ export const Progress: React.FC = () => {
 
                 {/* Weight input with steppers */}
                 <div className="flex flex-col gap-2">
-                  <div className="flex gap-2 items-center">
-                    {/* Stepper buttons − */}
-                    <div className="flex gap-1">
-                      {[-1, -0.1].map((delta) => (
-                        <button
-                          key={delta}
-                          type="button"
-                          onClick={() => setNewWeight((v) => {
-                            const cur = parseFloat(v || '0');
-                            return parseFloat((cur + delta).toFixed(1)).toString();
-                          })}
-                          className="h-11 w-11 rounded-xl text-[13px] font-bold active:scale-95 transition-all"
-                          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)' }}
-                        >
-                          {delta === -1 ? '−1' : '−.1'}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="flex gap-1.5 items-center">
+                    {/* − steppers */}
+                    {([-1, -0.1] as const).map((delta) => (
+                      <button
+                        key={delta}
+                        type="button"
+                        onClick={() => setNewWeight((v) => {
+                          const cur = parseFloat(v) || 0;
+                          const next = parseFloat((cur + delta).toFixed(1));
+                          return String(Math.max(0, next));
+                        })}
+                        className="h-12 w-[52px] shrink-0 rounded-xl text-[13px] font-black active:scale-95 transition-all leading-none"
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--text-primary)' }}
+                      >
+                        {delta === -1 ? '−1' : '−0.1'}
+                      </button>
+                    ))}
 
-                    {/* Input */}
-                    <div className="relative flex-1">
+                    {/* Input + unit badge */}
+                    <div className="flex flex-1 items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl px-3 focus-within:border-[var(--accent)] transition-colors">
                       <input
-                        type="number" step="0.1" min="20" max="500" value={newWeight}
-                        onChange={(e) => setNewWeight(e.target.value)}
+                        type="text"
+                        inputMode="decimal"
+                        value={newWeight}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d*\.?\d*$/.test(val)) setNewWeight(val);
+                        }}
+                        onBlur={() => {
+                          const n = parseFloat(newWeight);
+                          if (!isNaN(n)) setNewWeight(parseFloat(n.toFixed(1)).toString());
+                        }}
                         onKeyDown={(e) => e.key === 'Enter' && handleLogWeight()}
-                        placeholder={weightLogs.length > 0 ? String(weightLogs[weightLogs.length - 1].weight) : '75.0'}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-[16px] font-black text-center focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-white/25"
+                        placeholder={weightLogs.length > 0 ? weightLogs[weightLogs.length - 1].weight.toFixed(1) : '75.0'}
+                        className="flex-1 bg-transparent py-3 text-white text-[18px] font-black text-center focus:outline-none placeholder:text-white/25 min-w-0"
                       />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[var(--text-muted)] pointer-events-none">{displayUnit}</span>
+                      <span className="text-[12px] font-bold text-[var(--text-muted)] shrink-0">{displayUnit}</span>
                     </div>
 
-                    {/* Stepper buttons + */}
-                    <div className="flex gap-1">
-                      {[0.1, 1].map((delta) => (
-                        <button
-                          key={delta}
-                          type="button"
-                          onClick={() => setNewWeight((v) => {
-                            const cur = parseFloat(v || '0');
-                            return parseFloat((cur + delta).toFixed(1)).toString();
-                          })}
-                          className="h-11 w-11 rounded-xl text-[13px] font-bold active:scale-95 transition-all"
-                          style={{ background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.18)', color: 'var(--accent)' }}
-                        >
-                          {delta === 1 ? '+1' : '+.1'}
-                        </button>
-                      ))}
-                    </div>
+                    {/* + steppers */}
+                    {([0.1, 1] as const).map((delta) => (
+                      <button
+                        key={delta}
+                        type="button"
+                        onClick={() => setNewWeight((v) => {
+                          const cur = parseFloat(v) || 0;
+                          return String(parseFloat((cur + delta).toFixed(1)));
+                        })}
+                        className="h-12 w-[52px] shrink-0 rounded-xl text-[13px] font-black active:scale-95 transition-all leading-none"
+                        style={{ background: 'rgba(200,255,0,0.10)', border: '1px solid rgba(200,255,0,0.22)', color: 'var(--accent)' }}
+                      >
+                        {delta === 1 ? '+1' : '+0.1'}
+                      </button>
+                    ))}
                   </div>
 
                   <button
                     onClick={handleLogWeight}
-                    disabled={!newWeight}
+                    disabled={!newWeight || parseFloat(newWeight) <= 0}
                     className="w-full bg-[var(--accent)] text-black py-3 rounded-xl font-bold text-[14px] hover:opacity-90 active:scale-[0.99] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     Save Weight
