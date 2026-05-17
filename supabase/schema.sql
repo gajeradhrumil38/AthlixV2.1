@@ -7,12 +7,12 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   full_name TEXT,
-  unit_preference TEXT DEFAULT 'kg' CHECK (unit_preference IN ('kg', 'lbs')),
+  unit_preference TEXT DEFAULT 'lbs' CHECK (unit_preference IN ('kg', 'lbs')),
   theme_preference TEXT DEFAULT 'dark' CHECK (theme_preference IN ('dark', 'darker')),
   start_workout_enabled BOOLEAN DEFAULT false NOT NULL,
   show_start_sheet BOOLEAN DEFAULT false NOT NULL,
   body_weight DOUBLE PRECISION,
-  body_weight_unit TEXT DEFAULT 'kg' CHECK (body_weight_unit IN ('kg', 'lbs')),
+  body_weight_unit TEXT DEFAULT 'lbs' CHECK (body_weight_unit IN ('kg', 'lbs')),
   height_feet INTEGER,
   height_inches INTEGER,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -238,8 +238,8 @@ INSERT INTO public.exercise_library (name, muscle_group, is_custom) VALUES
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.profiles (id, full_name)
-  VALUES (new.id, new.raw_user_meta_data->>'full_name');
+  INSERT INTO public.profiles (id, full_name, unit_preference, body_weight_unit)
+  VALUES (new.id, new.raw_user_meta_data->>'full_name', 'lbs', 'lbs');
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
