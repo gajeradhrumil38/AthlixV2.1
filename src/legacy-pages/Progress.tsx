@@ -222,6 +222,7 @@ export const Progress: React.FC = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [weightChartView, setWeightChartView] = useState<'day' | 'week' | 'month'>('day');
+  const [showEditEntries, setShowEditEntries] = useState(false);
   const [editEntry, setEditEntry] = useState<LocalBodyWeightLog | null>(null);
   const [editWeight, setEditWeight] = useState('');
   const [heightCm, setHeightCm] = useState(() => localStorage.getItem('athlix_height_cm') ?? '');
@@ -637,10 +638,19 @@ export const Progress: React.FC = () => {
     if (heightCm && weightLogs.length > 0) {
       const currentWeight = weightLogs[weightLogs.length - 1].weight;
       const heightM = parseFloat(heightCm) / 100;
-      if (heightM > 0) setBmiValue((currentWeight / (heightM * heightM)).toFixed(1));
-      else setBmiValue(null);
+      if (heightM > 0) {
+        const weightKg = displayUnit === 'lbs' ? currentWeight / 2.20462 : currentWeight;
+        setBmiValue((weightKg / (heightM * heightM)).toFixed(1));
+      } else setBmiValue(null);
     } else setBmiValue(null);
-  }, [heightCm, weightLogs]);
+  }, [heightCm, weightLogs, displayUnit]);
+
+  // Pre-fill weight input with most recent log so user can just nudge +/-
+  useEffect(() => {
+    if (weightLogs.length > 0) {
+      setNewWeight(String(weightLogs[weightLogs.length - 1].weight));
+    }
+  }, [weightLogs]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -1939,21 +1949,64 @@ export const Progress: React.FC = () => {
                   })()}
                 </div>
 
-                <div className="flex gap-2">
-                  <input
-                    type="number" step="0.1" min="20" max="500" value={newWeight}
-                    onChange={(e) => setNewWeight(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleLogWeight()}
-                    placeholder={`e.g. ${weightLogs.length > 0 ? weightLogs[weightLogs.length - 1].weight : '75.0'}`}
-                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-[15px] font-semibold focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-white/20"
-                  />
-                  <span className="flex items-center text-[12px] font-semibold text-[var(--text-muted)]">{displayUnit}</span>
+                {/* Weight input with steppers */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2 items-center">
+                    {/* Stepper buttons − */}
+                    <div className="flex gap-1">
+                      {[-1, -0.1].map((delta) => (
+                        <button
+                          key={delta}
+                          type="button"
+                          onClick={() => setNewWeight((v) => {
+                            const cur = parseFloat(v || '0');
+                            return parseFloat((cur + delta).toFixed(1)).toString();
+                          })}
+                          className="h-11 w-11 rounded-xl text-[13px] font-bold active:scale-95 transition-all"
+                          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)' }}
+                        >
+                          {delta === -1 ? '−1' : '−.1'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Input */}
+                    <div className="relative flex-1">
+                      <input
+                        type="number" step="0.1" min="20" max="500" value={newWeight}
+                        onChange={(e) => setNewWeight(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleLogWeight()}
+                        placeholder={weightLogs.length > 0 ? String(weightLogs[weightLogs.length - 1].weight) : '75.0'}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-[16px] font-black text-center focus:outline-none focus:border-[var(--accent)] transition-colors placeholder:text-white/25"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[var(--text-muted)] pointer-events-none">{displayUnit}</span>
+                    </div>
+
+                    {/* Stepper buttons + */}
+                    <div className="flex gap-1">
+                      {[0.1, 1].map((delta) => (
+                        <button
+                          key={delta}
+                          type="button"
+                          onClick={() => setNewWeight((v) => {
+                            const cur = parseFloat(v || '0');
+                            return parseFloat((cur + delta).toFixed(1)).toString();
+                          })}
+                          className="h-11 w-11 rounded-xl text-[13px] font-bold active:scale-95 transition-all"
+                          style={{ background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.18)', color: 'var(--accent)' }}
+                        >
+                          {delta === 1 ? '+1' : '+.1'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <button
                     onClick={handleLogWeight}
                     disabled={!newWeight}
-                    className="bg-[var(--accent)] text-black px-5 py-3 rounded-xl font-bold text-[13px] hover:opacity-90 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="w-full bg-[var(--accent)] text-black py-3 rounded-xl font-bold text-[14px] hover:opacity-90 active:scale-[0.99] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                   >
-                    Save
+                    Save Weight
                   </button>
                 </div>
 
@@ -2004,8 +2057,8 @@ export const Progress: React.FC = () => {
                 );
               })()}
 
-              {/* Entries list */}
-              {weightLogs.length > 0 && (
+              {/* Entries list — shown only when "Edit entries" is toggled */}
+              {weightLogs.length > 0 && showEditEntries && (
                 <div className="rounded-2xl border border-white/8 bg-[linear-gradient(160deg,#16191F_0%,#111419_100%)] overflow-hidden">
                   <div className="px-5 pt-4 pb-3 flex items-center justify-between">
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-muted)]">All Entries</p>
@@ -2111,8 +2164,17 @@ export const Progress: React.FC = () => {
                       </ResponsiveContainer>
                     </div>
 
-                    {/* View tabs */}
-                    <div className="mt-4 flex justify-center">
+                    {/* View tabs + edit entries button */}
+                    <div className="mt-4 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setShowEditEntries((v) => !v)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all active:scale-95"
+                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: showEditEntries ? 'var(--accent)' : 'var(--text-muted)' }}
+                      >
+                        <Pencil className="w-3 h-3" />
+                        {showEditEntries ? 'Hide entries' : 'Edit entries'}
+                      </button>
                       <div
                         className="flex items-center gap-1 p-1 rounded-xl"
                         style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)' }}

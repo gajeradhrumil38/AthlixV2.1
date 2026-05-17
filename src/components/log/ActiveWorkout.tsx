@@ -118,6 +118,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
   const [isPaused, setIsPaused] = useState(true);
   const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [pickerDefaultTab, setPickerDefaultTab] = useState<'recent' | 'muscle' | 'plans'>('recent');
   const [dialPicker, setDialPicker] = useState<DialPickerState | null>(null);
   const [hiddenPrefillExerciseIds, setHiddenPrefillExerciseIds] = useState<string[]>([]);
   const autoOpenedPickerForStartRef = useRef<number | null>(null);
@@ -845,25 +846,37 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
                 <p className="text-[15px] font-semibold text-[var(--text-primary)] mb-1.5">No exercises yet</p>
                 <p className="text-[13px] text-[var(--text-muted)]">Add exercises or load from your plan.</p>
               </div>
-              <div className="flex flex-col gap-2 w-full max-w-[280px]">
+              <div className="flex flex-col gap-2.5 w-full max-w-[300px]">
                 <button
                   type="button"
-                  onClick={() => setShowExercisePicker(true)}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] text-[14px] font-bold text-black"
+                  onClick={() => { setPickerDefaultTab('recent'); setShowExercisePicker(true); }}
+                  className="flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] text-[15px] font-bold text-black active:scale-[0.98] transition-all"
                 >
                   <Plus className="w-4 h-4" />
                   Add Exercise
                 </button>
-                {onRequestPlanToday && (
+                <div className="flex gap-2 w-full">
                   <button
                     type="button"
-                    onClick={onRequestPlanToday}
-                    className="btn-glow btn-glow-accent flex h-12 w-full items-center justify-center gap-2 text-[13px] font-semibold text-[var(--text-primary)]"
+                    onClick={() => { setPickerDefaultTab('plans'); setShowExercisePicker(true); }}
+                    className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold text-[var(--text-primary)] active:scale-[0.97] transition-all"
+                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
                   >
-                    <Bookmark className="w-4 h-4 text-[var(--accent)]" />
-                    My Plans / Create Plan
+                    <Bookmark className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    My Plans
                   </button>
-                )}
+                  {onRequestPlanToday && (
+                    <button
+                      type="button"
+                      onClick={onRequestPlanToday}
+                      className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold text-[var(--text-primary)] active:scale-[0.97] transition-all"
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+                    >
+                      <Plus className="w-3.5 h-3.5 text-[var(--accent)]" />
+                      Create Plan
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
@@ -1100,6 +1113,7 @@ export const ActiveWorkout: React.FC<ActiveWorkoutProps> = ({
             recentExercises={[]}
             onEditTemplate={onEditTemplate}
             onLoadPlan={handleLoadPlan}
+            defaultTab={pickerDefaultTab}
             onLoadTemplate={(exercises, planTitle) => {
               const newEntries: ExerciseEntry[] = exercises.map((ex) => ({
                 id: createSetId(),

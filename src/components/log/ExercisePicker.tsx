@@ -54,6 +54,7 @@ interface ExercisePickerProps {
   onEditTemplate?: (template: any) => void;
   onLoadPlan?: (template: Template) => void;
   multiSelect?: boolean;
+  defaultTab?: 'recent' | 'muscle' | 'plans';
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -186,11 +187,12 @@ export const ExercisePicker: React.FC<ExercisePickerProps> = ({
   onEditTemplate,
   onLoadPlan,
   multiSelect = false,
+  defaultTab = 'recent',
 }) => {
   const { user } = useAuth();
 
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'recent' | 'muscle' | 'plans' | 'search'>('recent');
+  const [activeTab, setActiveTab] = useState<'recent' | 'muscle' | 'plans' | 'search'>(defaultTab);
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
   const [filterMuscle, setFilterMuscle] = useState<string | null>(null);
   const [libraryExercises, setLibraryExercises] = useState<Exercise[]>([]);
