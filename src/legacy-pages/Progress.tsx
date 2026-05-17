@@ -1951,26 +1951,9 @@ export const Progress: React.FC = () => {
 
                 {/* Weight input with steppers */}
                 <div className="flex flex-col gap-2">
-                  <div className="flex gap-1.5 items-center">
-                    {/* − steppers */}
-                    {([-1, -0.1] as const).map((delta) => (
-                      <button
-                        key={delta}
-                        type="button"
-                        onClick={() => setNewWeight((v) => {
-                          const cur = parseFloat(v) || 0;
-                          const next = parseFloat((cur + delta).toFixed(1));
-                          return String(Math.max(0, next));
-                        })}
-                        className="h-12 w-[52px] shrink-0 rounded-xl text-[13px] font-black active:scale-95 transition-all leading-none"
-                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--text-primary)' }}
-                      >
-                        {delta === -1 ? '−1' : '−0.1'}
-                      </button>
-                    ))}
-
+                  <div className="flex gap-2 items-stretch">
                     {/* Input + unit badge */}
-                    <div className="flex flex-1 items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl px-3 focus-within:border-[var(--accent)] transition-colors">
+                    <div className="flex flex-1 flex-col items-center justify-center bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 focus-within:border-[var(--accent)] transition-colors min-w-0">
                       <input
                         type="text"
                         inputMode="decimal"
@@ -1985,26 +1968,48 @@ export const Progress: React.FC = () => {
                         }}
                         onKeyDown={(e) => e.key === 'Enter' && handleLogWeight()}
                         placeholder={weightLogs.length > 0 ? weightLogs[weightLogs.length - 1].weight.toFixed(1) : '75.0'}
-                        className="flex-1 bg-transparent py-3 text-white text-[18px] font-black text-center focus:outline-none placeholder:text-white/25 min-w-0"
+                        className="w-full bg-transparent text-white text-[22px] font-black text-center focus:outline-none placeholder:text-white/25"
                       />
-                      <span className="text-[12px] font-bold text-[var(--text-muted)] shrink-0">{displayUnit}</span>
+                      <span className="text-[11px] font-semibold mt-0.5" style={{ color: 'var(--text-muted)' }}>{displayUnit}</span>
                     </div>
 
-                    {/* + steppers */}
-                    {([0.1, 1] as const).map((delta) => (
-                      <button
-                        key={delta}
-                        type="button"
-                        onClick={() => setNewWeight((v) => {
-                          const cur = parseFloat(v) || 0;
-                          return String(parseFloat((cur + delta).toFixed(1)));
-                        })}
-                        className="h-12 w-[52px] shrink-0 rounded-xl text-[13px] font-black active:scale-95 transition-all leading-none"
-                        style={{ background: 'rgba(200,255,0,0.10)', border: '1px solid rgba(200,255,0,0.22)', color: 'var(--accent)' }}
-                      >
-                        {delta === 1 ? '+1' : '+0.1'}
-                      </button>
-                    ))}
+                    {/* ±0.1 stacked */}
+                    <div className="flex flex-col gap-1.5 shrink-0">
+                      {([0.1, -0.1] as const).map((delta) => (
+                        <button
+                          key={delta}
+                          type="button"
+                          onClick={() => setNewWeight((v) => {
+                            const cur = parseFloat(v) || 0;
+                            const next = parseFloat((cur + delta).toFixed(1));
+                            return String(Math.max(0, next));
+                          })}
+                          className="flex-1 w-[58px] rounded-xl text-[12px] font-black active:scale-95 transition-all leading-none"
+                          style={{ background: 'rgba(200,255,0,0.12)', border: '1px solid rgba(200,255,0,0.28)', color: 'var(--accent)' }}
+                        >
+                          {delta > 0 ? '+0.1' : '−0.1'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* ±1 stacked */}
+                    <div className="flex flex-col gap-1.5 shrink-0">
+                      {([1, -1] as const).map((delta) => (
+                        <button
+                          key={delta}
+                          type="button"
+                          onClick={() => setNewWeight((v) => {
+                            const cur = parseFloat(v) || 0;
+                            const next = parseFloat((cur + delta).toFixed(1));
+                            return String(Math.max(0, next));
+                          })}
+                          className="flex-1 w-[58px] rounded-xl text-[14px] font-black active:scale-95 transition-all leading-none"
+                          style={{ background: 'rgba(200,255,0,0.12)', border: '1px solid rgba(200,255,0,0.28)', color: 'var(--accent)' }}
+                        >
+                          {delta > 0 ? '+1' : '−1'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <button
