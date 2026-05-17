@@ -147,6 +147,7 @@ export const Log: React.FC = () => {
   const forceAddExercise = searchParams.get('add') === '1';
   const forcePlanToday = searchParams.get('plan') === '1';
   const forcedWorkoutDate = searchParams.get('date');
+  const skipQuickStart = searchParams.get('direct') === '1';
 
   const [workout, setWorkout] = useState<WorkoutState | null>(null);
   const [showQuickStart, setShowQuickStart] = useState(false);
@@ -342,7 +343,7 @@ export const Log: React.FC = () => {
       return () => { cancelled = true; };
     }
 
-    if (showStartSheet) {
+    if (showStartSheet && !skipQuickStart) {
       setShowQuickStart(true);
       setOpenPickerOnStart(false);
       return;
@@ -353,7 +354,7 @@ export const Log: React.FC = () => {
     setShowQuickStart(false);
     setOpenPickerOnStart(false);
     writeDraft(initialState);
-  }, [showStartSheet, workout, createWorkoutState, forceAddExercise, forcedWorkoutDate, user]);
+  }, [showStartSheet, skipQuickStart, workout, createWorkoutState, forceAddExercise, forcedWorkoutDate, user]);
 
   // Write draft immediately when exercise count changes (covers unload / add / remove)
   const prevExCountRef = useRef<number>(-1);
