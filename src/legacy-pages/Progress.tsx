@@ -21,7 +21,7 @@ import {
 } from 'date-fns';
 
 import { LineChart, AreaChart, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, ReferenceDot } from 'recharts';
-import { Target, TrendingUp, Activity, Scale, ChevronLeft, ChevronRight, CalendarDays, Pencil, Heart, Bluetooth, PlugZap, Unplug, Info, Flame, X } from 'lucide-react';
+import { Target, TrendingUp, Activity, Scale, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, CalendarDays, Pencil, Heart, Bluetooth, PlugZap, Unplug, Info, Flame, X } from 'lucide-react';
 import { DopamineTracker } from '../components/progress/DopamineTracker';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -1973,42 +1973,70 @@ export const Progress: React.FC = () => {
                       <span className="text-[11px] font-semibold mt-0.5" style={{ color: 'var(--text-muted)' }}>{displayUnit}</span>
                     </div>
 
-                    {/* ±0.1 stacked */}
-                    <div className="flex flex-col gap-1.5 shrink-0">
-                      {([0.1, -0.1] as const).map((delta) => (
-                        <button
-                          key={delta}
-                          type="button"
-                          onClick={() => setNewWeight((v) => {
-                            const cur = parseFloat(v) || 0;
-                            const next = parseFloat((cur + delta).toFixed(1));
-                            return String(Math.max(0, next));
-                          })}
-                          className="flex-1 w-[58px] rounded-xl text-[12px] font-black active:scale-95 transition-all leading-none"
-                          style={{ background: 'rgba(200,255,0,0.12)', border: '1px solid rgba(200,255,0,0.28)', color: 'var(--accent)' }}
-                        >
-                          {delta > 0 ? '+0.1' : '−0.1'}
-                        </button>
-                      ))}
+                    {/* ±0.1 tall pill */}
+                    <div
+                      className="flex flex-col items-center justify-between shrink-0 rounded-2xl py-2 px-1 gap-1"
+                      style={{ width: 58, background: 'rgba(200,255,0,0.08)', border: '1.5px solid rgba(200,255,0,0.30)' }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setNewWeight((v) => {
+                          const cur = parseFloat(v) || 0;
+                          return String(parseFloat((cur + 0.1).toFixed(1)));
+                        })}
+                        className="flex flex-col items-center gap-0.5 w-full active:scale-95 transition-all py-1"
+                        style={{ color: 'var(--accent)' }}
+                      >
+                        <ChevronUp className="w-5 h-5 stroke-[2.5]" />
+                        <span className="text-[11px] font-black leading-none">0.1</span>
+                      </button>
+                      <div className="w-8 h-px" style={{ background: 'rgba(200,255,0,0.20)' }} />
+                      <button
+                        type="button"
+                        onClick={() => setNewWeight((v) => {
+                          const cur = parseFloat(v) || 0;
+                          const next = parseFloat((cur - 0.1).toFixed(1));
+                          return String(Math.max(0, next));
+                        })}
+                        className="flex flex-col items-center gap-0.5 w-full active:scale-95 transition-all py-1"
+                        style={{ color: 'var(--accent)' }}
+                      >
+                        <span className="text-[11px] font-black leading-none">0.1</span>
+                        <ChevronDown className="w-5 h-5 stroke-[2.5]" />
+                      </button>
                     </div>
 
-                    {/* ±1 stacked */}
-                    <div className="flex flex-col gap-1.5 shrink-0">
-                      {([1, -1] as const).map((delta) => (
-                        <button
-                          key={delta}
-                          type="button"
-                          onClick={() => setNewWeight((v) => {
-                            const cur = parseFloat(v) || 0;
-                            const next = parseFloat((cur + delta).toFixed(1));
-                            return String(Math.max(0, next));
-                          })}
-                          className="flex-1 w-[58px] rounded-xl text-[14px] font-black active:scale-95 transition-all leading-none"
-                          style={{ background: 'rgba(200,255,0,0.12)', border: '1px solid rgba(200,255,0,0.28)', color: 'var(--accent)' }}
-                        >
-                          {delta > 0 ? '+1' : '−1'}
-                        </button>
-                      ))}
+                    {/* ±1 tall pill */}
+                    <div
+                      className="flex flex-col items-center justify-between shrink-0 rounded-2xl py-2 px-1 gap-1"
+                      style={{ width: 58, background: 'rgba(200,255,0,0.08)', border: '1.5px solid rgba(200,255,0,0.30)' }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setNewWeight((v) => {
+                          const cur = parseFloat(v) || 0;
+                          return String(parseFloat((cur + 1).toFixed(1)));
+                        })}
+                        className="flex flex-col items-center gap-0.5 w-full active:scale-95 transition-all py-1"
+                        style={{ color: 'var(--accent)' }}
+                      >
+                        <ChevronUp className="w-5 h-5 stroke-[2.5]" />
+                        <span className="text-[11px] font-black leading-none">1</span>
+                      </button>
+                      <div className="w-8 h-px" style={{ background: 'rgba(200,255,0,0.20)' }} />
+                      <button
+                        type="button"
+                        onClick={() => setNewWeight((v) => {
+                          const cur = parseFloat(v) || 0;
+                          const next = parseFloat((cur - 1).toFixed(1));
+                          return String(Math.max(0, next));
+                        })}
+                        className="flex flex-col items-center gap-0.5 w-full active:scale-95 transition-all py-1"
+                        style={{ color: 'var(--accent)' }}
+                      >
+                        <span className="text-[11px] font-black leading-none">1</span>
+                        <ChevronDown className="w-5 h-5 stroke-[2.5]" />
+                      </button>
                     </div>
                   </div>
 
