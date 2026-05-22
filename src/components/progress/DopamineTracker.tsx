@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format, subDays, parseISO, differenceInDays, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
+import { format, subDays, parseISO, differenceInDays, startOfWeek, endOfWeek, eachDayOfInterval, startOfMonth, endOfMonth, addMonths, getMonth, getYear } from 'date-fns';
 import {
   ShieldAlert, CheckCircle2, XCircle, X, Flame, Wind, Droplets, Zap, Target,
-  TrendingUp, Brain, Heart, Timer, Trash2,
+  TrendingUp, Brain, Heart, Timer, Trash2, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDopamineEntries, upsertDopamineEntry, deleteDopamineEntry } from '../../lib/supabaseData';
@@ -15,7 +15,6 @@ const SUCCESS_COLORS = ['', '#C8FF00', '#96CC00', '#6A9900', '#4A6B00', '#2E4200
 const RELAPSE_COLOR  = '#f87171';
 const EMPTY_COLOR    = 'rgba(255,255,255,0.05)';
 const TODAY_BORDER   = '#FAC775';
-const GRID_WEEKS     = 12;
 
 const TRIGGER_OPTIONS = ['Stress', 'Boredom', 'Loneliness', 'Fatigue', 'Social media', 'Physical urge', 'Emotional pain', 'Idle time'];
 const HELPED_OPTIONS  = ['Exercise', 'Cold shower', 'Deep breathing', 'Meditation', 'Journaling', 'Called someone', 'Left the space', 'Distraction'];
@@ -127,7 +126,8 @@ export const DopamineTracker: React.FC = () => {
   const [pendingTriggers, setPendingTriggers] = useState<string[]>([]);
   const [pendingHelped, setPendingHelped] = useState<string[]>([]);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
+  const [showAllLog, setShowAllLog] = useState(false);
   const today = format(new Date(), 'yyyy-MM-dd');
   const todayEntry = entries.find((e) => e.date === today);
 
@@ -140,11 +140,6 @@ export const DopamineTracker: React.FC = () => {
       .finally(() => setLoading(false));
   }, [user]);
 
-  useEffect(() => {
-    if (!loading && scrollRef.current) {
-      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
-    }
-  }, [loading]);
 
   // SOS urge surfing timer
   const startSosTimer = () => {
@@ -237,23 +232,23 @@ export const DopamineTracker: React.FC = () => {
   const milestone = getMilestone(stats.current);
   const nextMilestone = getNextMilestone(stats.current);
 
+  const canGoNext = getMonth(viewMonth) !== getMonth(new Date()) || getYear(viewMonth) !== getYear(new Date());
+
   const gridCells = useMemo(() => {
-    const todayDate = new Date();
-    const start = subDays(todayDate, GRID_WEEKS * 7 - 1);
-    const gridStart = startOfWeek(start, { weekStartsOn: 1 });
-    const gridEnd   = endOfWeek(todayDate, { weekStartsOn: 1 });
+    const gridStart = startOfWeek(startOfMonth(viewMonth), { weekStartsOn: 1 });
+    const gridEnd   = endOfWeek(endOfMonth(viewMonth), { weekStartsOn: 1 });
     return eachDayOfInterval({ start: gridStart, end: gridEnd }).map((day) => {
       const d = format(day, 'yyyy-MM-dd');
       const entry = entries.find((e) => e.date === d);
-      const rangeStart = format(subDays(todayDate, GRID_WEEKS * 7 - 1), 'yyyy-MM-dd');
+      const inMonth = getMonth(day) === getMonth(viewMonth) && getYear(day) === getYear(viewMonth);
       return {
         date: d, entry,
         isToday: d === today,
         isFuture: d > today,
-        isInRange: d >= rangeStart && d <= today,
+        inMonth,
       };
     });
-  }, [entries, today]);
+  }, [entries, today, viewMonth]);
 
   const weeks = useMemo(() => {
     const w: typeof gridCells[] = [];
@@ -392,174 +387,170 @@ export const DopamineTracker: React.FC = () => {
         </div>
       )}
 
-      {/* ── Heatmap ── */}
-      <div className="rounded-2xl p-5" style={{ background: 'linear-gradient(160deg,#16191F 0%,#111419 100%)', border: '1px solid rgba(255,255,255,0.08)' }}>
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.35)' }}>Activity</p>
-            <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.2)' }}>Tap any day · scroll to see history</p>
+      {/* ── Monthly Calendar ── */}
+      <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(160deg,#16191F 0%,#111419 100%)', border: '1px solid rgba(255,255,255,0.08)' }}>
+
+        {/* Month nav header */}
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => setViewMonth((m) => addMonths(m, -1))}
+            className="w-8 h-8 rounded-xl flex items-center justify-center active:scale-90 transition-all"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+          >
+            <ChevronLeft className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.6)' }} />
+          </button>
+
+          <div className="text-center">
+            <p className="text-[16px] font-bold" style={{ color: '#fff' }}>{format(viewMonth, 'MMMM yyyy')}</p>
+            <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.25)' }}>Tap any day to log</p>
           </div>
-          {/* Legend */}
-          <div className="flex items-center gap-1 text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-            {[
-              { c: EMPTY_COLOR, border: true,  label: 'Empty' },
-              { c: SUCCESS_COLORS[1], border: false, label: 'Strong' },
-              { c: RELAPSE_COLOR,    border: false, label: 'Struggle' },
-            ].map(({ c, border, label }) => (
-              <div key={label} className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-[3px]" style={{ background: c, border: border ? '1px solid rgba(255,255,255,0.12)' : 'none' }} />
-                <span>{label}</span>
-                {label !== 'Struggle' && <span className="opacity-30 mx-0.5">·</span>}
-              </div>
-            ))}
-          </div>
+
+          <button
+            onClick={() => canGoNext && setViewMonth((m) => addMonths(m, 1))}
+            disabled={!canGoNext}
+            className="w-8 h-8 rounded-xl flex items-center justify-center active:scale-90 transition-all disabled:opacity-20"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+          >
+            <ChevronRight className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.6)' }} />
+          </button>
         </div>
 
-        {/* Day-of-week column labels — full names, always visible */}
-        <div className="flex gap-0 mb-1 pl-[36px]">
+        {/* Day-of-week column headers */}
+        <div className="grid grid-cols-7 mb-1.5">
           {DAY_LABELS.map((d, i) => (
-            <div key={i} className="text-center text-[9px] font-bold uppercase tracking-wider" style={{ width: 36, color: i >= 5 ? 'rgba(250,199,117,0.5)' : 'rgba(255,255,255,0.3)' }}>
+            <div key={i} className="text-center text-[10px] font-bold uppercase tracking-wider py-1"
+              style={{ color: i >= 5 ? 'rgba(250,199,117,0.5)' : 'rgba(255,255,255,0.25)' }}>
               {d}
             </div>
           ))}
         </div>
 
-        {/* Scrollable grid — rows = weeks, columns = days */}
-        <div className="relative">
-          {/* Left fade — hints there's more history */}
-          <div className="absolute left-[36px] top-0 bottom-0 w-6 z-10 pointer-events-none"
-            style={{ background: 'linear-gradient(to right, #16191F, transparent)' }} />
-          {/* Right fade */}
-          <div className="absolute right-0 top-0 bottom-0 w-6 z-10 pointer-events-none"
-            style={{ background: 'linear-gradient(to left, #111419, transparent)' }} />
-
-          <div className="flex">
-            {/* Fixed row labels (week start date) */}
-            <div className="flex flex-col gap-1 shrink-0" style={{ width: 36 }}>
-              {weeks.map((week, wi) => {
-                const firstInRange = week.find((c) => c.isInRange);
-                return (
-                  <div key={wi} className="flex items-center text-[9px] font-semibold" style={{ height: 36, color: 'rgba(255,255,255,0.22)' }}>
-                    {firstInRange ? format(parseISO(firstInRange.date), 'MMM d') : ''}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Scrollable days grid — horizontal scroll, rows = weeks */}
-            <div
-              ref={scrollRef}
-              className="overflow-x-auto no-scrollbar flex-1"
-              style={{ scrollBehavior: 'smooth' }}
-            >
-              <div className="flex flex-col gap-1">
-                {weeks.map((week, wi) => (
-                  <div key={wi} className="flex gap-1">
-                    {week.map((cell, di) => {
-                      const bg = cell.isFuture || !cell.isInRange ? 'transparent' : getEntryColor(cell.entry);
-                      const isClickable = !cell.isFuture && cell.isInRange;
-                      const isWeekend = di >= 5;
-
-                      return (
-                        <motion.button
-                          key={di}
-                          type="button"
-                          disabled={!isClickable}
-                          onClick={() => isClickable && openCheckinForDate(cell.date)}
-                          whileTap={isClickable ? { scale: 0.85 } : undefined}
-                          whileHover={isClickable ? { scale: 1.08 } : undefined}
-                          transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-                          title={isClickable ? `${format(parseISO(cell.date), 'EEE, MMM d')}${cell.entry ? (cell.entry.status === 'success' ? ' · Strong' : ' · Struggled') : ' · No entry'}` : undefined}
-                          className="relative flex flex-col items-center justify-center rounded-lg shrink-0"
-                          style={{
-                            width: 36, height: 36,
-                            background: cell.isFuture || !cell.isInRange ? 'transparent'
-                              : cell.entry ? bg
-                              : isWeekend ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.06)',
-                            border: cell.isToday
-                              ? `2px solid ${TODAY_BORDER}`
-                              : !cell.isInRange || cell.isFuture ? 'none'
-                              : cell.entry ? '1px solid rgba(255,255,255,0.05)'
-                              : '1px dashed rgba(255,255,255,0.14)',
-                            opacity: cell.isFuture ? 0 : !cell.isInRange ? 0 : 1,
-                            cursor: isClickable ? 'pointer' : 'default',
-                          }}
-                        >
-                          {cell.isInRange && !cell.isFuture && (
-                            <span
-                              className="text-[11px] font-semibold leading-none"
-                              style={{
-                                color: cell.entry
-                                  ? (cell.entry.status === 'success' ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.7)')
-                                  : cell.isToday ? TODAY_BORDER
-                                  : 'rgba(255,255,255,0.35)',
-                              }}
-                            >
-                              {format(parseISO(cell.date), 'd')}
-                            </span>
-                          )}
-                          {/* Today dot */}
-                          {cell.isToday && !cell.entry && (
-                            <span className="absolute bottom-1 w-1 h-1 rounded-full" style={{ background: TODAY_BORDER }} />
-                          )}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
+        {/* Calendar grid — square rounded cells */}
+        {loading ? (
+          <div className="grid grid-cols-7 gap-1.5">
+            {Array.from({ length: 35 }).map((_, i) => (
+              <div key={i} className="rounded-xl animate-pulse" style={{ aspectRatio: '1', background: 'rgba(255,255,255,0.04)' }} />
+            ))}
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {weeks.map((week, wi) => (
+              <div key={wi} className="grid grid-cols-7 gap-1.5">
+                {week.map((cell, di) => {
+                  const isClickable = !cell.isFuture && cell.inMonth;
+                  const isWeekend = di >= 5;
+                  const bg = cell.entry ? getEntryColor(cell.entry)
+                    : isWeekend ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.05)';
 
-        <p className="text-center mt-3 text-[10px]" style={{ color: 'rgba(255,255,255,0.18)' }}>
-          ← swipe left to see older weeks
-        </p>
+                  return (
+                    <motion.button
+                      key={di}
+                      type="button"
+                      disabled={!isClickable}
+                      onClick={() => isClickable && openCheckinForDate(cell.date)}
+                      whileTap={isClickable ? { scale: 0.82 } : undefined}
+                      whileHover={isClickable ? { scale: 1.06 } : undefined}
+                      transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+                      className="relative flex items-center justify-center rounded-xl"
+                      style={{
+                        aspectRatio: '1',
+                        background: !cell.inMonth ? 'transparent' : bg,
+                        border: cell.isToday
+                          ? `2px solid ${TODAY_BORDER}`
+                          : !cell.inMonth ? 'none'
+                          : cell.entry ? '1px solid rgba(255,255,255,0.05)'
+                          : '1px dashed rgba(255,255,255,0.1)',
+                        opacity: !cell.inMonth ? 0.15 : cell.isFuture ? 0.3 : 1,
+                        cursor: isClickable ? 'pointer' : 'default',
+                      }}
+                    >
+                      <span
+                        className="text-[12px] font-semibold leading-none select-none"
+                        style={{
+                          color: cell.entry
+                            ? (cell.entry.status === 'success' ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.75)')
+                            : cell.isToday ? TODAY_BORDER
+                            : cell.inMonth ? 'rgba(255,255,255,0.4)'
+                            : 'rgba(255,255,255,0.2)',
+                        }}
+                      >
+                        {format(parseISO(cell.date), 'd')}
+                      </span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Legend */}
+        <div className="flex items-center justify-center gap-3 mt-4">
+          {[
+            { c: 'rgba(255,255,255,0.05)', border: true,  label: 'Empty' },
+            { c: SUCCESS_COLORS[1], border: false, label: 'Strong' },
+            { c: RELAPSE_COLOR,    border: false, label: 'Struggle' },
+          ].map(({ c, border, label }) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-[4px]" style={{ background: c, border: border ? '1px dashed rgba(255,255,255,0.15)' : 'none' }} />
+              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>{label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── Recent log ── */}
-      {entries.length > 0 && (
-        <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(160deg,#16191F 0%,#111419 100%)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          <div className="px-5 pt-4 pb-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.35)' }}>Recent Log</p>
-          </div>
-          {[...entries].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7).map((e, i) => (
-            <button
-              key={e.date}
-              onClick={() => openCheckinForDate(e.date)}
-              className="w-full flex items-start gap-3 px-5 py-3 text-left active:bg-white/5 transition-colors"
-              style={{ borderTop: i === 0 ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(255,255,255,0.04)' }}
-            >
-              <div className="w-2 h-2 rounded-full shrink-0 mt-1.5"
-                style={{ background: e.status === 'success' ? (SUCCESS_COLORS[e.urge] ?? '#C8FF00') : RELAPSE_COLOR }} />
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  {format(parseISO(e.date), 'EEE, MMM d')}
-                </p>
-                {(e.triggers ?? []).length > 0 && (
-                  <p className="text-[10px] mt-0.5" style={{ color: 'rgba(248,113,113,0.7)' }}>
-                    Triggers: {e.triggers!.join(', ')}
+      {entries.length > 0 && (() => {
+        const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+        const visible = showAllLog ? sorted : sorted.slice(0, 3);
+        return (
+          <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(160deg,#16191F 0%,#111419 100%)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.35)' }}>Recent Log</p>
+              {sorted.length > 3 && (
+                <button onClick={() => setShowAllLog((v) => !v)}
+                  className="text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all active:scale-95"
+                  style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)' }}>
+                  {showAllLog ? 'Show less' : `··· ${sorted.length - 3} more`}
+                </button>
+              )}
+            </div>
+            {visible.map((e, i) => (
+              <button
+                key={e.date}
+                onClick={() => openCheckinForDate(e.date)}
+                className="w-full flex items-start gap-3 px-5 py-3 text-left active:bg-white/5 transition-colors"
+                style={{ borderTop: i === 0 ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(255,255,255,0.04)' }}
+              >
+                <div className="w-2 h-2 rounded-full shrink-0 mt-1.5"
+                  style={{ background: e.status === 'success' ? (SUCCESS_COLORS[e.urge] ?? '#C8FF00') : RELAPSE_COLOR }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {format(parseISO(e.date), 'EEE, MMM d')}
                   </p>
-                )}
-                {(e.helped_by ?? []).length > 0 && (
-                  <p className="text-[10px] mt-0.5" style={{ color: 'rgba(200,255,0,0.6)' }}>
-                    Helped: {e.helped_by!.join(', ')}
-                  </p>
-                )}
-                {e.note && <p className="text-[11px] truncate mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>{e.note}</p>}
-              </div>
-              <div className="flex items-center gap-2 shrink-0 mt-0.5">
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                  {(e.triggers ?? []).length > 0 && (
+                    <p className="text-[10px] mt-0.5" style={{ color: 'rgba(248,113,113,0.7)' }}>
+                      Triggers: {e.triggers!.join(', ')}
+                    </p>
+                  )}
+                  {(e.helped_by ?? []).length > 0 && (
+                    <p className="text-[10px] mt-0.5" style={{ color: 'rgba(200,255,0,0.6)' }}>
+                      Helped: {e.helped_by!.join(', ')}
+                    </p>
+                  )}
+                  {e.note && <p className="text-[11px] truncate mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>{e.note}</p>}
+                </div>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 mt-0.5"
                   style={e.status === 'success'
                     ? { background: 'rgba(200,255,0,0.1)', color: '#C8FF00', border: '1px solid rgba(200,255,0,0.2)' }
                     : { background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.2)' }}>
                   {e.status === 'success' ? '✓ Strong' : '✗ Struggled'}
                 </span>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* ── Check-in modal ── */}
       <AnimatePresence>
