@@ -94,7 +94,7 @@ interface Message {
   role: 'user' | 'model';
   text: string;
   thought?: string;
-  action?: { name: string; summary: string; success: boolean };
+  action?: { success: boolean; message: string };
 }
 
 interface ApiUsage {
