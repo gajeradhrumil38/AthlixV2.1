@@ -462,12 +462,6 @@ export const AiChat: React.FC = () => {
       try {
         const systemPrompt = buildSystemPrompt(profile, workouts, prs);
 
-        // Search grounding tool format differs by model family
-        const isV2 = /^gemini-2/.test(model);
-        const searchTool = isV2
-          ? { google_search: {} }
-          : { google_search_retrieval: { dynamic_retrieval_config: { mode: 'MODE_DYNAMIC' } } };
-
         // Only send the last MAX_HISTORY messages to keep prompt tokens low
         const trimmedHistory = history.slice(-MAX_HISTORY);
 
@@ -479,17 +473,16 @@ export const AiChat: React.FC = () => {
           parts: [{ text: m.text }],
         }));
 
-        const makeRequest = (contents: object[], includeSearch: boolean) =>
+        // Gemini doesn't allow google_search + function_declarations in the same request
+        // so we always use function_declarations only (model answers coaching Qs from training knowledge)
+        const makeRequest = (contents: object[]) =>
           fetch(`${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               system_instruction: { parts: [{ text: systemPrompt }] },
               contents,
-              tools: [
-                { function_declarations: FUNCTION_DECLARATIONS },
-                ...(includeSearch ? [searchTool] : []),
-              ],
+              tools: [{ function_declarations: FUNCTION_DECLARATIONS }],
               generationConfig: {
                 temperature: 1,
                 maxOutputTokens: 2048,
@@ -513,7 +506,7 @@ export const AiChat: React.FC = () => {
           return res.json();
         };
 
-        const res = await makeRequest(geminiContents, true);
+        const res = await makeRequest(geminiContents);
         const data = await checkResponse(res);
         trackTokenUsage(data?.usageMetadata?.totalTokenCount ?? 0);
 
@@ -537,7 +530,7 @@ export const AiChat: React.FC = () => {
             { role: 'model', parts: [{ functionCall: fnCallPart.functionCall }] },
             { role: 'user', parts: [{ functionResponse: { name: toolName, response: toolResult } }] },
           ];
-          const res2 = await makeRequest(followUpContents, false);
+          const res2 = await makeRequest(followUpContents);
           const data2 = await checkResponse(res2);
           trackTokenUsage(data2?.usageMetadata?.totalTokenCount ?? 0);
 
