@@ -2589,12 +2589,14 @@ export interface DopamineEntry {
   status: 'success' | 'relapse';
   urge: number;        // 1-5
   note?: string;
+  triggers?: string[];
+  helped_by?: string[];
 }
 
 export const getDopamineEntries = async (userId: string): Promise<DopamineEntry[]> => {
   const { data, error } = await supabase
     .from('dopamine_entries')
-    .select('id, user_id, date, status, urge, note')
+    .select('id, user_id, date, status, urge, note, triggers, helped_by')
     .eq('user_id', userId)
     .order('date', { ascending: true });
 
@@ -2604,12 +2606,21 @@ export const getDopamineEntries = async (userId: string): Promise<DopamineEntry[
 
 export const upsertDopamineEntry = async (
   userId: string,
-  entry: { date: string; status: 'success' | 'relapse'; urge: number; note?: string },
+  entry: { date: string; status: 'success' | 'relapse'; urge: number; note?: string; triggers?: string[]; helped_by?: string[] },
 ): Promise<DopamineEntry> => {
   const { data, error } = await supabase
     .from('dopamine_entries')
     .upsert(
-      { user_id: userId, date: entry.date, status: entry.status, urge: entry.urge, note: entry.note ?? null, updated_at: new Date().toISOString() },
+      {
+        user_id: userId,
+        date: entry.date,
+        status: entry.status,
+        urge: entry.urge,
+        note: entry.note ?? null,
+        triggers: entry.triggers ?? [],
+        helped_by: entry.helped_by ?? [],
+        updated_at: new Date().toISOString(),
+      },
       { onConflict: 'user_id,date' },
     )
     .select()
