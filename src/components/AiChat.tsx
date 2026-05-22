@@ -86,13 +86,13 @@ const FUNCTION_DECLARATIONS = [
   },
   {
     name: 'log_exercise',
-    description: "Log a specific exercise set. Use when user mentions doing an exercise with details like sets/reps/weight. Examples: 'bench press 3x10 80kg', 'I did squats 5 sets of 5 at 100kg', 'just finished 4 sets of pull-ups'. Always normalize and fix typos in exercise names (e.g. 'banch press' → 'Bench Press', 'sholdr press' → 'Shoulder Press'). If weight not mentioned, use 0.",
+    description: "Log a specific exercise set. Use ONLY when the user explicitly provides BOTH sets AND reps (e.g. '3x10', '5 sets of 5', '4 sets 8 reps'). Examples: 'bench press 3x10 80kg', 'squats 5x5 100kg'. Always normalize typos (e.g. 'banch press' → 'Bench Press'). If weight not mentioned, use 0. IMPORTANT: If the user names an exercise but does NOT specify sets and reps, call show_exercise_form instead. For multiple exercises in one message, log the first one and tell the user to log the others one at a time.",
     parameters: {
       type: 'object',
       properties: {
         exercise_name: { type: 'string', description: 'Exercise name with typos corrected and properly capitalized (e.g. "Bench Press", "Squat", "Pull Up")' },
-        sets: { type: 'number', description: 'Number of sets' },
-        reps: { type: 'number', description: 'Reps per set' },
+        sets: { type: 'number', description: 'Number of sets — only provide when explicitly stated by user' },
+        reps: { type: 'number', description: 'Reps per set — only provide when explicitly stated by user' },
         weight: { type: 'number', description: 'Weight used. Use 0 for bodyweight exercises.' },
         unit: { type: 'string', enum: ['kg', 'lbs'], description: "Weight unit — default 'kg'" },
         date: { type: 'string', description: 'Date in YYYY-MM-DD format, defaults to today' },
@@ -102,8 +102,14 @@ const FUNCTION_DECLARATIONS = [
   },
   {
     name: 'show_exercise_form',
-    description: "Show the user a fillable exercise log form. Use ONLY when the user clearly wants to log an exercise but hasn't provided enough details (no sets, no reps) and it's ambiguous even after context. Do NOT use this for weight or dopamine logging.",
-    parameters: { type: 'object', properties: {}, required: [] },
+    description: "Show the user a fillable exercise log form. Use when: (1) user names an exercise but does NOT give sets and reps, (2) the exercise intent is clear but details are missing. Pass exercise_name if you know which exercise. Do NOT use for weight or dopamine logging.",
+    parameters: {
+      type: 'object',
+      properties: {
+        exercise_name: { type: 'string', description: 'Exercise name to pre-fill, with typos corrected. Leave empty if unknown.' },
+      },
+      required: [],
+    },
   },
 ];
 
@@ -119,6 +125,7 @@ interface ToolResult {
   message: string;
   suggestions?: string[];   // exercise name suggestions when not found
   showForm?: boolean;       // show inline exercise form
+  formInitialName?: string; // pre-fill exercise name in form
 }
 
 interface Message {
@@ -126,7 +133,8 @@ interface Message {
   text: string;
   thought?: string;
   action?: ToolResult;
-  exerciseForm?: boolean;   // render inline exercise form
+  exerciseForm?: boolean;         // render inline exercise form
+  exerciseFormInitialName?: string; // pre-fill exercise name
 }
 
 interface ApiUsage {
@@ -435,7 +443,7 @@ async function executeTool(
   }
 
   if (name === 'show_exercise_form') {
-    return { success: true, message: '', showForm: true };
+    return { success: true, message: '', showForm: true, formInitialName: (args.exercise_name as string) || '' };
   }
 
   return { success: false, message: `Unknown tool: ${name}` };
@@ -612,6 +620,19 @@ export const AiChat: React.FC = () => {
             toolResult = { success: false, message: e.message || 'Action failed' };
           }
 
+          // show_exercise_form: render inline form immediately, skip Gemini follow-up entirely
+          if (toolResult.showForm) {
+            setMessages((prev) => [...prev, {
+              role: 'model',
+              text: toolResult.formInitialName
+                ? `Fill in the details for **${toolResult.formInitialName}**:`
+                : "Here's a quick form to log your exercise:",
+              exerciseForm: true,
+              exerciseFormInitialName: toolResult.formInitialName || '',
+            }]);
+            return;
+          }
+
           // Send function result back to Gemini for a natural-language reply
           const followUpContents = [
             ...geminiContents,
@@ -624,15 +645,6 @@ export const AiChat: React.FC = () => {
 
           const finalParts: Array<{ text?: string; thought?: boolean }> =
             data2?.candidates?.[0]?.content?.parts || [];
-          // show_exercise_form: skip Gemini follow-up, render inline form instead
-          if (toolResult.showForm) {
-            setMessages((prev) => [...prev, {
-              role: 'model',
-              text: "Here's a quick form to log your exercise:",
-              exerciseForm: true,
-            }]);
-            return;
-          }
 
           const aiText2 = finalParts.filter((p) => !p.thought).map((p) => p.text).join('').trim() || 'Done!';
 
@@ -684,7 +696,7 @@ export const AiChat: React.FC = () => {
     });
   };
 
-  /* ── Direct exercise log (from suggestion chip or form) ────────── */
+  /* ── Direct exercise log (from form submit) ─────────────────────── */
   const handleLogExercise = useCallback(async (name: string, sets: number, reps: number, weight: number, unit: string) => {
     if (!user?.id) return;
     const result = await executeTool(user.id, 'log_exercise', { exercise_name: name, sets, reps, weight, unit });
@@ -694,6 +706,16 @@ export const AiChat: React.FC = () => {
       action: result,
     }]);
   }, [user?.id]);
+
+  /* ── Show pre-filled form (from suggestion chip tap) ────────────── */
+  const handleShowFormWithName = useCallback((name: string) => {
+    setMessages((prev) => [...prev, {
+      role: 'model' as const,
+      text: name ? `Fill in the details for **${name}**:` : "Here's a quick form to log your exercise:",
+      exerciseForm: true,
+      exerciseFormInitialName: name,
+    }]);
+  }, []);
 
   /* ── FAB button (mobile only, sits left of the + FAB) ───────────── */
   const fabButton = (
@@ -763,6 +785,7 @@ export const AiChat: React.FC = () => {
               onSend={() => send()}
               onSuggest={(q) => send(q)}
               onLogExercise={handleLogExercise}
+              onShowFormWithName={handleShowFormWithName}
               onClose={close}
               onGoSettings={() => { close(); navigate('/settings'); }}
               onClear={() => setMessages([])}
@@ -803,6 +826,7 @@ export const AiChat: React.FC = () => {
               onSend={() => send()}
               onSuggest={(q) => send(q)}
               onLogExercise={handleLogExercise}
+              onShowFormWithName={handleShowFormWithName}
               onClose={close}
               onGoSettings={() => { close(); navigate('/settings'); }}
               onClear={() => setMessages([])}
@@ -824,33 +848,37 @@ export const AiChat: React.FC = () => {
 
 /* ── Inline exercise quick-log form ───────────────────────────────── */
 const ExerciseQuickForm: React.FC<{
+  initialName?: string;
   onSubmit: (name: string, sets: number, reps: number, weight: number, unit: string) => Promise<void>;
   loading: boolean;
   setLoading: (v: boolean) => void;
-}> = ({ onSubmit, loading, setLoading }) => {
-  const [name, setName] = useState('');
-  const [sets, setSets] = useState('3');
-  const [reps, setReps] = useState('10');
+}> = ({ initialName = '', onSubmit, loading, setLoading }) => {
+  const [name, setName] = useState(initialName);
+  const [sets, setSets] = useState(3);
+  const [reps, setReps] = useState(10);
   const [weight, setWeight] = useState('');
   const [unit, setUnit] = useState<'kg' | 'lbs'>('kg');
   const [done, setDone] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
-  const field = (
-    label: string,
-    value: string,
-    onChange: (v: string) => void,
-    opts?: { type?: string; placeholder?: string },
-  ) => (
+  const Stepper = ({
+    label, value, onChange, min, max,
+  }: { label: string; value: number; onChange: (v: number) => void; min: number; max: number }) => (
     <div className="flex flex-col gap-1">
       <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>{label}</span>
-      <input
-        type={opts?.type ?? 'text'}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={opts?.placeholder}
-        className="text-[13px] px-2.5 py-2 rounded-lg outline-none"
-        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', caretColor: '#C8FF00' }}
-      />
+      <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)' }}>
+        <button
+          onClick={() => onChange(Math.max(min, value - 1))}
+          className="px-3 py-2 text-[16px] font-light transition-colors active:bg-white/10"
+          style={{ color: 'rgba(255,255,255,0.5)', flexShrink: 0 }}
+        >−</button>
+        <span className="flex-1 text-center text-[14px] font-bold" style={{ color: 'var(--text-primary)' }}>{value}</span>
+        <button
+          onClick={() => onChange(Math.min(max, value + 1))}
+          className="px-3 py-2 text-[16px] font-light transition-colors active:bg-white/10"
+          style={{ color: 'rgba(255,255,255,0.5)', flexShrink: 0 }}
+        >+</button>
+      </div>
     </div>
   );
 
@@ -858,12 +886,18 @@ const ExerciseQuickForm: React.FC<{
     if (!name.trim() || loading) return;
     setLoading(true);
     try {
-      await onSubmit(name.trim(), Number(sets) || 3, Number(reps) || 10, Number(weight) || 0, unit);
+      await onSubmit(name.trim(), sets, reps, Number(weight) || 0, unit);
       setDone(true);
     } finally {
       setLoading(false);
     }
   };
+
+  if (dismissed) return (
+    <div className="px-3 py-2 rounded-xl text-[11px]" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.3)' }}>
+      Form dismissed
+    </div>
+  );
 
   if (done) return (
     <div className="px-3 py-2.5 rounded-xl text-[12px] font-semibold" style={{ background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.22)', color: '#C8FF00' }}>
@@ -873,18 +907,50 @@ const ExerciseQuickForm: React.FC<{
 
   return (
     <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
-      <div className="px-3 pt-3 pb-2 flex items-center gap-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <Sparkles className="w-3 h-3" style={{ color: 'var(--accent)' }} />
-        <span className="text-[11px] font-bold" style={{ color: 'var(--accent)' }}>Log Exercise</span>
+      <div className="px-3 pt-3 pb-2 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="flex items-center gap-1.5">
+          <Sparkles className="w-3 h-3" style={{ color: 'var(--accent)' }} />
+          <span className="text-[11px] font-bold" style={{ color: 'var(--accent)' }}>Log Exercise</span>
+        </div>
+        <button
+          onClick={() => setDismissed(true)}
+          className="w-5 h-5 flex items-center justify-center rounded transition-colors"
+          style={{ color: 'rgba(255,255,255,0.3)' }}
+        >
+          <X className="w-3 h-3" />
+        </button>
       </div>
       <div className="p-3 space-y-2.5">
-        {field('Exercise name', name, setName, { placeholder: 'e.g. Bench Press' })}
-        <div className="grid grid-cols-2 gap-2">
-          {field('Sets', sets, setSets, { type: 'number', placeholder: '3' })}
-          {field('Reps', reps, setReps, { type: 'number', placeholder: '10' })}
+        {/* Exercise name */}
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>Exercise name</span>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Bench Press"
+            className="text-[13px] px-2.5 py-2 rounded-lg outline-none"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', caretColor: '#C8FF00' }}
+          />
         </div>
+        {/* Sets + Reps steppers */}
+        <div className="grid grid-cols-2 gap-2">
+          <Stepper label="Sets" value={sets} onChange={setSets} min={1} max={20} />
+          <Stepper label="Reps" value={reps} onChange={setReps} min={1} max={50} />
+        </div>
+        {/* Weight + unit toggle */}
         <div className="flex gap-2 items-end">
-          <div className="flex-1">{field('Weight (optional)', weight, setWeight, { type: 'number', placeholder: '0' })}</div>
+          <div className="flex flex-col gap-1 flex-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>Weight (optional)</span>
+            <input
+              type="number"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              placeholder="0"
+              className="text-[13px] px-2.5 py-2 rounded-lg outline-none"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', caretColor: '#C8FF00' }}
+            />
+          </div>
           <div className="flex rounded-lg overflow-hidden shrink-0" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
             {(['kg', 'lbs'] as const).map((u) => (
               <button key={u} onClick={() => setUnit(u)}
@@ -924,6 +990,7 @@ interface ChatContentProps {
   onSend: () => void;
   onSuggest: (q: string) => void;
   onLogExercise: (name: string, sets: number, reps: number, weight: number, unit: string) => Promise<void>;
+  onShowFormWithName: (name: string) => void;
   onClose: () => void;
   onGoSettings: () => void;
   onClear: () => void;
@@ -933,7 +1000,7 @@ interface ChatContentProps {
 const ChatContent: React.FC<ChatContentProps> = ({
   apiKey, messages, suggestions, input, loading, loadingPhase, copiedIdx,
   inputRef, bottomRef,
-  onInput, onKey, onSend, onSuggest, onLogExercise,
+  onInput, onKey, onSend, onSuggest, onLogExercise, onShowFormWithName,
   onClose, onGoSettings, onClear, onCopy,
 }) => {
   const [expandedThought, setExpandedThought] = useState<number | null>(null);
@@ -1122,7 +1189,7 @@ const ChatContent: React.FC<ChatContentProps> = ({
                   </div>
                 )}
 
-                {/* Exercise suggestions — tapping logs directly */}
+                {/* Exercise suggestions — tapping opens pre-filled form */}
                 {m.role === 'model' && m.action?.suggestions && m.action.suggestions.length > 0 && (
                   <div className="mb-1">
                     <p className="text-[10px] mb-1.5 font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
@@ -1132,7 +1199,7 @@ const ChatContent: React.FC<ChatContentProps> = ({
                       {m.action.suggestions.map((s) => (
                         <button
                           key={s}
-                          onClick={() => onLogExercise(s, 3, 10, 0, 'kg')}
+                          onClick={() => onShowFormWithName(s)}
                           className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg active:scale-95 transition-all"
                           style={{
                             background: 'rgba(200,255,0,0.08)',
@@ -1167,7 +1234,12 @@ const ChatContent: React.FC<ChatContentProps> = ({
 
                 {/* Inline exercise form */}
                 {m.role === 'model' && m.exerciseForm && (
-                  <ExerciseQuickForm onSubmit={onLogExercise} loading={formLoading} setLoading={setFormLoading} />
+                  <ExerciseQuickForm
+                    initialName={m.exerciseFormInitialName || ''}
+                    onSubmit={onLogExercise}
+                    loading={formLoading}
+                    setLoading={setFormLoading}
+                  />
                 )}
 
                 {m.role === 'model' && !m.exerciseForm && (
@@ -1255,7 +1327,7 @@ const ChatContent: React.FC<ChatContentProps> = ({
               onChange={(e) => onInput(e.target.value)}
               onKeyDown={onKey}
               disabled={loading}
-              placeholder="Ask about your training…"
+              placeholder="Ask or log — 'bench 3×10 80kg', 'weight 75kg'…"
               className="flex-1 text-[14px] outline-none"
               style={{
                 background: 'none',
