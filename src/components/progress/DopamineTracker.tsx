@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, subDays, parseISO, differenceInDays, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
-import { ShieldAlert, CheckCircle2, XCircle, X, Flame, Wind, Droplets, Zap, Target } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, XCircle, X, Flame, Wind, Droplets, Zap, Target, Plus } from 'lucide-react';
 
 const STORAGE_KEY = 'athlix_dopamine_log';
 
@@ -12,7 +12,6 @@ interface DopamineEntry {
   note?: string;
 }
 
-// Urge 1 = easiest (brightest green), 5 = hardest day (still won, dim green)
 const SUCCESS_COLORS = ['', '#C8FF00', '#96CC00', '#6A9900', '#4A6B00', '#2E4200'];
 const RELAPSE_COLOR  = '#f87171';
 const EMPTY_COLOR    = 'rgba(255,255,255,0.05)';
@@ -35,18 +34,14 @@ const SOS_TIPS = [
 
 const computeStats = (entries: DopamineEntry[]) => {
   const entryMap = new Map(entries.map((e) => [e.date, e]));
-
-  // Current streak — go backwards from yesterday (today may not be logged yet)
   let current = 0;
   for (let i = 0; i <= 365; i++) {
     const d = format(subDays(new Date(), i), 'yyyy-MM-dd');
     const e = entryMap.get(d);
-    if (i === 0 && !e) continue; // today not logged yet — still running
+    if (i === 0 && !e) continue;
     if (!e || e.status === 'relapse') break;
     current++;
   }
-
-  // Best streak
   let best = 0, run = 0, prevDate: string | null = null;
   for (const e of [...entries].sort((a, b) => a.date.localeCompare(b.date))) {
     if (e.status === 'relapse') { run = 0; prevDate = null; continue; }
@@ -55,8 +50,6 @@ const computeStats = (entries: DopamineEntry[]) => {
     if (run > best) best = run;
     prevDate = e.date;
   }
-
-  // Last-30 metrics
   const cutoff = format(subDays(new Date(), 29), 'yyyy-MM-dd');
   const last30 = entries.filter((e) => e.date >= cutoff);
   const successes = last30.filter((e) => e.status === 'success');
@@ -64,7 +57,6 @@ const computeStats = (entries: DopamineEntry[]) => {
   const avgUrge = successes.length > 0
     ? (successes.reduce((s, e) => s + e.urge, 0) / successes.length).toFixed(1)
     : null;
-
   return { current, best, successRate, avgUrge };
 };
 
@@ -86,85 +78,105 @@ const getMotivation = (streak: number) => {
   return `${streak} days. You are proof it\'s possible.`;
 };
 
+// How many weeks to show in the scrollable grid
+const GRID_WEEKS = 12;
+
 export const DopamineTracker: React.FC = () => {
   const [entries, setEntries] = useState<DopamineEntry[]>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
     catch { return []; }
   });
 
-  const [showCheckin, setShowCheckin] = useState(false);
   const [showSOS, setShowSOS] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<{ date: string; entry: DopamineEntry } | null>(null);
+  // editingDate drives the check-in modal; null = closed
+  const [editingDate, setEditingDate] = useState<string | null>(null);
   const [checkinStep, setCheckinStep] = useState<'status' | 'details'>('status');
   const [pendingStatus, setPendingStatus] = useState<'success' | 'relapse' | null>(null);
   const [pendingUrge, setPendingUrge] = useState(2);
   const [pendingNote, setPendingNote] = useState('');
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+
   const today = format(new Date(), 'yyyy-MM-dd');
   const todayEntry = entries.find((e) => e.date === today);
+
+  // Scroll grid to the right (today) on mount
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+    }
+  }, []);
 
   const saveEntries = useCallback((updated: DopamineEntry[]) => {
     setEntries(updated);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   }, []);
 
-  const submitCheckin = () => {
-    if (!pendingStatus) return;
-    const updated = entries.filter((e) => e.date !== today);
-    updated.push({ date: today, status: pendingStatus, urge: pendingUrge, note: pendingNote.trim() || undefined });
-    saveEntries(updated);
-    setShowCheckin(false);
+  const openCheckinForDate = (dateStr: string) => {
+    const existing = entries.find((e) => e.date === dateStr);
+    if (existing) {
+      setPendingStatus(existing.status);
+      setPendingUrge(existing.urge);
+      setPendingNote(existing.note || '');
+      setCheckinStep('details');
+    } else {
+      setCheckinStep('status');
+      setPendingStatus(null);
+      setPendingUrge(2);
+      setPendingNote('');
+    }
+    setEditingDate(dateStr);
+  };
+
+  const closeCheckin = () => {
+    setEditingDate(null);
     setCheckinStep('status');
     setPendingStatus(null);
     setPendingUrge(2);
     setPendingNote('');
   };
 
+  const submitCheckin = () => {
+    if (!pendingStatus || !editingDate) return;
+    const updated = entries.filter((e) => e.date !== editingDate);
+    updated.push({ date: editingDate, status: pendingStatus, urge: pendingUrge, note: pendingNote.trim() || undefined });
+    saveEntries(updated);
+    closeCheckin();
+  };
+
   const stats = useMemo(() => computeStats(entries), [entries]);
   const milestone = getMilestone(stats.current);
   const motivation = getMotivation(stats.current);
 
-  // Build 5-week GitHub-style grid (35 cells, Mon-start, last 35 days)
+  // Build GRID_WEEKS-week scrollable grid (Mon-start)
   const gridCells = useMemo(() => {
-    // Align to last full week ending today
     const todayDate = new Date();
-    // Start from 34 days ago
-    const start = subDays(todayDate, 34);
-    // Pad to Monday
+    const start = subDays(todayDate, GRID_WEEKS * 7 - 1);
     const gridStart = startOfWeek(start, { weekStartsOn: 1 });
     const gridEnd   = endOfWeek(todayDate, { weekStartsOn: 1 });
     return eachDayOfInterval({ start: gridStart, end: gridEnd }).map((day) => {
       const d = format(day, 'yyyy-MM-dd');
       const entry = entries.find((e) => e.date === d);
-      const isTod = d === today;
+      const isToday = d === today;
       const isFuture = d > today;
-      const isInRange = d >= format(subDays(todayDate, 34), 'yyyy-MM-dd') && d <= today;
-      return { date: d, entry, isToday: isTod, isFuture, isInRange };
+      const rangeStart = format(subDays(todayDate, GRID_WEEKS * 7 - 1), 'yyyy-MM-dd');
+      const isInRange = d >= rangeStart && d <= today;
+      return { date: d, entry, isToday, isFuture, isInRange };
     });
   }, [entries, today]);
 
   const weeks = useMemo(() => {
     const w: typeof gridCells[] = [];
-    for (let i = 0; i < gridCells.length; i += 7) {
-      w.push(gridCells.slice(i, i + 7));
-    }
+    for (let i = 0; i < gridCells.length; i += 7) w.push(gridCells.slice(i, i + 7));
     return w;
   }, [gridCells]);
 
   const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-  const openCheckin = () => {
-    if (todayEntry) {
-      // Pre-fill with existing
-      setPendingStatus(todayEntry.status);
-      setPendingUrge(todayEntry.urge);
-      setPendingNote(todayEntry.note || '');
-      setCheckinStep('details');
-    } else {
-      setCheckinStep('status');
-    }
-    setShowCheckin(true);
-  };
+  const editingEntry = editingDate ? entries.find((e) => e.date === editingDate) : undefined;
+  const editingDateLabel = editingDate
+    ? (editingDate === today ? 'Today' : format(parseISO(editingDate), 'EEE, MMM d'))
+    : '';
 
   return (
     <div className="space-y-4">
@@ -174,7 +186,6 @@ export const DopamineTracker: React.FC = () => {
         className="rounded-2xl p-5 relative overflow-hidden"
         style={{ background: 'linear-gradient(135deg, #0f1a00 0%, #111419 60%)', border: '1px solid rgba(200,255,0,0.12)' }}
       >
-        {/* Ambient glow */}
         <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 20% 50%, rgba(200,255,0,0.06) 0%, transparent 60%)' }} />
 
         <div className="flex items-start justify-between mb-5 relative">
@@ -195,7 +206,6 @@ export const DopamineTracker: React.FC = () => {
             )}
           </div>
 
-          {/* SOS button */}
           <button
             onClick={() => setShowSOS(true)}
             className="flex items-center gap-1.5 h-9 px-3 rounded-xl text-[12px] font-bold transition-all active:scale-95"
@@ -206,12 +216,10 @@ export const DopamineTracker: React.FC = () => {
           </button>
         </div>
 
-        {/* Motivation */}
         <p className="text-[13px] leading-relaxed mb-5 relative" style={{ color: 'rgba(255,255,255,0.55)' }}>
           {milestone ? milestone.text : motivation}
         </p>
 
-        {/* Stats row */}
         <div className="grid grid-cols-3 gap-2 mb-5">
           {[
             { label: 'Best', value: `${stats.best}d`, sub: 'streak' },
@@ -226,9 +234,8 @@ export const DopamineTracker: React.FC = () => {
           ))}
         </div>
 
-        {/* Daily check-in button */}
         <button
-          onClick={openCheckin}
+          onClick={() => openCheckinForDate(today)}
           className="w-full py-3.5 rounded-xl text-[14px] font-bold text-black flex items-center justify-center gap-2 active:scale-[0.98] transition-all relative"
           style={{ background: '#C8FF00' }}
         >
@@ -244,9 +251,10 @@ export const DopamineTracker: React.FC = () => {
 
       {/* ── Heatmap ── */}
       <div className="rounded-2xl p-5" style={{ background: 'linear-gradient(160deg,#16191F 0%,#111419 100%)', border: '1px solid rgba(255,255,255,0.08)' }}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.35)' }}>35-Day Activity</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.35)' }}>{GRID_WEEKS}-Week Activity</p>
+            <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.2)' }}>Tap any day to add or edit</p>
           </div>
           <div className="flex items-center gap-1.5 text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
             <span>Less</span>
@@ -258,10 +266,10 @@ export const DopamineTracker: React.FC = () => {
           </div>
         </div>
 
-        {/* Grid */}
+        {/* Scrollable grid */}
         <div className="flex gap-1.5">
-          {/* Day labels */}
-          <div className="flex flex-col gap-1.5 pt-0">
+          {/* Day labels (fixed) */}
+          <div className="flex flex-col gap-1.5 shrink-0">
             {DAY_LABELS.map((d, i) => (
               <div key={i} className="h-[28px] flex items-center text-[9px] font-semibold w-3" style={{ color: 'rgba(255,255,255,0.25)' }}>
                 {i % 2 === 0 ? d : ''}
@@ -269,10 +277,14 @@ export const DopamineTracker: React.FC = () => {
             ))}
           </div>
 
-          {/* Weeks */}
-          <div className="flex gap-1.5 flex-1">
+          {/* Scrollable weeks */}
+          <div
+            ref={scrollRef}
+            className="flex gap-1.5 overflow-x-auto no-scrollbar flex-1"
+            style={{ scrollBehavior: 'auto' }}
+          >
             {weeks.map((week, wi) => (
-              <div key={wi} className="flex flex-col gap-1.5 flex-1">
+              <div key={wi} className="flex flex-col gap-1.5 shrink-0" style={{ width: 28 }}>
                 {week.map((cell, di) => {
                   const bg = cell.isFuture || !cell.isInRange
                     ? 'transparent'
@@ -281,26 +293,37 @@ export const DopamineTracker: React.FC = () => {
                     ? `2px solid ${TODAY_BORDER}`
                     : cell.isFuture || !cell.isInRange
                     ? 'none'
-                    : '1px solid rgba(255,255,255,0.04)';
+                    : cell.entry
+                    ? '1px solid rgba(255,255,255,0.04)'
+                    : '1px dashed rgba(255,255,255,0.12)';
 
-                  const hasEntry = !!cell.entry && !cell.isFuture && cell.isInRange;
+                  const isClickable = !cell.isFuture && cell.isInRange;
 
                   return (
-                    <div
+                    <motion.button
                       key={di}
-                      onClick={() => hasEntry && setSelectedDay({ date: cell.date, entry: cell.entry! })}
-                      className="rounded-[5px] transition-all"
+                      type="button"
+                      disabled={!isClickable}
+                      onClick={() => isClickable && openCheckinForDate(cell.date)}
+                      whileTap={isClickable ? { scale: 0.82 } : undefined}
+                      whileHover={isClickable ? { scale: 1.18 } : undefined}
+                      transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+                      className="rounded-[5px] relative flex items-center justify-center"
                       style={{
                         height: 28,
+                        width: 28,
                         background: bg,
                         border: borderStyle,
                         opacity: cell.isFuture ? 0 : 1,
-                        cursor: hasEntry ? 'pointer' : 'default',
-                        transform: 'scale(1)',
+                        cursor: isClickable ? 'pointer' : 'default',
                       }}
-                      onMouseEnter={(e) => { if (hasEntry) (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.15)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'; }}
-                    />
+                      title={isClickable ? (cell.entry ? `Edit ${cell.date}` : `Add entry for ${format(parseISO(cell.date), 'MMM d')}`) : undefined}
+                    >
+                      {/* "+" hint on empty clickable days */}
+                      {isClickable && !cell.entry && !cell.isToday && (
+                        <Plus className="w-2.5 h-2.5 opacity-20" style={{ color: '#fff' }} />
+                      )}
+                    </motion.button>
                   );
                 })}
               </div>
@@ -308,10 +331,10 @@ export const DopamineTracker: React.FC = () => {
           </div>
         </div>
 
-        {/* Legend date range */}
+        {/* Date range */}
         <div className="flex justify-between mt-3 text-[9px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
-          <span>{format(subDays(new Date(), 34), 'MMM d')}</span>
-          <span>Today {format(new Date(), 'MMM d')}</span>
+          <span>{format(subDays(new Date(), GRID_WEEKS * 7 - 1), 'MMM d')}</span>
+          <span>← scroll for history &nbsp;·&nbsp; Today {format(new Date(), 'MMM d')} →</span>
         </div>
       </div>
 
@@ -325,10 +348,11 @@ export const DopamineTracker: React.FC = () => {
             .sort((a, b) => b.date.localeCompare(a.date))
             .slice(0, 7)
             .map((e, i) => (
-              <div
+              <button
                 key={e.date}
-                className="flex items-center gap-3 px-5 py-3"
+                className="w-full flex items-center gap-3 px-5 py-3 text-left active:bg-white/5 transition-colors"
                 style={{ borderTop: i === 0 ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(255,255,255,0.04)' }}
+                onClick={() => openCheckinForDate(e.date)}
               >
                 <div
                   className="w-2 h-2 rounded-full shrink-0"
@@ -351,119 +375,16 @@ export const DopamineTracker: React.FC = () => {
                   >
                     {e.status === 'success' ? '✓ Strong' : '✗ Relapse'}
                   </span>
-                  <span className="text-[11px] tabular-nums" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                    U{e.urge}
-                  </span>
+                  <span className="text-[11px] tabular-nums" style={{ color: 'rgba(255,255,255,0.3)' }}>U{e.urge}</span>
                 </div>
-              </div>
+              </button>
             ))}
         </div>
       )}
 
-      {/* ── Day detail popup ── */}
+      {/* ── Check-in / Edit modal ── */}
       <AnimatePresence>
-        {selectedDay && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center px-5"
-            style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)' }}
-            onClick={() => setSelectedDay(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.92, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.92, opacity: 0 }}
-              transition={{ type: 'spring', damping: 26, stiffness: 300 }}
-              className="w-full max-w-[340px] rounded-2xl p-5"
-              style={{ background: '#111419', border: '1px solid rgba(255,255,255,0.1)' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.16em] mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                    {format(parseISO(selectedDay.date), 'EEEE')}
-                  </p>
-                  <p className="text-[18px] font-bold" style={{ color: '#fff' }}>
-                    {format(parseISO(selectedDay.date), 'MMM d, yyyy')}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setSelectedDay(null)}
-                  className="h-8 w-8 rounded-full flex items-center justify-center shrink-0"
-                  style={{ background: 'rgba(255,255,255,0.08)' }}
-                >
-                  <X className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.5)' }} />
-                </button>
-              </div>
-
-              {/* Status badge */}
-              <div
-                className="flex items-center gap-2.5 rounded-xl px-4 py-3 mb-4"
-                style={selectedDay.entry.status === 'success'
-                  ? { background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.2)' }
-                  : { background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}
-              >
-                {selectedDay.entry.status === 'success'
-                  ? <CheckCircle2 className="w-5 h-5 shrink-0" style={{ color: '#C8FF00' }} />
-                  : <XCircle className="w-5 h-5 shrink-0" style={{ color: '#f87171' }} />}
-                <span className="text-[14px] font-bold" style={{ color: selectedDay.entry.status === 'success' ? '#C8FF00' : '#f87171' }}>
-                  {selectedDay.entry.status === 'success' ? 'Stayed Strong' : 'Relapsed'}
-                </span>
-              </div>
-
-              {/* Urge level (only for successes) */}
-              {selectedDay.entry.status === 'success' && (
-                <div className="mb-4">
-                  <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'rgba(255,255,255,0.35)' }}>Urge Level</p>
-                  <div className="flex gap-1.5">
-                    {[1, 2, 3, 4, 5].map((u) => (
-                      <div
-                        key={u}
-                        className="flex-1 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold"
-                        style={u <= selectedDay.entry.urge
-                          ? { background: SUCCESS_COLORS[u] ?? '#C8FF00', color: '#000' }
-                          : { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.2)' }}
-                      >
-                        {u}
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-[11px] mt-1.5 text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                    {URGE_LABELS[selectedDay.entry.urge]} urge
-                  </p>
-                </div>
-              )}
-
-              {/* Note */}
-              {selectedDay.entry.note ? (
-                <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <p className="text-[10px] uppercase tracking-wider mb-1.5" style={{ color: 'rgba(255,255,255,0.3)' }}>Note</p>
-                  <p className="text-[13px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.7)' }}>
-                    {selectedDay.entry.note}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-[12px] text-center" style={{ color: 'rgba(255,255,255,0.2)' }}>No note added</p>
-              )}
-
-              <button
-                onClick={() => setSelectedDay(null)}
-                className="w-full mt-5 py-3 rounded-xl text-[13px] font-semibold active:scale-[0.98] transition-all"
-                style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.6)' }}
-              >
-                Close
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Check-in modal ── */}
-      <AnimatePresence>
-        {showCheckin && (
+        {editingDate && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -482,11 +403,13 @@ export const DopamineTracker: React.FC = () => {
               <div className="w-9 h-1 rounded-full mx-auto mt-4 mb-5 opacity-30" style={{ background: '#fff' }} />
               <div className="flex items-center justify-between px-5 mb-5">
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.18em] mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>Daily Check-in</p>
-                  <p className="text-[17px] font-bold" style={{ color: '#fff' }}>{format(new Date(), 'EEEE, MMM d')}</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                    {editingEntry ? 'Edit Entry' : 'Add Entry'}
+                  </p>
+                  <p className="text-[17px] font-bold" style={{ color: '#fff' }}>{editingDateLabel}</p>
                 </div>
                 <button
-                  onClick={() => setShowCheckin(false)}
+                  onClick={closeCheckin}
                   className="h-8 w-8 rounded-full flex items-center justify-center"
                   style={{ background: 'rgba(255,255,255,0.08)' }}
                 >
@@ -496,7 +419,7 @@ export const DopamineTracker: React.FC = () => {
 
               {checkinStep === 'status' ? (
                 <div className="px-5 space-y-3">
-                  <p className="text-[13px] font-semibold mb-3" style={{ color: 'rgba(255,255,255,0.5)' }}>How was today?</p>
+                  <p className="text-[13px] font-semibold mb-3" style={{ color: 'rgba(255,255,255,0.5)' }}>How was this day?</p>
                   <button
                     onClick={() => { setPendingStatus('success'); setCheckinStep('details'); }}
                     className="w-full py-4 rounded-2xl text-[16px] font-bold flex items-center justify-center gap-3 active:scale-[0.98] transition-all"
@@ -516,7 +439,6 @@ export const DopamineTracker: React.FC = () => {
                 </div>
               ) : (
                 <div className="px-5 space-y-5">
-                  {/* Status indicator */}
                   <div
                     className="flex items-center gap-2 px-3 py-2 rounded-xl"
                     style={pendingStatus === 'success'
@@ -527,7 +449,7 @@ export const DopamineTracker: React.FC = () => {
                       ? <CheckCircle2 className="w-4 h-4" style={{ color: '#C8FF00' }} />
                       : <XCircle className="w-4 h-4" style={{ color: '#f87171' }} />}
                     <span className="text-[13px] font-semibold" style={{ color: pendingStatus === 'success' ? '#C8FF00' : '#f87171' }}>
-                      {pendingStatus === 'success' ? 'Stayed strong today' : 'Relapse logged'}
+                      {pendingStatus === 'success' ? 'Stayed strong' : 'Relapse logged'}
                     </span>
                     <button
                       onClick={() => setCheckinStep('status')}
@@ -538,11 +460,10 @@ export const DopamineTracker: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Urge level */}
                   {pendingStatus === 'success' && (
                     <div>
                       <p className="text-[12px] font-semibold mb-3" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                        Urge level today — <span style={{ color: '#C8FF00' }}>{URGE_LABELS[pendingUrge]}</span>
+                        Urge level — <span style={{ color: '#C8FF00' }}>{URGE_LABELS[pendingUrge]}</span>
                       </p>
                       <div className="flex gap-2">
                         {[1, 2, 3, 4, 5].map((u) => (
@@ -564,7 +485,6 @@ export const DopamineTracker: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Note */}
                   <div>
                     <p className="text-[12px] font-semibold mb-2" style={{ color: 'rgba(255,255,255,0.35)' }}>Note (optional)</p>
                     <textarea
@@ -587,7 +507,7 @@ export const DopamineTracker: React.FC = () => {
                     className="w-full py-3.5 rounded-xl text-[14px] font-bold text-black active:scale-[0.98] transition-all"
                     style={{ background: pendingStatus === 'success' ? '#C8FF00' : '#f87171' }}
                   >
-                    Save Entry
+                    {editingEntry ? 'Update Entry' : 'Save Entry'}
                   </button>
                 </div>
               )}
@@ -617,7 +537,6 @@ export const DopamineTracker: React.FC = () => {
               style={{ background: '#0f1118', border: '1px solid rgba(248,113,113,0.2)' }}
             >
               <div className="w-9 h-1 rounded-full mx-auto mt-4 mb-4 opacity-30" style={{ background: '#f87171' }} />
-
               <div className="px-5 mb-5">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
@@ -635,7 +554,6 @@ export const DopamineTracker: React.FC = () => {
                 <p className="text-[13px]" style={{ color: 'rgba(255,255,255,0.4)' }}>Urges pass. You are stronger than this moment.</p>
               </div>
 
-              {/* Current streak reminder */}
               <div
                 className="mx-5 mb-5 rounded-xl p-4 flex items-center gap-3"
                 style={{ background: 'rgba(200,255,0,0.06)', border: '1px solid rgba(200,255,0,0.15)' }}
@@ -646,13 +564,10 @@ export const DopamineTracker: React.FC = () => {
                   <p className="text-[22px] font-black leading-none" style={{ color: '#C8FF00' }}>
                     {stats.current} day{stats.current !== 1 ? 's' : ''}
                   </p>
-                  <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                    Don't lose what you've built.
-                  </p>
+                  <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>Don't lose what you've built.</p>
                 </div>
               </div>
 
-              {/* Tips */}
               <div className="px-5 space-y-2 mb-5">
                 {SOS_TIPS.map(({ icon: Icon, label, desc }) => (
                   <div
@@ -660,10 +575,7 @@ export const DopamineTracker: React.FC = () => {
                     className="rounded-xl p-3.5 flex items-start gap-3"
                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
                   >
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-                      style={{ background: 'rgba(255,255,255,0.07)' }}
-                    >
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: 'rgba(255,255,255,0.07)' }}>
                       <Icon className="w-4 h-4" style={{ color: '#C8FF00' }} />
                     </div>
                     <div>
