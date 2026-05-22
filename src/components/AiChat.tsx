@@ -802,6 +802,7 @@ export const AiChat: React.FC = () => {
               onKey={handleKey}
               onSend={() => send()}
               onSuggest={(q) => send(q)}
+              onLogExercise={handleLogExercise}
               onClose={close}
               onGoSettings={() => { close(); navigate('/settings'); }}
               onClear={() => setMessages([])}
