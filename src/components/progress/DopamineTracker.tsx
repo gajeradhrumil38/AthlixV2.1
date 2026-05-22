@@ -2,15 +2,9 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, subDays, parseISO, differenceInDays, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { ShieldAlert, CheckCircle2, XCircle, X, Flame, Wind, Droplets, Zap, Target, Plus } from 'lucide-react';
-
-const STORAGE_KEY = 'athlix_dopamine_log';
-
-interface DopamineEntry {
-  date: string;       // YYYY-MM-DD
-  status: 'success' | 'relapse';
-  urge: number;       // 1-5
-  note?: string;
-}
+import { useAuth } from '../../contexts/AuthContext';
+import { getDopamineEntries, upsertDopamineEntry } from '../../lib/supabaseData';
+import type { DopamineEntry } from '../../lib/supabaseData';
 
 const SUCCESS_COLORS = ['', '#C8FF00', '#96CC00', '#6A9900', '#4A6B00', '#2E4200'];
 const RELAPSE_COLOR  = '#f87171';
@@ -82,10 +76,10 @@ const getMotivation = (streak: number) => {
 const GRID_WEEKS = 12;
 
 export const DopamineTracker: React.FC = () => {
-  const [entries, setEntries] = useState<DopamineEntry[]>(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
-    catch { return []; }
-  });
+  const { user } = useAuth();
+  const [entries, setEntries] = useState<DopamineEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const [showSOS, setShowSOS] = useState(false);
   // editingDate drives the check-in modal; null = closed
@@ -100,17 +94,22 @@ export const DopamineTracker: React.FC = () => {
   const today = format(new Date(), 'yyyy-MM-dd');
   const todayEntry = entries.find((e) => e.date === today);
 
-  // Scroll grid to the right (today) on mount
+  // Load entries from backend
   useEffect(() => {
-    if (scrollRef.current) {
+    if (!user) return;
+    setLoading(true);
+    getDopamineEntries(user.id)
+      .then(setEntries)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  // Scroll grid to the right (today) after entries load
+  useEffect(() => {
+    if (!loading && scrollRef.current) {
       scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
     }
-  }, []);
-
-  const saveEntries = useCallback((updated: DopamineEntry[]) => {
-    setEntries(updated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  }, []);
+  }, [loading]);
 
   const openCheckinForDate = (dateStr: string) => {
     const existing = entries.find((e) => e.date === dateStr);
@@ -136,13 +135,27 @@ export const DopamineTracker: React.FC = () => {
     setPendingNote('');
   };
 
-  const submitCheckin = () => {
-    if (!pendingStatus || !editingDate) return;
-    const updated = entries.filter((e) => e.date !== editingDate);
-    updated.push({ date: editingDate, status: pendingStatus, urge: pendingUrge, note: pendingNote.trim() || undefined });
-    saveEntries(updated);
-    closeCheckin();
-  };
+  const submitCheckin = useCallback(async () => {
+    if (!pendingStatus || !editingDate || !user) return;
+    setSaving(true);
+    try {
+      const saved = await upsertDopamineEntry(user.id, {
+        date: editingDate,
+        status: pendingStatus,
+        urge: pendingUrge,
+        note: pendingNote.trim() || undefined,
+      });
+      setEntries((prev) => {
+        const without = prev.filter((e) => e.date !== editingDate);
+        return [...without, saved].sort((a, b) => a.date.localeCompare(b.date));
+      });
+      closeCheckin();
+    } catch {
+      // keep modal open so user can retry
+    } finally {
+      setSaving(false);
+    }
+  }, [pendingStatus, editingDate, user, pendingUrge, pendingNote]);
 
   const stats = useMemo(() => computeStats(entries), [entries]);
   const milestone = getMilestone(stats.current);
@@ -504,10 +517,11 @@ export const DopamineTracker: React.FC = () => {
 
                   <button
                     onClick={submitCheckin}
-                    className="w-full py-3.5 rounded-xl text-[14px] font-bold text-black active:scale-[0.98] transition-all"
+                    disabled={saving}
+                    className="w-full py-3.5 rounded-xl text-[14px] font-bold text-black active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ background: pendingStatus === 'success' ? '#C8FF00' : '#f87171' }}
                   >
-                    {editingEntry ? 'Update Entry' : 'Save Entry'}
+                    {saving ? 'Saving…' : editingEntry ? 'Update Entry' : 'Save Entry'}
                   </button>
                 </div>
               )}

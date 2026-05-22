@@ -2579,3 +2579,52 @@ export const getLatestHeartRateSession = async (userId: string) => {
   if (error) throw normalizeError(error, 'Failed to load latest heart-rate session.');
   return (data || null) as LocalHeartRateSession | null;
 };
+
+// ─── Dopamine Entries ────────────────────────────────────────────────────────
+
+export interface DopamineEntry {
+  id?: string;
+  user_id?: string;
+  date: string;        // YYYY-MM-DD
+  status: 'success' | 'relapse';
+  urge: number;        // 1-5
+  note?: string;
+}
+
+export const getDopamineEntries = async (userId: string): Promise<DopamineEntry[]> => {
+  const { data, error } = await supabase
+    .from('dopamine_entries')
+    .select('id, user_id, date, status, urge, note')
+    .eq('user_id', userId)
+    .order('date', { ascending: true });
+
+  if (error) throw normalizeError(error, 'Failed to load dopamine entries.');
+  return (data || []) as DopamineEntry[];
+};
+
+export const upsertDopamineEntry = async (
+  userId: string,
+  entry: { date: string; status: 'success' | 'relapse'; urge: number; note?: string },
+): Promise<DopamineEntry> => {
+  const { data, error } = await supabase
+    .from('dopamine_entries')
+    .upsert(
+      { user_id: userId, date: entry.date, status: entry.status, urge: entry.urge, note: entry.note ?? null, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,date' },
+    )
+    .select()
+    .single();
+
+  if (error) throw normalizeError(error, 'Failed to save dopamine entry.');
+  return data as DopamineEntry;
+};
+
+export const deleteDopamineEntry = async (userId: string, date: string): Promise<void> => {
+  const { error } = await supabase
+    .from('dopamine_entries')
+    .delete()
+    .eq('user_id', userId)
+    .eq('date', date);
+
+  if (error) throw normalizeError(error, 'Failed to delete dopamine entry.');
+};
