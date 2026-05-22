@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, X, Send, Loader2, Settings as SettingsIcon, RotateCcw, Copy, Check } from 'lucide-react';
+import { Sparkles, X, Send, Loader2, Settings as SettingsIcon, RotateCcw, Copy, Check, Plus, Minus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { format, subDays, differenceInCalendarDays } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
+import { DialPicker } from './log/DialPicker';
 import {
   getWorkouts,
   getPersonalRecords,
@@ -17,6 +18,29 @@ import {
   type LocalPersonalRecord,
   type LocalExerciseLibraryItem,
 } from '../lib/supabaseData';
+
+/* ── Per-set data type ────────────────────────────────────────────── */
+interface SetEntry { reps: number; weight: number; }
+
+/* ── Fetch last logged sets for an exercise (for pre-fill) ────────── */
+async function getLastExerciseSets(userId: string, exerciseName: string): Promise<SetEntry[] | null> {
+  try {
+    const workouts = await getWorkouts(userId, { limit: 20, includeExercises: true });
+    for (const w of (workouts || []) as any[]) {
+      const ex = ((w.exercises as any[]) || []).find(
+        (e: any) => e.name.toLowerCase() === exerciseName.toLowerCase(),
+      );
+      if (!ex) continue;
+      if (Array.isArray(ex.completed_sets) && ex.completed_sets.length > 0) {
+        return ex.completed_sets.map((s: any) => ({ reps: Number(s.reps) || 1, weight: Number(s.weight) || 0 }));
+      }
+      if (ex.sets > 0) {
+        return Array.from({ length: ex.sets }, () => ({ reps: Number(ex.reps) || 1, weight: Number(ex.weight) || 0 }));
+      }
+    }
+  } catch { /* non-fatal */ }
+  return null;
+}
 
 type WorkoutWithExercises = LocalWorkout & { exercises?: LocalExercise[] };
 
@@ -438,6 +462,7 @@ async function executeTool(
       exercises: [{ name: best.name, muscle_group: best.muscle_group, exercise_db_id: best.id || null, completed_sets: completedSets }],
     });
 
+    window.dispatchEvent(new CustomEvent('athlix:workout-logged'));
     const weightStr = weight > 0 ? ` @ ${weight}${unit}` : '';
     return { success: true, message: `${best.name} — ${sets}×${reps}${weightStr} logged${date === today ? ' for today' : ` for ${date}`}` };
   }
@@ -697,14 +722,38 @@ export const AiChat: React.FC = () => {
   };
 
   /* ── Direct exercise log (from form submit) ─────────────────────── */
-  const handleLogExercise = useCallback(async (name: string, sets: number, reps: number, weight: number, unit: string) => {
+  const handleLogExercise = useCallback(async (name: string, sets: SetEntry[], unit: 'kg' | 'lbs') => {
     if (!user?.id) return;
-    const result = await executeTool(user.id, 'log_exercise', { exercise_name: name, sets, reps, weight, unit });
-    setMessages((prev) => [...prev, {
-      role: 'model' as const,
-      text: result.success ? `Done! ${result.message}` : `Couldn't log that — ${result.message}`,
-      action: result,
-    }]);
+    try {
+      const matches = await searchExerciseLibrary(user.id, name);
+      const best = matches[0];
+      const exerciseName = best?.name || name;
+      const completedSets = sets.map((s) => ({ reps: s.reps, weight: s.weight, unit }));
+      await saveWorkout(user.id, {
+        title: exerciseName,
+        date: format(new Date(), 'yyyy-MM-dd'),
+        duration_minutes: 0,
+        exercises: [{
+          name: exerciseName,
+          muscle_group: best?.muscle_group || undefined,
+          exercise_db_id: (best as any)?.id || null,
+          completed_sets: completedSets,
+        }],
+      });
+      window.dispatchEvent(new CustomEvent('athlix:workout-logged'));
+      const summary = `${exerciseName} — ${sets.length} set${sets.length !== 1 ? 's' : ''} logged`;
+      setMessages((prev) => [...prev, {
+        role: 'model' as const,
+        text: `Done! ${summary}`,
+        action: { success: true, message: summary },
+      }]);
+    } catch (e: any) {
+      setMessages((prev) => [...prev, {
+        role: 'model' as const,
+        text: `Couldn't log that — ${e?.message || 'unknown error'}`,
+        action: { success: false, message: e?.message || 'unknown error' },
+      }]);
+    }
   }, [user?.id]);
 
   /* ── Show pre-filled form (from suggestion chip tap) ────────────── */
@@ -849,44 +898,82 @@ export const AiChat: React.FC = () => {
 /* ── Inline exercise quick-log form ───────────────────────────────── */
 const ExerciseQuickForm: React.FC<{
   initialName?: string;
-  onSubmit: (name: string, sets: number, reps: number, weight: number, unit: string) => Promise<void>;
+  onSubmit: (name: string, sets: SetEntry[], unit: 'kg' | 'lbs') => Promise<void>;
   loading: boolean;
   setLoading: (v: boolean) => void;
 }> = ({ initialName = '', onSubmit, loading, setLoading }) => {
+  const { user, profile } = useAuth();
+  const defaultUnit = ((profile?.unit_preference as 'kg' | 'lbs') || 'kg');
+
   const [name, setName] = useState(initialName);
-  const [sets, setSets] = useState(3);
-  const [reps, setReps] = useState(10);
-  const [weight, setWeight] = useState('');
-  const [unit, setUnit] = useState<'kg' | 'lbs'>('kg');
+  const [sets, setSets] = useState<SetEntry[]>([{ reps: 10, weight: 0 }]);
+  const [unit, setUnit] = useState<'kg' | 'lbs'>(defaultUnit);
   const [done, setDone] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [nameError, setNameError] = useState(false);
+  const [weightError, setWeightError] = useState(false);
 
-  const Stepper = ({
-    label, value, onChange, min, max,
-  }: { label: string; value: number; onChange: (v: number) => void; min: number; max: number }) => (
-    <div className="flex flex-col gap-1">
-      <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>{label}</span>
-      <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)' }}>
-        <button
-          onClick={() => onChange(Math.max(min, value - 1))}
-          className="px-3 py-2 text-[16px] font-light transition-colors active:bg-white/10"
-          style={{ color: 'rgba(255,255,255,0.5)', flexShrink: 0 }}
-        >−</button>
-        <span className="flex-1 text-center text-[14px] font-bold" style={{ color: 'var(--text-primary)' }}>{value}</span>
-        <button
-          onClick={() => onChange(Math.min(max, value + 1))}
-          className="px-3 py-2 text-[16px] font-light transition-colors active:bg-white/10"
-          style={{ color: 'rgba(255,255,255,0.5)', flexShrink: 0 }}
-        >+</button>
-      </div>
-    </div>
-  );
+  // Live exercise search
+  const [searchResults, setSearchResults] = useState<string[]>([]);
+  const searchTimer = useRef<number | null>(null);
+
+  // DialPicker state — which set row is being edited
+  const [dialOpen, setDialOpen] = useState(false);
+  const [dialSetIdx, setDialSetIdx] = useState(0);
+
+  // Pre-fill from last logged entry for this exercise
+  const prefillFromLast = useCallback(async (exerciseName: string) => {
+    if (!user?.id || !exerciseName.trim()) return;
+    const last = await getLastExerciseSets(user.id, exerciseName);
+    if (last && last.length > 0) setSets(last);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (initialName) prefillFromLast(initialName);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleNameChange = (v: string) => {
+    setName(v);
+    setNameError(false);
+    if (searchTimer.current) window.clearTimeout(searchTimer.current);
+    if (!v.trim() || !user?.id) { setSearchResults([]); return; }
+    searchTimer.current = window.setTimeout(async () => {
+      const results = await searchExerciseLibrary(user.id!, v);
+      setSearchResults(results.slice(0, 5).map((e: LocalExerciseLibraryItem) => e.name));
+    }, 280);
+  };
+
+  const selectSuggestion = (s: string) => {
+    setName(s);
+    setSearchResults([]);
+    prefillFromLast(s);
+  };
+
+  const updateSet = (i: number, patch: Partial<SetEntry>) => {
+    setSets((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+    setWeightError(false);
+  };
+
+  const addSet = () => {
+    const last = sets[sets.length - 1] ?? { reps: 10, weight: 0 };
+    setSets((prev) => [...prev, { ...last }]);
+  };
+
+  const removeSet = (i: number) => {
+    if (sets.length <= 1) return;
+    setSets((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  const openDial = (i: number) => { setDialSetIdx(i); setDialOpen(true); };
 
   const handleSubmit = async () => {
-    if (!name.trim() || loading) return;
+    let err = false;
+    if (!name.trim()) { setNameError(true); err = true; }
+    if (sets.some((s) => s.weight <= 0)) { setWeightError(true); err = true; }
+    if (err || loading) return;
     setLoading(true);
     try {
-      await onSubmit(name.trim(), sets, reps, Number(weight) || 0, unit);
+      await onSubmit(name.trim(), sets, unit);
       setDone(true);
     } finally {
       setLoading(false);
@@ -906,71 +993,153 @@ const ExerciseQuickForm: React.FC<{
   );
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
-      <div className="px-3 pt-3 pb-2 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="flex items-center gap-1.5">
-          <Sparkles className="w-3 h-3" style={{ color: 'var(--accent)' }} />
-          <span className="text-[11px] font-bold" style={{ color: 'var(--accent)' }}>Log Exercise</span>
-        </div>
-        <button
-          onClick={() => setDismissed(true)}
-          className="w-5 h-5 flex items-center justify-center rounded transition-colors"
-          style={{ color: 'rgba(255,255,255,0.3)' }}
-        >
-          <X className="w-3 h-3" />
-        </button>
-      </div>
-      <div className="p-3 space-y-2.5">
-        {/* Exercise name */}
-        <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>Exercise name</span>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Bench Press"
-            className="text-[13px] px-2.5 py-2 rounded-lg outline-none"
-            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', caretColor: '#C8FF00' }}
-          />
-        </div>
-        {/* Sets + Reps steppers */}
-        <div className="grid grid-cols-2 gap-2">
-          <Stepper label="Sets" value={sets} onChange={setSets} min={1} max={20} />
-          <Stepper label="Reps" value={reps} onChange={setReps} min={1} max={50} />
-        </div>
-        {/* Weight + unit toggle */}
-        <div className="flex gap-2 items-end">
-          <div className="flex flex-col gap-1 flex-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>Weight (optional)</span>
-            <input
-              type="number"
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-              placeholder="0"
-              className="text-[13px] px-2.5 py-2 rounded-lg outline-none"
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', caretColor: '#C8FF00' }}
-            />
+    <>
+      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-elevated)', border: `1px solid ${nameError || weightError ? 'rgba(248,113,113,0.4)' : 'var(--border)'}` }}>
+        {/* Header */}
+        <div className="px-3 pt-3 pb-2 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3" style={{ color: 'var(--accent)' }} />
+            <span className="text-[11px] font-bold" style={{ color: 'var(--accent)' }}>Log Exercise</span>
           </div>
-          <div className="flex rounded-lg overflow-hidden shrink-0" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
-            {(['kg', 'lbs'] as const).map((u) => (
-              <button key={u} onClick={() => setUnit(u)}
-                className="px-3 py-2 text-[11px] font-bold transition-all"
-                style={{ background: unit === u ? '#C8FF00' : 'transparent', color: unit === u ? '#000' : 'rgba(255,255,255,0.4)' }}>
-                {u}
-              </button>
+          <button onClick={() => setDismissed(true)} className="w-5 h-5 flex items-center justify-center" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+
+        <div className="p-3 space-y-3">
+          {/* Exercise name + live search */}
+          <div className="relative">
+            <span className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: nameError ? '#f87171' : 'rgba(255,255,255,0.35)' }}>
+              {nameError ? 'Exercise name is required' : 'Exercise name'}
+            </span>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              placeholder="e.g. Bench Press"
+              className="w-full text-[13px] px-2.5 py-2 rounded-lg outline-none"
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                border: `1px solid ${nameError ? 'rgba(248,113,113,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                color: 'var(--text-primary)',
+                caretColor: '#C8FF00',
+              }}
+            />
+            {/* Search suggestions dropdown */}
+            {searchResults.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1 rounded-lg overflow-hidden z-10" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+                {searchResults.map((s) => (
+                  <button
+                    key={s}
+                    onMouseDown={() => selectSuggestion(s)}
+                    className="w-full text-left px-3 py-2 text-[12px] transition-colors"
+                    style={{ color: 'var(--text-primary)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Unit toggle */}
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>Unit</span>
+            <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+              {(['kg', 'lbs'] as const).map((u) => (
+                <button key={u} onClick={() => setUnit(u)}
+                  className="px-3 py-1.5 text-[11px] font-bold transition-all"
+                  style={{ background: unit === u ? '#C8FF00' : 'transparent', color: unit === u ? '#000' : 'rgba(255,255,255,0.4)' }}>
+                  {u}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Column headers */}
+          <div className="grid items-center gap-2" style={{ gridTemplateColumns: '32px 1fr 1fr auto' }}>
+            <div />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-center" style={{ color: 'rgba(255,255,255,0.35)' }}>Reps</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-center" style={{ color: weightError ? '#f87171' : 'rgba(255,255,255,0.35)' }}>
+              {weightError ? 'Required!' : `Weight (${unit})`}
+            </span>
+            <div />
+          </div>
+
+          {/* Per-set rows */}
+          <div className="space-y-2">
+            {sets.map((s, i) => (
+              <div key={i} className="grid items-center gap-2" style={{ gridTemplateColumns: '32px 1fr 1fr auto' }}>
+                {/* Set label */}
+                <span className="text-[11px] font-bold text-center" style={{ color: 'rgba(255,255,255,0.35)' }}>{i + 1}</span>
+
+                {/* Reps stepper */}
+                <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)' }}>
+                  <button onClick={() => updateSet(i, { reps: Math.max(1, s.reps - 1) })} className="px-2.5 py-2 text-[15px] active:bg-white/10" style={{ color: 'rgba(255,255,255,0.4)' }}>−</button>
+                  <span className="flex-1 text-center text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>{s.reps}</span>
+                  <button onClick={() => updateSet(i, { reps: Math.min(50, s.reps + 1) })} className="px-2.5 py-2 text-[15px] active:bg-white/10" style={{ color: 'rgba(255,255,255,0.4)' }}>+</button>
+                </div>
+
+                {/* Weight — tap to open dial */}
+                <button
+                  onClick={() => openDial(i)}
+                  className="py-2 rounded-lg text-[13px] font-bold text-center active:scale-[0.97] transition-all"
+                  style={{
+                    background: s.weight > 0 ? 'rgba(200,255,0,0.08)' : 'rgba(255,255,255,0.05)',
+                    border: `1px solid ${s.weight > 0 ? 'rgba(200,255,0,0.25)' : weightError ? 'rgba(248,113,113,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                    color: s.weight > 0 ? '#C8FF00' : 'rgba(255,255,255,0.3)',
+                  }}
+                >
+                  {s.weight > 0 ? `${s.weight}` : 'Tap'}
+                </button>
+
+                {/* Remove row */}
+                <button
+                  onClick={() => removeSet(i)}
+                  disabled={sets.length <= 1}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg transition-all disabled:opacity-20"
+                  style={{ color: 'rgba(248,113,113,0.6)' }}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             ))}
           </div>
+
+          {/* Add set */}
+          <button
+            onClick={addSet}
+            className="w-full py-2 rounded-lg text-[12px] font-semibold transition-all active:scale-[0.98]"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px dashed rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.4)' }}
+          >
+            + Add Set
+          </button>
+
+          {/* Submit */}
+          <button
+            onClick={handleSubmit}
+            disabled={loading || !name.trim()}
+            className="w-full py-2.5 rounded-lg text-[13px] font-bold text-black active:scale-[0.98] transition-all disabled:opacity-40"
+            style={{ background: '#C8FF00' }}
+          >
+            {loading ? 'Logging…' : `Log ${sets.length} Set${sets.length !== 1 ? 's' : ''}`}
+          </button>
         </div>
-        <button
-          onClick={handleSubmit}
-          disabled={loading || !name.trim()}
-          className="w-full py-2.5 rounded-lg text-[13px] font-bold text-black active:scale-[0.98] transition-all disabled:opacity-40"
-          style={{ background: '#C8FF00' }}
-        >
-          {loading ? 'Logging…' : 'Log Exercise'}
-        </button>
       </div>
-    </div>
+
+      {/* DialPicker — full-screen weight picker */}
+      {dialOpen && (
+        <DialPicker
+          title="Weight"
+          fieldKind="weight"
+          inputType="weight_reps"
+          initialValue={sets[dialSetIdx]?.weight || 0}
+          weightUnit={unit}
+          onClose={() => setDialOpen(false)}
+          onConfirm={(v) => { updateSet(dialSetIdx, { weight: v }); setDialOpen(false); }}
+        />
+      )}
+    </>
   );
 };
 
@@ -989,7 +1158,7 @@ interface ChatContentProps {
   onKey: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   onSend: () => void;
   onSuggest: (q: string) => void;
-  onLogExercise: (name: string, sets: number, reps: number, weight: number, unit: string) => Promise<void>;
+  onLogExercise: (name: string, sets: SetEntry[], unit: 'kg' | 'lbs') => Promise<void>;
   onShowFormWithName: (name: string) => void;
   onClose: () => void;
   onGoSettings: () => void;
