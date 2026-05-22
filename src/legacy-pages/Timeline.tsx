@@ -286,6 +286,13 @@ export const Timeline: React.FC = () => {
   const displayUnit = (profile?.unit_preference || 'lbs') as WeightUnit;
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const handler = () => setRefreshKey((k) => k + 1);
+    window.addEventListener('athlix:workout-logged', handler);
+    return () => window.removeEventListener('athlix:workout-logged', handler);
+  }, []);
 
   useEffect(() => {
     if (!user) { setWorkouts([]); setLoading(false); return; }
@@ -294,7 +301,7 @@ export const Timeline: React.FC = () => {
       .then((data) => setWorkouts(data || []))
       .catch(() => toast.error('Failed to load timeline'))
       .finally(() => setLoading(false));
-  }, [user]);
+  }, [user, refreshKey]);
 
   const handleDelete = async (id: string) => {
     if (!user) return;

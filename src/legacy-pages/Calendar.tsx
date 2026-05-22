@@ -179,6 +179,14 @@ export const Calendar: React.FC = () => {
   const [windowScrollY, setWindowScrollY] = useState(0);
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Refresh when AI logs a workout from the chat
+  useEffect(() => {
+    const handler = () => setRefreshKey((k) => k + 1);
+    window.addEventListener('athlix:workout-logged', handler);
+    return () => window.removeEventListener('athlix:workout-logged', handler);
+  }, []);
 
   // ── Data fetch ───────────────────────────────────────────────────────────────
   // Always fetch the full month + week-overflow around anchor so every view is covered.
@@ -215,7 +223,7 @@ export const Calendar: React.FC = () => {
       })
       .catch(() => setWorkouts([]))
       .finally(() => setLoading(false));
-  }, [user, anchor, viewMode]);
+  }, [user, anchor, viewMode, refreshKey]);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 
