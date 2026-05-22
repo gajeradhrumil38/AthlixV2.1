@@ -465,49 +465,69 @@ export const AiChat: React.FC = () => {
         // Only send the last MAX_HISTORY messages to keep prompt tokens low
         const trimmedHistory = history.slice(-MAX_HISTORY);
 
-        // Gemini 2.5 Flash supports native thinking tokens
-        const supportsThinking = /^gemini-2\.5/.test(model);
-
         const geminiContents = trimmedHistory.map((m) => ({
           role: m.role,
           parts: [{ text: m.text }],
         }));
 
-        // Gemini doesn't allow google_search + function_declarations in the same request
-        // so we always use function_declarations only (model answers coaching Qs from training knowledge)
-        const makeRequest = (contents: object[]) =>
-          fetch(`${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: systemPrompt }] },
-              contents,
-              tools: [{ function_declarations: FUNCTION_DECLARATIONS }],
-              generationConfig: {
-                temperature: 1,
-                maxOutputTokens: 2048,
-                ...(supportsThinking && { thinkingConfig: { thinkingBudget: 1024 } }),
-              },
-            }),
-          });
+        // Build the Gemini request body (no google_search — can't mix with function_declarations)
+        const buildBody = (contents: object[], targetModel: string) => ({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents,
+          tools: [{ function_declarations: FUNCTION_DECLARATIONS }],
+          generationConfig: {
+            temperature: 1,
+            maxOutputTokens: 2048,
+            ...(/^gemini-2\.5/.test(targetModel) && { thinkingConfig: { thinkingBudget: 1024 } }),
+          },
+        });
 
-        const checkResponse = async (res: Response) => {
-          if (!res.ok) {
-            const errBody = await res.json().catch(() => ({}));
+        // Returns true when the error is a transient server-side overload
+        const isOverloaded = (status: number, msg: string) =>
+          status === 503 || status === 429 && msg.includes('quota') === false ||
+          msg.toLowerCase().includes('high demand') ||
+          msg.toLowerCase().includes('overloaded') ||
+          msg.toLowerCase().includes('try again');
+
+        // Retry with backoff, then fall back to gemini-1.5-flash if primary is overloaded
+        const FALLBACK_MODEL = 'gemini-1.5-flash';
+        const RETRY_DELAYS = [1200, 2500]; // ms between attempts
+
+        const fetchWithRetry = async (contents: object[]): Promise<Response> => {
+          for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+            const targetModel = attempt < RETRY_DELAYS.length ? model : FALLBACK_MODEL;
+            const res = await fetch(`${GEMINI_BASE}/${targetModel}:generateContent?key=${apiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(buildBody(contents, targetModel)),
+            });
+            if (res.ok) return res;
+
+            const errBody = await res.clone().json().catch(() => ({}));
             const errMsg: string = errBody?.error?.message || `Request failed (${res.status})`;
-            if (res.status === 429 || errMsg.includes('quota') || errMsg.includes('limit: 0') || errMsg.includes('free_tier')) {
+
+            // Non-retryable errors — throw immediately
+            if (res.status === 429 && errMsg.includes('quota')) {
               throw new Error('QUOTA: Your API key\'s project has billing enabled, which sets the free tier limit to 0.\n\nFix: Go to aistudio.google.com/app/apikey → "Create API key in new project" (no billing) → paste the new key in Settings.');
             }
             if (res.status === 400 && errMsg.includes('API_KEY')) {
               throw new Error('INVALID_KEY: Your API key is invalid. Check it in Settings.');
             }
+
+            // Retryable overload errors
+            if (isOverloaded(res.status, errMsg) && attempt < RETRY_DELAYS.length) {
+              await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
+              continue;
+            }
+
+            // Last attempt failed — throw
             throw new Error(errMsg);
           }
-          return res.json();
+          throw new Error('All retry attempts failed.');
         };
 
-        const res = await makeRequest(geminiContents);
-        const data = await checkResponse(res);
+        const res = await fetchWithRetry(geminiContents);
+        const data = await res.json();
         trackTokenUsage(data?.usageMetadata?.totalTokenCount ?? 0);
 
         const rawParts: Array<{ text?: string; thought?: boolean; functionCall?: { name: string; args: Record<string, unknown> } }> =
@@ -530,8 +550,8 @@ export const AiChat: React.FC = () => {
             { role: 'model', parts: [{ functionCall: fnCallPart.functionCall }] },
             { role: 'user', parts: [{ functionResponse: { name: toolName, response: toolResult } }] },
           ];
-          const res2 = await makeRequest(followUpContents);
-          const data2 = await checkResponse(res2);
+          const res2 = await fetchWithRetry(followUpContents);
+          const data2 = await res2.json();
           trackTokenUsage(data2?.usageMetadata?.totalTokenCount ?? 0);
 
           const finalParts: Array<{ text?: string; thought?: boolean }> =
