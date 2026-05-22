@@ -10,9 +10,12 @@ import {
   getPersonalRecords,
   logBodyWeight,
   upsertDopamineEntry,
+  saveWorkout,
+  searchExerciseLibrary,
   type LocalWorkout,
   type LocalExercise,
   type LocalPersonalRecord,
+  type LocalExerciseLibraryItem,
 } from '../lib/supabaseData';
 
 type WorkoutWithExercises = LocalWorkout & { exercises?: LocalExercise[] };
@@ -81,6 +84,27 @@ const FUNCTION_DECLARATIONS = [
       required: ['status'],
     },
   },
+  {
+    name: 'log_exercise',
+    description: "Log a specific exercise set. Use when user mentions doing an exercise with details like sets/reps/weight. Examples: 'bench press 3x10 80kg', 'I did squats 5 sets of 5 at 100kg', 'just finished 4 sets of pull-ups'. Always normalize and fix typos in exercise names (e.g. 'banch press' → 'Bench Press', 'sholdr press' → 'Shoulder Press'). If weight not mentioned, use 0.",
+    parameters: {
+      type: 'object',
+      properties: {
+        exercise_name: { type: 'string', description: 'Exercise name with typos corrected and properly capitalized (e.g. "Bench Press", "Squat", "Pull Up")' },
+        sets: { type: 'number', description: 'Number of sets' },
+        reps: { type: 'number', description: 'Reps per set' },
+        weight: { type: 'number', description: 'Weight used. Use 0 for bodyweight exercises.' },
+        unit: { type: 'string', enum: ['kg', 'lbs'], description: "Weight unit — default 'kg'" },
+        date: { type: 'string', description: 'Date in YYYY-MM-DD format, defaults to today' },
+      },
+      required: ['exercise_name', 'sets', 'reps'],
+    },
+  },
+  {
+    name: 'show_exercise_form',
+    description: "Show the user a fillable exercise log form. Use ONLY when the user clearly wants to log an exercise but hasn't provided enough details (no sets, no reps) and it's ambiguous even after context. Do NOT use this for weight or dopamine logging.",
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
 ];
 
 const LOADING_PHASES = [
@@ -90,11 +114,19 @@ const LOADING_PHASES = [
   'Formulating advice…',
 ];
 
+interface ToolResult {
+  success: boolean;
+  message: string;
+  suggestions?: string[];   // exercise name suggestions when not found
+  showForm?: boolean;       // show inline exercise form
+}
+
 interface Message {
   role: 'user' | 'model';
   text: string;
   thought?: string;
-  action?: { success: boolean; message: string };
+  action?: ToolResult;
+  exerciseForm?: boolean;   // render inline exercise form
 }
 
 interface ApiUsage {
@@ -347,7 +379,7 @@ async function executeTool(
   userId: string,
   name: string,
   args: Record<string, unknown>,
-): Promise<{ success: boolean; message: string }> {
+): Promise<ToolResult> {
   const today = format(new Date(), 'yyyy-MM-dd');
 
   if (name === 'log_weight') {
@@ -355,8 +387,7 @@ async function executeTool(
     const unit = (args.unit as 'kg' | 'lbs') || 'kg';
     const date = (args.date as string) || today;
     await logBodyWeight(userId, { date, weight, unit });
-    const isToday = date === today;
-    return { success: true, message: `${weight} ${unit} logged${isToday ? ' for today' : ` for ${date}`}` };
+    return { success: true, message: `${weight} ${unit} logged${date === today ? ' for today' : ` for ${date}`}` };
   }
 
   if (name === 'log_dopamine') {
@@ -365,9 +396,46 @@ async function executeTool(
     const note = (args.note as string) || '';
     const date = (args.date as string) || today;
     await upsertDopamineEntry(userId, { date, status, urge, note: note || undefined });
-    const isToday = date === today;
     const label = status === 'success' ? 'Stayed strong' : 'Check-in logged';
-    return { success: true, message: `${label}${isToday ? ' for today' : ` for ${date}`}` };
+    return { success: true, message: `${label}${date === today ? ' for today' : ` for ${date}`}` };
+  }
+
+  if (name === 'log_exercise') {
+    const rawName = (args.exercise_name as string) || '';
+    const sets = Math.max(1, Number(args.sets) || 1);
+    const reps = Math.max(1, Number(args.reps) || 1);
+    const weight = Number(args.weight ?? 0);
+    const unit = (args.unit as 'kg' | 'lbs') || 'kg';
+    const date = (args.date as string) || today;
+
+    // Fuzzy-search the library (handles remaining typos the AI missed)
+    const matches = await searchExerciseLibrary(userId, rawName);
+
+    if (matches.length === 0) {
+      // Nothing close — give broader suggestions from first word
+      const fallback = await searchExerciseLibrary(userId, rawName.split(' ')[0] || rawName);
+      return {
+        success: false,
+        message: `"${rawName}" not found in your exercise library.`,
+        suggestions: fallback.slice(0, 6).map((e: LocalExerciseLibraryItem) => e.name),
+      };
+    }
+
+    const best = matches[0];
+    const completedSets = Array.from({ length: sets }, () => ({ reps, weight, unit }));
+    await saveWorkout(userId, {
+      title: best.name,
+      date,
+      duration_minutes: 0,
+      exercises: [{ name: best.name, muscle_group: best.muscle_group, exercise_db_id: best.id || null, completed_sets: completedSets }],
+    });
+
+    const weightStr = weight > 0 ? ` @ ${weight}${unit}` : '';
+    return { success: true, message: `${best.name} — ${sets}×${reps}${weightStr} logged${date === today ? ' for today' : ` for ${date}`}` };
+  }
+
+  if (name === 'show_exercise_form') {
+    return { success: true, message: '', showForm: true };
   }
 
   return { success: false, message: `Unknown tool: ${name}` };
@@ -537,7 +605,7 @@ export const AiChat: React.FC = () => {
         const fnCallPart = rawParts.find((p) => p.functionCall);
         if (fnCallPart?.functionCall && user?.id) {
           const { name: toolName, args: toolArgs } = fnCallPart.functionCall;
-          let toolResult: { success: boolean; message: string };
+          let toolResult: ToolResult;
           try {
             toolResult = await executeTool(user.id, toolName, toolArgs);
           } catch (e: any) {
@@ -556,6 +624,16 @@ export const AiChat: React.FC = () => {
 
           const finalParts: Array<{ text?: string; thought?: boolean }> =
             data2?.candidates?.[0]?.content?.parts || [];
+          // show_exercise_form: skip Gemini follow-up, render inline form instead
+          if (toolResult.showForm) {
+            setMessages((prev) => [...prev, {
+              role: 'model',
+              text: "Here's a quick form to log your exercise:",
+              exerciseForm: true,
+            }]);
+            return;
+          }
+
           const aiText2 = finalParts.filter((p) => !p.thought).map((p) => p.text).join('').trim() || 'Done!';
 
           setMessages((prev) => [...prev, {
@@ -605,6 +683,17 @@ export const AiChat: React.FC = () => {
       setTimeout(() => setCopiedIdx(null), 2000);
     });
   };
+
+  /* ── Direct exercise log (from suggestion chip or form) ────────── */
+  const handleLogExercise = useCallback(async (name: string, sets: number, reps: number, weight: number, unit: string) => {
+    if (!user?.id) return;
+    const result = await executeTool(user.id, 'log_exercise', { exercise_name: name, sets, reps, weight, unit });
+    setMessages((prev) => [...prev, {
+      role: 'model' as const,
+      text: result.success ? `Done! ${result.message}` : `Couldn't log that — ${result.message}`,
+      action: result,
+    }]);
+  }, [user?.id]);
 
   /* ── FAB button (mobile only, sits left of the + FAB) ───────────── */
   const fabButton = (
@@ -673,6 +762,7 @@ export const AiChat: React.FC = () => {
               onKey={handleKey}
               onSend={() => send()}
               onSuggest={(q) => send(q)}
+              onLogExercise={handleLogExercise}
               onClose={close}
               onGoSettings={() => { close(); navigate('/settings'); }}
               onClear={() => setMessages([])}
@@ -731,6 +821,92 @@ export const AiChat: React.FC = () => {
   );
 };
 
+/* ── Inline exercise quick-log form ───────────────────────────────── */
+const ExerciseQuickForm: React.FC<{
+  onSubmit: (name: string, sets: number, reps: number, weight: number, unit: string) => Promise<void>;
+  loading: boolean;
+  setLoading: (v: boolean) => void;
+}> = ({ onSubmit, loading, setLoading }) => {
+  const [name, setName] = useState('');
+  const [sets, setSets] = useState('3');
+  const [reps, setReps] = useState('10');
+  const [weight, setWeight] = useState('');
+  const [unit, setUnit] = useState<'kg' | 'lbs'>('kg');
+  const [done, setDone] = useState(false);
+
+  const field = (
+    label: string,
+    value: string,
+    onChange: (v: string) => void,
+    opts?: { type?: string; placeholder?: string },
+  ) => (
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>{label}</span>
+      <input
+        type={opts?.type ?? 'text'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={opts?.placeholder}
+        className="text-[13px] px-2.5 py-2 rounded-lg outline-none"
+        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', caretColor: '#C8FF00' }}
+      />
+    </div>
+  );
+
+  const handleSubmit = async () => {
+    if (!name.trim() || loading) return;
+    setLoading(true);
+    try {
+      await onSubmit(name.trim(), Number(sets) || 3, Number(reps) || 10, Number(weight) || 0, unit);
+      setDone(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (done) return (
+    <div className="px-3 py-2.5 rounded-xl text-[12px] font-semibold" style={{ background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.22)', color: '#C8FF00' }}>
+      ✓ Exercise logged!
+    </div>
+  );
+
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+      <div className="px-3 pt-3 pb-2 flex items-center gap-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <Sparkles className="w-3 h-3" style={{ color: 'var(--accent)' }} />
+        <span className="text-[11px] font-bold" style={{ color: 'var(--accent)' }}>Log Exercise</span>
+      </div>
+      <div className="p-3 space-y-2.5">
+        {field('Exercise name', name, setName, { placeholder: 'e.g. Bench Press' })}
+        <div className="grid grid-cols-2 gap-2">
+          {field('Sets', sets, setSets, { type: 'number', placeholder: '3' })}
+          {field('Reps', reps, setReps, { type: 'number', placeholder: '10' })}
+        </div>
+        <div className="flex gap-2 items-end">
+          <div className="flex-1">{field('Weight (optional)', weight, setWeight, { type: 'number', placeholder: '0' })}</div>
+          <div className="flex rounded-lg overflow-hidden shrink-0" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+            {(['kg', 'lbs'] as const).map((u) => (
+              <button key={u} onClick={() => setUnit(u)}
+                className="px-3 py-2 text-[11px] font-bold transition-all"
+                style={{ background: unit === u ? '#C8FF00' : 'transparent', color: unit === u ? '#000' : 'rgba(255,255,255,0.4)' }}>
+                {u}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button
+          onClick={handleSubmit}
+          disabled={loading || !name.trim()}
+          className="w-full py-2.5 rounded-lg text-[13px] font-bold text-black active:scale-[0.98] transition-all disabled:opacity-40"
+          style={{ background: '#C8FF00' }}
+        >
+          {loading ? 'Logging…' : 'Log Exercise'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 /* ── Inner chat content (shared between mobile sheet + desktop modal) ─ */
 interface ChatContentProps {
   apiKey: string;
@@ -746,6 +922,7 @@ interface ChatContentProps {
   onKey: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   onSend: () => void;
   onSuggest: (q: string) => void;
+  onLogExercise: (name: string, sets: number, reps: number, weight: number, unit: string) => Promise<void>;
   onClose: () => void;
   onGoSettings: () => void;
   onClear: () => void;
@@ -755,10 +932,11 @@ interface ChatContentProps {
 const ChatContent: React.FC<ChatContentProps> = ({
   apiKey, messages, suggestions, input, loading, loadingPhase, copiedIdx,
   inputRef, bottomRef,
-  onInput, onKey, onSend, onSuggest,
+  onInput, onKey, onSend, onSuggest, onLogExercise,
   onClose, onGoSettings, onClear, onCopy,
 }) => {
   const [expandedThought, setExpandedThought] = useState<number | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
 
   return (
   <>
@@ -927,7 +1105,7 @@ const ChatContent: React.FC<ChatContentProps> = ({
                   </div>
                 )}
                 {/* Action confirmation card */}
-                {m.role === 'model' && m.action && (
+                {m.role === 'model' && m.action && m.action.message && (
                   <div
                     className="flex items-center gap-2 px-3 py-2 mb-1"
                     style={{
@@ -942,22 +1120,56 @@ const ChatContent: React.FC<ChatContentProps> = ({
                     </span>
                   </div>
                 )}
+
+                {/* Exercise suggestions — tapping logs directly */}
+                {m.role === 'model' && m.action?.suggestions && m.action.suggestions.length > 0 && (
+                  <div className="mb-1">
+                    <p className="text-[10px] mb-1.5 font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                      Did you mean one of these?
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {m.action.suggestions.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => onLogExercise(s, 3, 10, 0, 'kg')}
+                          className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg active:scale-95 transition-all"
+                          style={{
+                            background: 'rgba(200,255,0,0.08)',
+                            border: '1px solid rgba(200,255,0,0.25)',
+                            color: '#C8FF00',
+                          }}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Main reply bubble */}
-                <div
-                  className="text-[13px] leading-[1.55] word-break"
-                  style={{
-                    padding: '10px 13px',
-                    background: m.role === 'user' ? 'var(--accent)' : 'var(--bg-elevated)',
-                    color: m.role === 'user' ? '#000' : 'var(--text-primary)',
-                    fontWeight: m.role === 'user' ? 500 : 400,
-                    borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                    border: m.role === 'model' ? '1px solid var(--border)' : 'none',
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {renderText(m.text)}
-                </div>
-                {m.role === 'model' && (
+                {!m.exerciseForm && (
+                  <div
+                    className="text-[13px] leading-[1.55] word-break"
+                    style={{
+                      padding: '10px 13px',
+                      background: m.role === 'user' ? 'var(--accent)' : 'var(--bg-elevated)',
+                      color: m.role === 'user' ? '#000' : 'var(--text-primary)',
+                      fontWeight: m.role === 'user' ? 500 : 400,
+                      borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                      border: m.role === 'model' ? '1px solid var(--border)' : 'none',
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {renderText(m.text)}
+                  </div>
+                )}
+
+                {/* Inline exercise form */}
+                {m.role === 'model' && m.exerciseForm && (
+                  <ExerciseQuickForm onSubmit={onLogExercise} loading={formLoading} setLoading={setFormLoading} />
+                )}
+
+                {m.role === 'model' && !m.exerciseForm && (
                   <button
                     onClick={() => onCopy(m.text, i)}
                     title="Copy response"
