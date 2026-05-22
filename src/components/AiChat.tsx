@@ -8,6 +8,8 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   getWorkouts,
   getPersonalRecords,
+  logBodyWeight,
+  upsertDopamineEntry,
   type LocalWorkout,
   type LocalExercise,
   type LocalPersonalRecord,
@@ -50,6 +52,37 @@ const AURORA_CSS = `
   .ai-input-wrap:focus-within { border-color: rgba(200,255,0,0.35) !important; }
 `;
 
+// ── Gemini function declarations (tool calling) ──────────────────────────────
+const FUNCTION_DECLARATIONS = [
+  {
+    name: 'log_weight',
+    description: "Log the user's body weight. Use when the user says their weight, e.g. 'my weight is 75', 'log 80kg', 'I weigh 170lbs today'.",
+    parameters: {
+      type: 'object',
+      properties: {
+        weight: { type: 'number', description: 'Body weight value as a number' },
+        unit: { type: 'string', enum: ['kg', 'lbs'], description: "Unit of weight — 'kg' or 'lbs'. Default kg if not specified." },
+        date: { type: 'string', description: "Date in YYYY-MM-DD format. Use today's date if not mentioned." },
+      },
+      required: ['weight'],
+    },
+  },
+  {
+    name: 'log_dopamine',
+    description: "Log a dopamine / NoFap daily check-in. Use when user says things like 'I stayed clean today', 'relapsed today', 'I resisted the urge', 'logged a win for today'.",
+    parameters: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['success', 'relapse'], description: "'success' if they stayed clean / resisted urges, 'relapse' if they gave in" },
+        urge: { type: 'number', description: 'Urge intensity 1–5. Only for success entries. Guess from context if not given (default 3).', minimum: 1, maximum: 5 },
+        note: { type: 'string', description: 'Optional short note the user wants to record.' },
+        date: { type: 'string', description: "Date in YYYY-MM-DD format. Default to today." },
+      },
+      required: ['status'],
+    },
+  },
+];
+
 const LOADING_PHASES = [
   'Reviewing your workout history…',
   'Checking muscle recovery status…',
@@ -60,7 +93,8 @@ const LOADING_PHASES = [
 interface Message {
   role: 'user' | 'model';
   text: string;
-  thought?: string; // coach's reasoning chain (from Gemini thinking tokens)
+  thought?: string;
+  action?: { name: string; summary: string; success: boolean };
 }
 
 interface ApiUsage {
@@ -286,26 +320,57 @@ function getSuggestions(workouts: WorkoutWithExercises[]): string[] {
   const hasData = workouts.length > 3;
   if (trainedToday) {
     return [
-      'How did this session compare to last time?',
-      'Any recovery tips for what I just trained?',
-      'Am I hitting enough volume per muscle group?',
+      'My weight today is 78 kg',
+      'I stayed clean today',
+      'Any recovery tips for what I trained?',
       'What should I focus on next session?',
     ];
   }
   if (hasData) {
     return [
-      'What should I train today?',
+      'Log my weight as 75 kg',
+      'I stayed strong today',
       'Which exercises am I plateauing on?',
       "How's my weekly volume looking?",
-      'Give me a progressive overload plan for next week.',
     ];
   }
   return [
+    'My weight today is 80 kg',
+    'I stayed clean today',
     'What should I train today?',
-    "How's my progress looking?",
-    'Best exercises for my weak points?',
-    'Give me a deload week plan.',
+    'Give me a beginner plan.',
   ];
+}
+
+/* ── Execute a Gemini function call against Supabase ───────────────── */
+async function executeTool(
+  userId: string,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<{ success: boolean; message: string }> {
+  const today = format(new Date(), 'yyyy-MM-dd');
+
+  if (name === 'log_weight') {
+    const weight = Number(args.weight);
+    const unit = (args.unit as 'kg' | 'lbs') || 'kg';
+    const date = (args.date as string) || today;
+    await logBodyWeight(userId, { date, weight, unit });
+    const isToday = date === today;
+    return { success: true, message: `${weight} ${unit} logged${isToday ? ' for today' : ` for ${date}`}` };
+  }
+
+  if (name === 'log_dopamine') {
+    const status = args.status as 'success' | 'relapse';
+    const urge = Number(args.urge ?? 3);
+    const note = (args.note as string) || '';
+    const date = (args.date as string) || today;
+    await upsertDopamineEntry(userId, { date, status, urge, note: note || undefined });
+    const isToday = date === today;
+    const label = status === 'success' ? 'Stayed strong' : 'Check-in logged';
+    return { success: true, message: `${label}${isToday ? ' for today' : ` for ${date}`}` };
+  }
+
+  return { success: false, message: `Unknown tool: ${name}` };
 }
 
 /* ── Main AiChat component ─────────────────────────────────────────── */
@@ -397,9 +462,7 @@ export const AiChat: React.FC = () => {
       try {
         const systemPrompt = buildSystemPrompt(profile, workouts, prs);
 
-        // Search grounding tool format differs by model family:
-        //   Gemini 2.x / 2.5.x  → { google_search: {} }
-        //   Gemini 1.5.x         → { google_search_retrieval: { dynamic_retrieval_config: { mode: "MODE_DYNAMIC" } } }
+        // Search grounding tool format differs by model family
         const isV2 = /^gemini-2/.test(model);
         const searchTool = isV2
           ? { google_search: {} }
@@ -408,53 +471,91 @@ export const AiChat: React.FC = () => {
         // Only send the last MAX_HISTORY messages to keep prompt tokens low
         const trimmedHistory = history.slice(-MAX_HISTORY);
 
-        // Gemini 2.5 Flash supports native thinking tokens — gives coach-level reasoning
+        // Gemini 2.5 Flash supports native thinking tokens
         const supportsThinking = /^gemini-2\.5/.test(model);
 
-        const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: systemPrompt }] },
-            contents: trimmedHistory.map((m) => ({
-              role: m.role,
-              parts: [{ text: m.text }],
-            })),
-            tools: [searchTool],
-            generationConfig: {
-              temperature: 1, // required when thinkingConfig is set
-              maxOutputTokens: 2048,
-              ...(supportsThinking && { thinkingConfig: { thinkingBudget: 1024 } }),
-            },
-          }),
-        });
+        const geminiContents = trimmedHistory.map((m) => ({
+          role: m.role,
+          parts: [{ text: m.text }],
+        }));
 
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => ({}));
-          const errMsg: string = errBody?.error?.message || `Request failed (${res.status})`;
-          if (
-            res.status === 429 ||
-            errMsg.includes('quota') ||
-            errMsg.includes('limit: 0') ||
-            errMsg.includes('free_tier')
-          ) {
-            throw new Error(
-              'QUOTA: Your API key\'s project has billing enabled, which sets the free tier limit to 0.\n\n' +
-              'Fix: Go to aistudio.google.com/app/apikey → "Create API key in new project" (no billing) → paste the new key in Settings.',
-            );
+        const makeRequest = (contents: object[], includeSearch: boolean) =>
+          fetch(`${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: systemPrompt }] },
+              contents,
+              tools: [
+                { function_declarations: FUNCTION_DECLARATIONS },
+                ...(includeSearch ? [searchTool] : []),
+              ],
+              generationConfig: {
+                temperature: 1,
+                maxOutputTokens: 2048,
+                ...(supportsThinking && { thinkingConfig: { thinkingBudget: 1024 } }),
+              },
+            }),
+          });
+
+        const checkResponse = async (res: Response) => {
+          if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            const errMsg: string = errBody?.error?.message || `Request failed (${res.status})`;
+            if (res.status === 429 || errMsg.includes('quota') || errMsg.includes('limit: 0') || errMsg.includes('free_tier')) {
+              throw new Error('QUOTA: Your API key\'s project has billing enabled, which sets the free tier limit to 0.\n\nFix: Go to aistudio.google.com/app/apikey → "Create API key in new project" (no billing) → paste the new key in Settings.');
+            }
+            if (res.status === 400 && errMsg.includes('API_KEY')) {
+              throw new Error('INVALID_KEY: Your API key is invalid. Check it in Settings.');
+            }
+            throw new Error(errMsg);
           }
-          if (res.status === 400 && errMsg.includes('API_KEY')) {
-            throw new Error('INVALID_KEY: Your API key is invalid. Check it in Settings.');
+          return res.json();
+        };
+
+        const res = await makeRequest(geminiContents, true);
+        const data = await checkResponse(res);
+        trackTokenUsage(data?.usageMetadata?.totalTokenCount ?? 0);
+
+        const rawParts: Array<{ text?: string; thought?: boolean; functionCall?: { name: string; args: Record<string, unknown> } }> =
+          data?.candidates?.[0]?.content?.parts || [];
+
+        // ── Function call branch ─────────────────────────────────────────
+        const fnCallPart = rawParts.find((p) => p.functionCall);
+        if (fnCallPart?.functionCall && user?.id) {
+          const { name: toolName, args: toolArgs } = fnCallPart.functionCall;
+          let toolResult: { success: boolean; message: string };
+          try {
+            toolResult = await executeTool(user.id, toolName, toolArgs);
+          } catch (e: any) {
+            toolResult = { success: false, message: e.message || 'Action failed' };
           }
-          throw new Error(errMsg);
+
+          // Send function result back to Gemini for a natural-language reply
+          const followUpContents = [
+            ...geminiContents,
+            { role: 'model', parts: [{ functionCall: fnCallPart.functionCall }] },
+            { role: 'user', parts: [{ functionResponse: { name: toolName, response: toolResult } }] },
+          ];
+          const res2 = await makeRequest(followUpContents, false);
+          const data2 = await checkResponse(res2);
+          trackTokenUsage(data2?.usageMetadata?.totalTokenCount ?? 0);
+
+          const finalParts: Array<{ text?: string; thought?: boolean }> =
+            data2?.candidates?.[0]?.content?.parts || [];
+          const aiText2 = finalParts.filter((p) => !p.thought).map((p) => p.text).join('').trim() || 'Done!';
+
+          setMessages((prev) => [...prev, {
+            role: 'model',
+            text: aiText2,
+            action: toolResult,
+          }]);
+          return;
         }
 
-        const data = await res.json();
-        const parts: Array<{ text?: string; thought?: boolean }> =
-          data?.candidates?.[0]?.content?.parts || [];
-        const thought = parts.filter((p) => p.thought).map((p) => p.text).join('').trim();
-        const aiText = parts.filter((p) => !p.thought).map((p) => p.text).join('').trim() || '(no response)';
-        trackTokenUsage(data?.usageMetadata?.totalTokenCount ?? 0);
+        // ── Normal text response branch ──────────────────────────────────
+        const thought = rawParts.filter((p) => p.thought).map((p) => p.text).join('').trim();
+        const aiText = rawParts.filter((p) => !p.thought).map((p) => p.text).join('').trim() || '(no response)';
         setMessages((prev) => [...prev, { role: 'model', text: aiText, thought: thought || undefined }]);
       } catch (err: any) {
         const raw: string = err?.message || 'Something went wrong.';
@@ -736,7 +837,7 @@ const ChatContent: React.FC<ChatContentProps> = ({
                 Your AI fitness coach
               </p>
               <p className="text-[13px] text-center leading-relaxed mb-6 max-w-[260px]" style={{ color: 'var(--text-secondary)' }}>
-                Ask me about recovery, programming, progress, or anything training-related.
+                Ask about training, or tell me to log something — weight, check-in, anything.
               </p>
               {/* 2-col chip grid */}
               <div className="w-full grid grid-cols-2 gap-2">
@@ -810,6 +911,22 @@ const ChatContent: React.FC<ChatContentProps> = ({
                         {m.thought}
                       </div>
                     )}
+                  </div>
+                )}
+                {/* Action confirmation card */}
+                {m.role === 'model' && m.action && (
+                  <div
+                    className="flex items-center gap-2 px-3 py-2 mb-1"
+                    style={{
+                      borderRadius: 8,
+                      background: m.action.success ? 'rgba(200,255,0,0.08)' : 'rgba(248,113,113,0.08)',
+                      border: `1px solid ${m.action.success ? 'rgba(200,255,0,0.22)' : 'rgba(248,113,113,0.22)'}`,
+                    }}
+                  >
+                    <span style={{ fontSize: 14 }}>{m.action.success ? '✓' : '✗'}</span>
+                    <span className="text-[12px] font-semibold" style={{ color: m.action.success ? '#C8FF00' : '#f87171' }}>
+                      {m.action.message}
+                    </span>
                   </div>
                 )}
                 {/* Main reply bubble */}
