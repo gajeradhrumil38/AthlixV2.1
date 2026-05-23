@@ -36,6 +36,22 @@ const BENEFITS_TIMELINE = [
   { days: 90, benefit: 'Dopamine baseline reset. You are operating at full capacity.' },
 ];
 
+const COACH_MESSAGES: { days: number; msg: string }[] = [
+  { days: 0,  msg: "Every reset starts with a single day. Today is that day — make it count." },
+  { days: 1,  msg: "Day 1 done. Most people quit here. You didn't. That means everything." },
+  { days: 3,  msg: "3 days in. Your brain is already recalibrating. The fog is starting to lift." },
+  { days: 7,  msg: "One full week clean. The urges are real — and you beat every single one." },
+  { days: 14, msg: "Two weeks of rewiring. The old version of you can't believe how far you've come." },
+  { days: 30, msg: "30 days. You've built something that took real discipline. That's yours to keep." },
+  { days: 60, msg: "Two months strong. The old patterns have lost their grip. You're proving it daily." },
+  { days: 90, msg: "90 days. This isn't a streak anymore — it's just who you are now." },
+];
+
+function getCoachMessage(streak: number): string {
+  return [...COACH_MESSAGES].reverse().find((m) => streak >= m.days)?.msg
+    ?? "Every day clean is a win. You're building something real — don't stop now.";
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const getEntryColor = (entry: DopamineEntry | undefined) => {
@@ -268,78 +284,107 @@ export const DopamineTracker: React.FC = () => {
     <div className="space-y-4">
 
       {/* ── Streak hero ── */}
-      <div
-        className="rounded-2xl p-5 relative overflow-hidden"
-        style={{ background: 'linear-gradient(135deg,#0f1a00 0%,#111419 60%)', border: '1px solid rgba(200,255,0,0.12)' }}
-      >
-        <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 20% 50%,rgba(200,255,0,0.06) 0%,transparent 60%)' }} />
+      <div className="rounded-2xl p-5 space-y-4" style={{ background: '#16191F', border: '1px solid rgba(255,255,255,0.08)' }}>
 
-        <div className="flex items-start justify-between mb-4 relative">
+        {/* Row 1: label + streak number + SOS */}
+        <div className="flex items-start justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] mb-1" style={{ color: 'rgba(200,255,0,0.5)' }}>Dopamine Reset</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] mb-1.5" style={{ color: 'rgba(255,255,255,0.3)' }}>Dopamine Reset</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-[48px] font-black leading-none tabular-nums" style={{ color: '#C8FF00' }}>{stats.current}</span>
-              <span className="text-[16px] font-semibold" style={{ color: 'rgba(255,255,255,0.5)' }}>day streak</span>
+              <span className="text-[52px] font-black leading-none tabular-nums" style={{ color: '#fff' }}>{stats.current}</span>
+              <span className="text-[15px] font-semibold" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                {stats.current === 1 ? 'day strong' : 'days strong'}
+              </span>
             </div>
             {milestone && (
               <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold"
-                style={{ background: 'rgba(200,255,0,0.15)', border: '1px solid rgba(200,255,0,0.3)', color: '#C8FF00' }}>
-                <Flame className="w-3 h-3" />
-                {milestone.days}-day milestone!
+                style={{ background: 'rgba(200,255,0,0.1)', border: '1px solid rgba(200,255,0,0.22)', color: '#C8FF00' }}>
+                <Flame className="w-3 h-3" /> Day {milestone.days} unlocked
               </div>
             )}
           </div>
           <button onClick={() => setShowSOS(true)}
             className="flex items-center gap-1.5 h-9 px-3 rounded-xl text-[12px] font-bold transition-all active:scale-95"
-            style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' }}>
+            style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', color: '#f87171' }}>
             <ShieldAlert className="w-3.5 h-3.5" /> SOS
           </button>
         </div>
 
-        {/* Milestone benefit or next goal */}
-        {milestone && (
-          <p className="text-[12px] leading-relaxed mb-4 relative" style={{ color: 'rgba(255,255,255,0.55)' }}>
-            {milestone.benefit}
+        {/* Coach message */}
+        <div className="rounded-xl px-3.5 py-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <p className="text-[12px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>
+            "{getCoachMessage(stats.current)}"
           </p>
+        </div>
+
+        {/* What you've unlocked (current milestone benefit) */}
+        {milestone && (
+          <div className="flex items-start gap-3 rounded-xl px-3.5 py-3"
+            style={{ background: 'rgba(200,255,0,0.05)', border: '1px solid rgba(200,255,0,0.12)' }}>
+            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#C8FF00' }} />
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: 'rgba(200,255,0,0.5)' }}>What you've unlocked</p>
+              <p className="text-[12px] leading-snug" style={{ color: 'rgba(255,255,255,0.6)' }}>{milestone.benefit}</p>
+            </div>
+          </div>
         )}
 
-        {/* Next milestone progress bar */}
+        {/* Goal progress */}
         {nextMilestone && (
-          <div className="mb-4 relative">
-            <div className="flex justify-between mb-1">
-              <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,255,255,0.3)' }}>Next milestone</span>
-              <span className="text-[10px] font-bold" style={{ color: 'rgba(200,255,0,0.6)' }}>{nextMilestone.days} days — {nextMilestone.benefit.split('.')[0]}</span>
+          <div className="rounded-xl px-3.5 py-3.5 space-y-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            {/* Goal header */}
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: 'rgba(255,255,255,0.28)' }}>Your Goal</p>
+                <p className="text-[13px] font-bold" style={{ color: 'rgba(255,255,255,0.75)' }}>Day {nextMilestone.days}</p>
+                <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>{nextMilestone.benefit.split('.')[0]}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[28px] font-black tabular-nums leading-none" style={{ color: '#C8FF00' }}>
+                  {Math.round((stats.current / nextMilestone.days) * 100)}
+                  <span className="text-[14px] font-bold">%</span>
+                </p>
+                <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.25)' }}>there</p>
+              </div>
             </div>
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+            {/* Progress bar */}
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
               <div
-                className="h-full rounded-full transition-all"
-                style={{ width: `${Math.min(100, (stats.current / nextMilestone.days) * 100)}%`, background: '#C8FF00' }}
+                className="h-full rounded-full transition-all duration-700"
+                style={{ width: `${Math.min(100, (stats.current / nextMilestone.days) * 100)}%`, background: 'linear-gradient(90deg,#C8FF00,#96CC00)' }}
               />
             </div>
-            <p className="text-[10px] mt-1 text-right" style={{ color: 'rgba(255,255,255,0.25)' }}>
-              {nextMilestone.days - stats.current} day{nextMilestone.days - stats.current !== 1 ? 's' : ''} to go
-            </p>
+            {/* Days count */}
+            <div className="flex justify-between">
+              <span className="text-[11px] font-semibold tabular-nums" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                {stats.current} done
+              </span>
+              <span className="text-[11px] font-semibold tabular-nums" style={{ color: 'rgba(200,255,0,0.7)' }}>
+                {nextMilestone.days - stats.current} day{nextMilestone.days - stats.current !== 1 ? 's' : ''} to go
+              </span>
+            </div>
           </div>
         )}
 
         {/* Stats row */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="grid grid-cols-3 gap-2">
           {[
             { label: 'Best', value: `${stats.best}d`, sub: 'streak' },
             { label: 'Rate', value: stats.successRate != null ? `${stats.successRate}%` : '—', sub: '30-day' },
             { label: 'Avg Urge', value: stats.avgUrge ?? '—', sub: '/ 5' },
           ].map((s) => (
-            <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)' }}>
-              <p className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>{s.label}</p>
-              <p className="text-[20px] font-black tabular-nums leading-none" style={{ color: 'rgba(255,255,255,0.9)' }}>{s.value}</p>
-              <p className="text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>{s.sub}</p>
+            <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <p className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>{s.label}</p>
+              <p className="text-[20px] font-black tabular-nums leading-none" style={{ color: 'rgba(255,255,255,0.85)' }}>{s.value}</p>
+              <p className="text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.25)' }}>{s.sub}</p>
             </div>
           ))}
         </div>
 
+        {/* Log button */}
         <button onClick={() => openCheckinForDate(today)}
           className="w-full py-3.5 rounded-xl text-[14px] font-bold text-black flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
-          style={{ background: '#C8FF00' }}>
+          style={{ background: todayEntry?.status === 'success' ? '#C8FF00' : todayEntry?.status === 'relapse' ? '#f87171' : '#C8FF00' }}>
           {todayEntry
             ? (todayEntry.status === 'success'
               ? <><CheckCircle2 className="w-4 h-4" /> Today: Strong — Edit</>
