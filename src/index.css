@@ -5,20 +5,33 @@
   src: url('/fonts/VictoryStrikerSans.otf') format('opentype');
   font-weight: normal;
   font-style: normal;
-  font-display: swap;
+  /* block: no FOUT — browser waits for font then renders, no mid-render swap */
+  font-display: block;
 }
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-victory: "VictoryStriker", ui-sans-serif, system-ui, sans-serif;
-  --radius-xs: 0.5rem;
-  --radius-sm: 0.75rem;
-  --radius-md: 0.875rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
-  --radius-2xl: 1.5rem;
-  --radius-3xl: 1.75rem;
-  --radius-4xl: 2rem;
+
+  /*
+   * Responsive border-radius using clamp().
+   * Values are smaller on narrow phone screens and grow to a cap on desktop.
+   * This removes the "looks too round on phone / too sharp on desktop" effect.
+   *
+   * Formula: clamp(mobile-min, vw-scale, desktop-max)
+   * At 390px (iPhone): 2vw = 7.8px → clamped to mobile-min
+   * At 768px (tablet): scales up
+   * At 1440px+ (desktop): clamped to desktop-max
+   */
+  --radius-xs:  clamp(4px,  0.8vw, 6px);   /* tiny: badges, dots */
+  --radius-sm:  clamp(6px,  1.2vw, 9px);   /* small: tags, chips */
+  --radius-md:  clamp(9px,  1.8vw, 12px);  /* medium: buttons, inputs */
+  --radius-lg:  clamp(12px, 2.2vw, 16px);  /* large: cards */
+  --radius-xl:  clamp(14px, 2.8vw, 18px);  /* xl: prominent cards */
+  --radius-2xl: clamp(16px, 3.2vw, 20px);  /* 2xl: modals, sheets */
+  --radius-3xl: clamp(18px, 3.8vw, 24px);  /* 3xl: bottom sheets */
+  --radius-4xl: clamp(20px, 4.5vw, 28px);  /* 4xl: large bottom sheets */
+  --radius-full: 9999px;                    /* pills */
 }
 
 @layer base {
@@ -85,13 +98,14 @@
     --ai-gradient-to:   #2563eb;
 
     /* ── Layout / geometry (not colours) ─────────── */
-    --ios-radius-sm: 12px;
-    --ios-radius-md: 16px;
-    --ios-radius-lg: 20px;
-    --ios-radius-pill: 999px;
-    --ios-control-height: 50px;
-    --ios-surface-shadow: 0 12px 30px rgba(3, 8, 18, 0.35);
-    --ios-press-scale: 0.985;
+    /* Aliases that reference the responsive @theme radii */
+    --ios-radius-sm:   var(--radius-md);   /* 9–12px */
+    --ios-radius-md:   var(--radius-lg);   /* 12–16px */
+    --ios-radius-lg:   var(--radius-xl);   /* 14–18px */
+    --ios-radius-pill: 9999px;
+    --ios-control-height: 48px;
+    --ios-surface-shadow: 0 8px 24px rgba(3, 8, 18, 0.30);
+    --ios-press-scale: 0.97;
   }
 
   body {
@@ -100,11 +114,15 @@
     font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
   }
 
   /* Smooth scrolling everywhere */
   * {
     scroll-behavior: smooth;
+    /* Prevent layout shifts from radius rendering differences across browsers */
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Better focus ring */
@@ -114,17 +132,17 @@
   }
 
   :where(button, [type='button'], [type='submit'], [type='reset']) {
-    border-radius: var(--ios-radius-md);
-    transition: transform 0.14s ease, filter 0.14s ease, box-shadow 0.2s ease;
+    border-radius: var(--radius-md);
+    transition: transform 0.12s ease, opacity 0.12s ease, box-shadow 0.18s ease;
   }
 
   :where(button:not(:disabled), [type='button']:not(:disabled), [type='submit']:not(:disabled), [type='reset']:not(:disabled)):active {
-    transform: translateY(1px) scale(var(--ios-press-scale));
+    transform: scale(var(--ios-press-scale));
   }
 
   :where(input:not([type='checkbox']):not([type='radio']), select, textarea) {
     min-height: var(--ios-control-height);
-    border-radius: var(--ios-radius-md);
+    border-radius: var(--radius-md);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 }
@@ -153,9 +171,15 @@
   .glass-card {
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: var(--ios-radius-lg);
+    border-radius: var(--radius-xl);
     box-shadow: var(--ios-surface-shadow);
   }
+
+  /* Consistent card radius helper — use this instead of hardcoded values */
+  .r-card    { border-radius: var(--radius-xl);  }
+  .r-btn     { border-radius: var(--radius-md);  }
+  .r-sheet   { border-radius: var(--radius-3xl) var(--radius-3xl) 0 0; }
+  .r-modal   { border-radius: var(--radius-2xl); }
 
   /* Lime text glow */
   .text-accent-glow {
@@ -237,7 +261,7 @@
   );
   background-size: 200% 100%;
   animation: shimmer 1.6s ease-in-out infinite;
-  border-radius: var(--ios-radius-md);
+  border-radius: var(--radius-lg);
 }
 
 /* ── Muscle map styles ───────────────────────────────── */
@@ -326,7 +350,7 @@
   position: relative;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: var(--ios-radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: 0 0 0 0 rgba(var(--btn-glow-color), 0);
   transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease, border-color 0.25s ease;
   overflow: hidden;

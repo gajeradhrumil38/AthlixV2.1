@@ -100,6 +100,14 @@ async function bootstrap() {
     });
   }
 
+  // Wait for all fonts (VictoryStriker + Inter) to be ready before first render.
+  // This prevents FOUT — the loading screen holds until fonts are painted correctly.
+  // Cap at 2s so a slow network doesn't block forever.
+  await Promise.race([
+    document.fonts.ready,
+    new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+  ]);
+
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />
