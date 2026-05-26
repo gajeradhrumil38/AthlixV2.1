@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useHeartRate, type HeartRateSample } from '../contexts/HeartRateContext';
 import {
@@ -21,7 +22,7 @@ import {
 } from 'date-fns';
 
 import { LineChart, AreaChart, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, ReferenceDot } from 'recharts';
-import { Target, TrendingUp, Activity, Scale, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, CalendarDays, Pencil, Heart, Bluetooth, PlugZap, Unplug, Info, Flame, X } from 'lucide-react';
+import { Target, TrendingUp, Activity, Scale, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, CalendarDays, Pencil, Heart, Bluetooth, PlugZap, Unplug, Info, Flame, X, Camera, Utensils, History } from 'lucide-react';
 import { DopamineTracker } from '../components/progress/DopamineTracker';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -39,6 +40,8 @@ import type { LocalBodyWeightLog } from '../lib/supabaseData';
 import { parseDateAtStartOfDay } from '../lib/dates';
 import { convertWeight, isWeightUnit, type WeightUnit } from '../lib/units';
 import { palette } from '../theme/colors';
+import { getTodayCalories, getFoodScans } from '../lib/foodData';
+import type { FoodScan } from '../features/food/types';
 
 const HEART_RATE_ZONES = [
   { id: 'z1', name: 'Recovery', range: '50-94',   color: 'var(--back)'   },
@@ -202,19 +205,16 @@ const formatStoredDate = (value: unknown, pattern: string) => {
 export const Progress: React.FC = () => {
   const { user, profile } = useAuth();
   const displayUnit = profile?.unit_preference || 'lbs';
-  const [activeTab, setActiveTab] = useState<'overview' | 'overload' | 'dopamine' | 'weight' | 'livehr'>('livehr');
+  const [activeTab, setActiveTab] = useState<'overview' | 'food' | 'dopamine' | 'weight' | 'livehr'>('livehr');
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [todayCalories, setTodayCalories] = useState(0);
+  const [recentScans, setRecentScans] = useState<FoodScan[]>([]);
+  const [foodLoading, setFoodLoading] = useState(false);
 
   const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [exercises, setExercises] = useState<any[]>([]);
-  const [selectedExerciseForOverload, setSelectedExerciseForOverload] = useState<string>('');
-  const [overloadSearch, setOverloadSearch] = useState('');
-  const [overloadDropdownOpen, setOverloadDropdownOpen] = useState(false);
-  const [overloadChartView, setOverloadChartView] = useState<'weight' | 'volume'>('weight');
-  const [overloadRangeStart, setOverloadRangeStart] = useState<Date | null>(() => startOfMonth(new Date()));
-  const [overloadRangeEnd,   setOverloadRangeEnd]   = useState<Date | null>(() => new Date());
-  const [overloadCalendarMonth, setOverloadCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [volumeMonth, setVolumeMonth] = useState(() => startOfMonth(new Date()));
 
   const [newWeight, setNewWeight] = useState('');
@@ -635,6 +635,27 @@ export const Progress: React.FC = () => {
   useEffect(() => { if (user) fetchData(); }, [user, displayUnit]);
 
   useEffect(() => {
+    if (!user || activeTab !== 'food') return;
+    let cancelled = false;
+    const load = async () => {
+      setFoodLoading(true);
+      try {
+        const [cals, { scans }] = await Promise.all([
+          getTodayCalories(user.id),
+          getFoodScans(user.id, 0, 4),
+        ]);
+        if (cancelled) return;
+        setTodayCalories(cals);
+        setRecentScans(scans);
+      } catch { /* silent */ } finally {
+        if (!cancelled) setFoodLoading(false);
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [user, activeTab]);
+
+  useEffect(() => {
     if (heightCm && weightLogs.length > 0) {
       const currentWeight = weightLogs[weightLogs.length - 1].weight;
       const heightM = parseFloat(heightCm) / 100;
@@ -681,8 +702,7 @@ export const Progress: React.FC = () => {
             : Number(exercise.weight || 0),
           unit: !exercise.unit || isWeightUnit(exercise.unit) ? targetUnit : exercise.unit,
         })));
-        const uniqueNames = Array.from(new Set(exerciseData.map((ex: any) => ex.name)));
-        if (uniqueNames.length > 0) setSelectedExerciseForOverload(uniqueNames[0] as string);
+        // exercise names available for future use
       }
     } catch (error) {
       console.error('Error fetching progress data:', error);
@@ -844,10 +864,10 @@ export const Progress: React.FC = () => {
 
   /* ── Tab config ─────────────────────────────── */
   const TABS = [
-    { id: 'overview',  label: 'Overview',  Icon: Activity  },
-    { id: 'overload',  label: 'Overload',  Icon: TrendingUp },
-    { id: 'dopamine',  label: 'Dopamine',  Icon: Target    },
-    { id: 'weight',    label: 'Weight',    Icon: Scale     },
+    { id: 'overview',  label: 'Overview',   Icon: Activity  },
+    { id: 'food',      label: 'Nutrition',  Icon: Utensils  },
+    { id: 'dopamine',  label: 'Dopamine',   Icon: Target    },
+    { id: 'weight',    label: 'Weight',     Icon: Scale     },
   ] as const;
 
   return (
@@ -1147,700 +1167,168 @@ export const Progress: React.FC = () => {
           )}
 
           {/* ════════════════════════════════════════════════
-              OVERLOAD
+              NUTRITION
           ════════════════════════════════════════════════ */}
-          {activeTab === 'overload' && (() => {
-            // ── Muscle → hex color map (palette values work in SVG stopColor) ──
-            const MUSCLE_HEX: Record<string, string> = {
-              Chest: palette.chest, Back: palette.back, Legs: palette.legs,
-              Shoulders: palette.shoulders, Core: palette.core, Biceps: palette.biceps,
-              Triceps: palette.triceps, Arms: palette.biceps, Cardio: palette.cardio,
-              Glutes: '#F4B96A', Forearms: '#98D4E8', Mobility: '#85C9B0', Yoga: '#7CB9C8',
-            };
-            const getMuscleHex = (mg: string) => MUSCLE_HEX[mg] ?? palette.accent;
+          {activeTab === 'food' && (
+            <>
+              {/* Today's calories card */}
+              <div className="rounded-2xl border border-white/8 bg-[linear-gradient(160deg,#16191F_0%,#111419_100%)] p-5">
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] mb-4" style={{ color: 'rgba(255,255,255,0.3)' }}>Today's Nutrition</p>
 
-            const weightedNames = Array.from(new Set(
-              exercises.filter(ex => ex.weight > 0).map(ex => ex.name)
-            )).sort() as string[];
-            const effectiveExercise = selectedExerciseForOverload || weightedNames[0] || '';
-
-            // Muscle group of selected exercise
-            const exerciseMuscle = exercises.find(ex => ex.name === effectiveExercise)?.muscle_group ?? '';
-            const chartColor = getMuscleHex(exerciseMuscle);
-
-            // Filtered list for dropdown search
-            const filteredNames = overloadSearch.trim()
-              ? weightedNames.filter(n => n.toLowerCase().includes(overloadSearch.toLowerCase()))
-              : weightedNames;
-
-            // ── Helpers ──────────────────────────────────────────────────────
-            const fmtWt = (n: number) => Number.isInteger(n) ? String(n) : parseFloat(n.toFixed(1)).toString();
-
-            const linReg = (pts: { x: number; y: number }[]) => {
-              const n = pts.length;
-              if (n < 2) return { slope: 0, intercept: pts[0]?.y ?? 0 };
-              const sx = pts.reduce((s, p) => s + p.x, 0);
-              const sy = pts.reduce((s, p) => s + p.y, 0);
-              const sxy = pts.reduce((s, p) => s + p.x * p.y, 0);
-              const sxx = pts.reduce((s, p) => s + p.x * p.x, 0);
-              const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1);
-              return { slope, intercept: (sy - slope * sx) / n };
-            };
-
-            const buildChartData = (name: string) => {
-              const rStart = overloadRangeStart ? startOfDay(overloadRangeStart) : null;
-              const rEnd   = overloadRangeEnd   ? startOfDay(overloadRangeEnd)   : null;
-              const rawRows = exercises
-                .filter(ex => {
-                  if (ex.name !== name || ex.weight <= 0) return false;
-                  if (rStart && rEnd) {
-                    const d = parseDateAtStartOfDay(ex.workouts.date);
-                    if (!d || d < rStart || d > rEnd) return false;
-                  }
-                  return true;
-                })
-                .sort((a, b) => (parseDateAtStartOfDay(a.workouts.date)?.getTime() ?? 0) - (parseDateAtStartOfDay(b.workouts.date)?.getTime() ?? 0));
-              const byDate: Record<string, typeof rawRows> = {};
-              rawRows.forEach(ex => {
-                if (!byDate[ex.workouts.date]) byDate[ex.workouts.date] = [];
-                byDate[ex.workouts.date].push(ex);
-              });
-              let runningMax = 0;
-              const base = Object.entries(byDate)
-                .sort(([a], [b]) => a > b ? 1 : -1)
-                .map(([date, rows]) => {
-                  const weights = rows.map(r => r.weight).sort((a, b) => a - b);
-                  const maxW = weights[weights.length - 1];
-                  const minW = weights[0];
-                  const volume = rows.reduce((s, r) => s + (r.reps || 0) * r.weight, 0);
-                  const isPR = maxW > runningMax;
-                  if (isPR) runningMax = maxW;
-                  return { date, min: minW, max: maxW, range: maxW - minW, volume, isPR };
-                });
-
-              // linear regression for weight trend
-              const wReg = linReg(base.map((p, i) => ({ x: i, y: p.max })));
-              const vReg = linReg(base.map((p, i) => ({ x: i, y: p.volume })));
-              return base.map((p, i) => ({
-                ...p,
-                wTrend: wReg.slope * i + wReg.intercept,
-                vTrend: vReg.slope * i + vReg.intercept,
-              }));
-            };
-
-            const chartData = effectiveExercise ? buildChartData(effectiveExercise) : [];
-            const sessions = chartData.length;
-
-            return (
-              <div className="rounded-2xl border border-white/8 bg-[linear-gradient(160deg,#16191F_0%,#111419_100%)] overflow-hidden">
-
-                {/* ── Header ── */}
-                <div className="px-5 pt-5 pb-4 border-b border-white/6">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-muted)]">Progressive Overload</p>
-                    {sessions > 0 && (
-                      <span className="text-[10px] font-semibold" style={{ color: chartColor }}>
-                        {sessions} session{sessions !== 1 ? 's' : ''}
-                      </span>
-                    )}
+                <div className="flex items-center gap-5 mb-5">
+                  {/* Calorie ring */}
+                  <div className="relative flex-shrink-0">
+                    <svg width={88} height={88} viewBox="0 0 88 88">
+                      <circle cx={44} cy={44} r={38} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={7} />
+                      <circle
+                        cx={44} cy={44} r={38}
+                        fill="none" stroke="#C8FF00" strokeWidth={7}
+                        strokeLinecap="round"
+                        strokeDasharray={`${Math.min(todayCalories / 2000, 1) * 238.76} 238.76`}
+                        transform="rotate(-90 44 44)"
+                        style={{ transition: 'stroke-dasharray 0.6s ease' }}
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-[20px] font-black leading-none tabular-nums" style={{ color: '#C8FF00' }}>{todayCalories}</span>
+                      <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>kcal</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {exerciseMuscle && (
-                      <span className="text-[9px] font-bold uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-full"
-                        style={{ background: `${chartColor}18`, color: chartColor, border: `1px solid ${chartColor}30` }}>
-                        {exerciseMuscle}
-                      </span>
-                    )}
-                    <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">
-                      {effectiveExercise || 'No weighted exercises yet'}
-                    </p>
+
+                  {/* Goal bar + macros */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-semibold" style={{ color: 'rgba(255,255,255,0.5)' }}>Daily goal</span>
+                      <span className="text-[11px] font-bold tabular-nums" style={{ color: 'rgba(255,255,255,0.5)' }}>2000 kcal</span>
+                    </div>
+                    <div className="h-1.5 rounded-full overflow-hidden mb-4" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(todayCalories / 2000 * 100, 100)}%`, background: todayCalories > 2000 ? '#FF5A5F' : '#C8FF00' }}
+                      />
+                    </div>
+                    {(() => {
+                      const today = new Date().toDateString();
+                      const todayScans = recentScans.filter(s => new Date(s.scan_date).toDateString() === today);
+                      const mac = todayScans.reduce(
+                        (acc, s) => ({ p: acc.p + s.total_protein, c: acc.c + s.total_carbs, f: acc.f + s.total_fat }),
+                        { p: 0, c: 0, f: 0 },
+                      );
+                      return (
+                        <div className="grid grid-cols-3 gap-2">
+                          {([
+                            { label: 'Protein', value: mac.p, color: '#59D9C6' },
+                            { label: 'Carbs',   value: mac.c, color: '#C8FF00' },
+                            { label: 'Fat',     value: mac.f, color: '#FF9F1C' },
+                          ] as const).map(m => (
+                            <div key={m.label} className="rounded-xl px-2 py-2 text-center" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                              <p className="text-[15px] font-black tabular-nums leading-none" style={{ color: m.color }}>
+                                {Math.round(m.value)}<span className="text-[9px] font-bold ml-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>g</span>
+                              </p>
+                              <p className="text-[9px] font-bold uppercase tracking-wider mt-1" style={{ color: 'rgba(255,255,255,0.3)' }}>{m.label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
-                {/* ── Searchable dropdown ── */}
-                {weightedNames.length > 0 && (
-                  <div className="px-4 py-3 border-b border-white/6 relative">
-                    {/* Trigger */}
-                    <button
-                      onClick={() => { setOverloadDropdownOpen(o => !o); setOverloadSearch(''); }}
-                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13px] font-medium transition-all active:scale-[0.99]"
-                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)' }}
-                    >
-                      <span className="text-[var(--text-primary)] truncate pr-2">{effectiveExercise || 'Select exercise'}</span>
-                      <ChevronLeft
-                        className="w-4 h-4 flex-shrink-0 transition-transform duration-200"
-                        style={{ color: 'var(--text-muted)', transform: overloadDropdownOpen ? 'rotate(-90deg)' : 'rotate(-180deg)' }}
-                      />
-                    </button>
-
-                    {/* Dropdown panel */}
-                    {overloadDropdownOpen && (
-                      <div
-                        className="absolute left-4 right-4 top-[calc(100%-6px)] z-20 rounded-xl overflow-hidden"
-                        style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 8px 32px rgba(0,0,0,0.45)' }}
-                      >
-                        {/* Search input */}
-                        <div className="px-3 pt-3 pb-2">
-                          <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                            <svg className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'var(--text-muted)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-                            </svg>
-                            <input
-                              autoFocus
-                              value={overloadSearch}
-                              onChange={e => setOverloadSearch(e.target.value)}
-                              placeholder="Search exercise…"
-                              className="flex-1 bg-transparent text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none min-h-0"
-                            />
-                            {overloadSearch && (
-                              <button onClick={() => setOverloadSearch('')} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M18 6 6 18M6 6l12 12"/></svg>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Exercise list */}
-                        <div className="max-h-52 overflow-y-auto pb-2">
-                          {filteredNames.length === 0 ? (
-                            <p className="px-4 py-3 text-[12px] text-[var(--text-muted)]">No exercises match "{overloadSearch}"</p>
-                          ) : filteredNames.map(name => {
-                            const mg = exercises.find(ex => ex.name === name)?.muscle_group ?? '';
-                            const col = getMuscleHex(mg);
-                            const isActive = name === effectiveExercise;
-                            return (
-                              <button
-                                key={name}
-                                onClick={() => { setSelectedExerciseForOverload(name); setOverloadDropdownOpen(false); setOverloadSearch(''); }}
-                                className="w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors active:bg-white/5"
-                                style={isActive ? { background: 'rgba(255,255,255,0.06)' } : undefined}
-                              >
-                                <span className="text-[13px] font-medium text-[var(--text-primary)] truncate pr-2">{name}</span>
-                                {mg && (
-                                  <span className="text-[9px] font-bold uppercase tracking-wide flex-shrink-0 px-1.5 py-0.5 rounded-full"
-                                    style={{ background: `${col}18`, color: col }}>
-                                    {mg}
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ── Range calendar ── */}
-                {weightedNames.length > 0 && (() => {
-                  const calToday  = new Date();
-                  const calStart  = startOfWeek(startOfMonth(overloadCalendarMonth), { weekStartsOn: 1 });
-                  const calEnd    = endOfWeek(endOfMonth(overloadCalendarMonth), { weekStartsOn: 1 });
-                  const calDays   = eachDayOfInterval({ start: calStart, end: calEnd });
-                  const loggedDates = new Set(
-                    exercises
-                      .filter(ex => ex.name === effectiveExercise && ex.weight > 0)
-                      .map(ex => ex.workouts.date as string)
-                  );
-                  const rStart = overloadRangeStart ? startOfDay(overloadRangeStart) : null;
-                  const rEnd   = overloadRangeEnd   ? startOfDay(overloadRangeEnd)   : null;
-
-                  const handleDayTap = (day: Date) => {
-                    if (!rStart || rEnd) {
-                      setOverloadRangeStart(day);
-                      setOverloadRangeEnd(null);
-                    } else if (isSameDay(day, rStart)) {
-                      setOverloadRangeStart(null);
-                    } else if (day < rStart) {
-                      setOverloadRangeStart(day);
-                    } else {
-                      setOverloadRangeEnd(day);
-                    }
-                  };
-
-                  const hasRange = rStart && rEnd;
-
-                  return (
-                    <div className="border-b border-white/6">
-                      {/* Range label row */}
-                      <div className="flex items-center justify-between px-4 pt-3 pb-1">
-                        <div className="flex items-center gap-2">
-                          {rStart ? (
-                            <span className="text-[12px] font-semibold" style={{ color: 'var(--accent)' }}>
-                              {format(rStart, 'MMM d')}
-                            </span>
-                          ) : (
-                            <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.25)' }}>Pick start</span>
-                          )}
-                          {rStart && (
-                            <>
-                              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.2)' }}>→</span>
-                              {rEnd ? (
-                                <span className="text-[12px] font-semibold" style={{ color: 'var(--accent)' }}>
-                                  {format(rEnd, 'MMM d')}
-                                </span>
-                              ) : (
-                                <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.25)' }}>Pick end</span>
-                              )}
-                            </>
-                          )}
-                        </div>
-                        {(rStart || rEnd) && (
-                          <button
-                            type="button"
-                            onClick={() => { setOverloadRangeStart(null); setOverloadRangeEnd(null); }}
-                            className="text-[10px] font-semibold transition-all active:opacity-50"
-                            style={{ color: 'rgba(255,255,255,0.25)' }}
-                          >
-                            Clear
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Month nav */}
-                      <div className="flex items-center justify-between px-4 py-2">
-                        <button
-                          type="button"
-                          onClick={() => setOverloadCalendarMonth(m => subMonths(m, 1))}
-                          className="h-7 w-7 flex items-center justify-center rounded-lg transition-all active:scale-90"
-                          style={{ color: 'rgba(255,255,255,0.4)' }}
-                        >
-                          <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <span className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>
-                          {format(overloadCalendarMonth, 'MMMM yyyy')}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setOverloadCalendarMonth(m => addMonths(m, 1))}
-                          disabled={isSameMonth(overloadCalendarMonth, calToday)}
-                          className="h-7 w-7 flex items-center justify-center rounded-lg transition-all active:scale-90 disabled:opacity-20"
-                          style={{ color: 'rgba(255,255,255,0.4)' }}
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {/* Weekday headers */}
-                      <div className="grid grid-cols-7 px-2">
-                        {['M','T','W','T','F','S','S'].map((d, i) => (
-                          <div key={i} className="pb-1 text-center text-[9px] font-bold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.18)' }}>
-                            {d}
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Day grid — no x-gap so range strip is seamless */}
-                      <div className="grid grid-cols-7 px-2 pb-3">
-                        {calDays.map((day, idx) => {
-                          const outside  = !isSameMonth(day, overloadCalendarMonth);
-                          const isToday  = isSameDay(day, calToday);
-                          const isFuture = day > calToday;
-                          const dateStr  = format(day, 'yyyy-MM-dd');
-                          const hasLog   = loggedDates.has(dateStr);
-                          const isStart  = rStart ? isSameDay(day, rStart) : false;
-                          const isEnd    = rEnd   ? isSameDay(day, rEnd)   : false;
-                          const inRange  = hasRange && day >= rStart! && day <= rEnd!;
-                          const colIdx   = idx % 7; // 0=Mon … 6=Sun
-
-                          // Range strip: full-width fill, clipped at start/end with rounded caps
-                          const stripLeft  = isStart || colIdx === 0;
-                          const stripRight = isEnd   || colIdx === 6;
-
-                          return (
-                            <button
-                              key={day.toISOString()}
-                              type="button"
-                              disabled={isFuture || outside}
-                              onClick={() => handleDayTap(day)}
-                              className="relative flex flex-col items-center py-0.5 h-10 transition-all active:scale-90 disabled:pointer-events-none"
-                              style={{ opacity: outside ? 0 : isFuture ? 0.2 : 1 }}
-                            >
-                              {/* Range fill strip (behind the circle) */}
-                              {inRange && !isStart && !isEnd && (
-                                <div
-                                  className="absolute top-1 bottom-1 z-0"
-                                  style={{
-                                    left: stripLeft ? '50%' : 0,
-                                    right: stripRight ? '50%' : 0,
-                                    background: 'rgba(200,255,0,0.10)',
-                                  }}
-                                />
-                              )}
-                              {/* Start cap — right half fill */}
-                              {isStart && rEnd && (
-                                <div className="absolute top-1 bottom-1 z-0" style={{ left: '50%', right: 0, background: 'rgba(200,255,0,0.10)' }} />
-                              )}
-                              {/* End cap — left half fill */}
-                              {isEnd && rStart && (
-                                <div className="absolute top-1 bottom-1 z-0" style={{ right: '50%', left: 0, background: 'rgba(200,255,0,0.10)' }} />
-                              )}
-
-                              {/* Day circle */}
-                              <div
-                                className="relative z-10 h-7 w-7 flex items-center justify-center rounded-full text-[12px] font-semibold transition-all"
-                                style={
-                                  isStart || isEnd
-                                    ? { background: 'var(--accent)', color: '#000' }
-                                    : isToday
-                                    ? { outline: '1.5px solid var(--accent)', color: 'var(--accent)' }
-                                    : inRange && hasLog
-                                    ? { background: 'rgba(200,255,0,0.18)', color: 'var(--accent)' }
-                                    : { color: inRange ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.4)' }
-                                }
-                              >
-                                {format(day, 'd')}
-                              </div>
-
-                              {/* Dot for logged session */}
-                              {hasLog && !isStart && !isEnd && (
-                                <div className="relative z-10 w-1 h-1 rounded-full" style={{ background: inRange ? 'var(--accent)' : 'rgba(200,255,0,0.3)', marginTop: 1 }} />
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* ── Content ── */}
-                <div className="p-5">
-                  {weightedNames.length === 0 ? (
-                    <div className="py-10 text-center">
-                      <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.15)' }}>
-                        <TrendingUp className="w-6 h-6" style={{ color: 'var(--accent)' }} />
-                      </div>
-                      <p className="text-[15px] font-bold text-[var(--text-primary)] mb-1">Start tracking overload</p>
-                      <p className="text-[12px] text-[var(--text-secondary)] max-w-[220px] mx-auto leading-relaxed">
-                        Log any weighted exercise and it'll appear here as a progression chart.
-                      </p>
-                    </div>
-                  ) : chartData.length === 0 ? (
-                    <div className="py-10 text-center">
-                      <p className="text-[14px] font-semibold text-[var(--text-secondary)] mb-1">No weight data</p>
-                      <p className="text-[12px] text-[var(--text-muted)]">Log {effectiveExercise} with a weight to track it.</p>
-                    </div>
-                  ) : chartData.length === 1 ? (
-                    /* ── Single session ── */
-                    <div>
-                      <div className="grid grid-cols-2 gap-3 mb-4">
-                        <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                          <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-2">First logged</p>
-                          <p className="text-[22px] font-black tabular-nums leading-none" style={{ color: chartColor }}>
-                            {fmtWt(chartData[0].max)}<span className="text-[12px] font-medium text-[var(--text-muted)] ml-1">{displayUnit}</span>
-                          </p>
-                          <p className="text-[10px] text-[var(--text-muted)] mt-1">{formatStoredDate(chartData[0].date, 'MMM d, yyyy')}</p>
-                        </div>
-                        <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                          <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-2">Volume</p>
-                          <p className="text-[22px] font-black tabular-nums leading-none" style={{ color: chartColor }}>
-                            {Math.round(chartData[0].volume).toLocaleString()}
-                          </p>
-                          <p className="text-[10px] text-[var(--text-muted)] mt-1">{displayUnit} total</p>
-                        </div>
-                      </div>
-                      <div className="rounded-xl p-4" style={{ background: `${chartColor}0D`, border: `1px solid ${chartColor}28` }}>
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-[12px] font-semibold text-[var(--text-primary)]">Log again to unlock chart</p>
-                          <span className="text-[11px] font-bold" style={{ color: chartColor }}>1 / 2</span>
-                        </div>
-                        <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                          <div className="h-full w-1/2 rounded-full" style={{ background: chartColor }} />
-                        </div>
-                        <p className="text-[11px] text-[var(--text-secondary)] mt-2.5">
-                          One more {effectiveExercise} session unlocks your full progression chart.
-                        </p>
-                      </div>
-                    </div>
-                  ) : (() => {
-                    /* ── Full chart ── */
-                    const firstMax = chartData[0].max;
-                    const lastMax = chartData[chartData.length - 1].max;
-                    const allTimeMax = Math.max(...chartData.map(d => d.max));
-                    const firstVol = chartData[0].volume;
-                    const lastVol = chartData[chartData.length - 1].volume;
-                    const wChange = firstMax > 0 ? ((lastMax - firstMax) / firstMax) * 100 : 0;
-                    const vChange = firstVol > 0 ? ((lastVol - firstVol) / firstVol) * 100 : 0;
-                    const isWeight = overloadChartView === 'weight';
-                    const activeChange = isWeight ? wChange : vChange;
-                    const trendUp = activeChange > 0;
-                    const trendDown = activeChange < 0;
-                    const trendColor = trendUp ? palette.green : trendDown ? palette.red : palette.yellow;
-                    const firstDate = chartData[0].date;
-                    const lastDate = chartData[chartData.length - 1].date;
-
-                    // Y domain with 8% padding so dots aren't clipped
-                    const wVals = chartData.map(d => d.max);
-                    const wMin = Math.min(...wVals);
-                    const wMax = Math.max(...wVals);
-                    const wPad = Math.max((wMax - wMin) * 0.15, wMax * 0.05);
-                    const wDomain: [number, number] = [Math.max(0, wMin - wPad), wMax + wPad];
-
-                    const vVals = chartData.map(d => d.volume);
-                    const vMax = Math.max(...vVals);
-
-                    return (
-                      <>
-                        {/* ── Stat row ── */}
-                        <div className="grid grid-cols-3 gap-2 mb-4">
-                          {/* Change */}
-                          <div className="rounded-xl p-3 flex flex-col justify-between" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                            <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1">Change</p>
-                            <div>
-                              <p className="text-[20px] font-black tabular-nums leading-none" style={{ color: trendColor }}>
-                                {activeChange > 0 ? '+' : ''}{activeChange.toFixed(1)}<span className="text-[10px] font-bold ml-0.5">%</span>
-                              </p>
-                              <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                                {trendUp ? '▲' : trendDown ? '▼' : '—'} {isWeight ? 'weight' : 'volume'}
-                              </p>
-                            </div>
-                          </div>
-                          {/* Best / PR */}
-                          <div className="rounded-xl p-3 flex flex-col justify-between" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                            <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1">All-time PR</p>
-                            <div>
-                              <p className="text-[20px] font-black tabular-nums leading-none" style={{ color: chartColor }}>
-                                {fmtWt(allTimeMax)}<span className="text-[10px] font-medium text-[var(--text-muted)] ml-0.5">{displayUnit}</span>
-                              </p>
-                              <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>best set ever</p>
-                            </div>
-                          </div>
-                          {/* Sessions */}
-                          <div className="rounded-xl p-3 flex flex-col justify-between" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                            <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)] mb-1">Sessions</p>
-                            <div>
-                              <p className="text-[20px] font-black text-[var(--text-primary)] tabular-nums leading-none">{sessions}</p>
-                              <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                                {formatStoredDate(firstDate, 'MMM d')} – {formatStoredDate(lastDate, 'MMM d')}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* ── Chart view toggle ── */}
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="inline-flex rounded-lg p-0.5" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                            {(['weight', 'volume'] as const).map(v => (
-                              <button
-                                key={v}
-                                onClick={() => setOverloadChartView(v)}
-                                className="h-7 px-3 rounded-md text-[11px] font-bold uppercase tracking-wide transition-all"
-                                style={overloadChartView === v
-                                  ? { background: chartColor, color: '#000' }
-                                  : { background: 'transparent', color: 'var(--text-muted)' }}
-                              >
-                                {v}
-                              </button>
-                            ))}
-                          </div>
-                          {isWeight && (
-                            <div className="flex items-center gap-3 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                              <span className="flex items-center gap-1.5">
-                                <span className="inline-block w-5 h-px" style={{ background: chartColor }} />
-                                Top set
-                              </span>
-                              <span className="flex items-center gap-1.5">
-                                <span className="inline-block w-5 h-px border-t-2 border-dashed" style={{ borderColor: `${chartColor}70` }} />
-                                Trend
-                              </span>
-                              <span className="flex items-center gap-1.5">
-                                <span className="inline-block w-3 h-3 rounded-full border-2" style={{ borderColor: '#FFD700', background: 'transparent' }} />
-                                PR
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* ── Weight progression chart ── */}
-                        {isWeight && (
-                          <div className="h-52">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <ComposedChart data={chartData} margin={{ top: 16, right: 12, bottom: 0, left: 0 }}>
-                                <defs>
-                                  <linearGradient id="bandGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor={chartColor} stopOpacity={0.18} />
-                                    <stop offset="100%" stopColor={chartColor} stopOpacity={0.02} />
-                                  </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                                <XAxis
-                                  dataKey="date"
-                                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
-                                  axisLine={false} tickLine={false}
-                                  tickFormatter={(v) => formatStoredDate(v, 'MMM d')}
-                                  interval="preserveStartEnd"
-                                />
-                                <YAxis
-                                  domain={wDomain}
-                                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
-                                  axisLine={false} tickLine={false}
-                                  width={34}
-                                  tickFormatter={(v) => fmtWt(v)}
-                                />
-                                <Tooltip
-                                  content={({ active, payload, label }) => {
-                                    if (!active || !payload?.length) return null;
-                                    const pt = chartData.find(d => d.date === label);
-                                    if (!pt) return null;
-                                    return (
-                                      <div style={{ background: '#1a1d24', border: `1px solid ${chartColor}50`, borderRadius: 12, padding: '10px 14px', minWidth: 160 }}>
-                                        <p style={{ color: 'var(--text-muted)', fontSize: 10, marginBottom: 6 }}>{formatStoredDate(label, 'EEE, MMM d yyyy')}</p>
-                                        <p style={{ fontWeight: 800, color: chartColor, fontSize: 15 }}>
-                                          {fmtWt(pt.max)} <span style={{ fontWeight: 500, fontSize: 11, color: 'var(--text-muted)' }}>{displayUnit} top set</span>
-                                        </p>
-                                        {pt.range > 0 && (
-                                          <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 3 }}>
-                                            Range: {fmtWt(pt.min)} – {fmtWt(pt.max)} {displayUnit}
-                                          </p>
-                                        )}
-                                        <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 3 }}>
-                                          Volume: {Math.round(pt.volume).toLocaleString()} {displayUnit}
-                                        </p>
-                                        {pt.isPR && (
-                                          <p style={{ color: '#FFD700', fontSize: 10, fontWeight: 700, marginTop: 5 }}>🏆 New Personal Record</p>
-                                        )}
-                                      </div>
-                                    );
-                                  }}
-                                />
-                                {/* Band: min to max range */}
-                                <Area type="monotoneX" dataKey="min" stackId="band" fill="transparent" stroke="none" dot={false} legendType="none" isAnimationActive={false} />
-                                <Area type="monotoneX" dataKey="range" stackId="band" fill="url(#bandGrad)" stroke="none" dot={false} legendType="none" isAnimationActive={false} />
-                                {/* Dashed trend line */}
-                                <Line
-                                  type="linear"
-                                  dataKey="wTrend"
-                                  stroke={`${chartColor}70`}
-                                  strokeWidth={1.5}
-                                  strokeDasharray="5 4"
-                                  dot={false}
-                                  activeDot={false}
-                                  isAnimationActive={false}
-                                />
-                                {/* Top-set line with custom PR dots */}
-                                <Line
-                                  type="monotoneX"
-                                  dataKey="max"
-                                  stroke={chartColor}
-                                  strokeWidth={2.5}
-                                  activeDot={{ r: 6, fill: chartColor, stroke: '#111419', strokeWidth: 2 }}
-                                  dot={(props: any) => {
-                                    const { cx, cy, payload } = props;
-                                    if (payload.isPR) {
-                                      return (
-                                        <g key={`pr-${payload.date}`}>
-                                          <circle cx={cx} cy={cy} r={7} fill="#FFD700" opacity={0.18} />
-                                          <circle cx={cx} cy={cy} r={4} fill="#FFD700" stroke="#111419" strokeWidth={1.5} />
-                                          <text x={cx} y={cy - 11} textAnchor="middle" fill="#FFD700" fontSize={8} fontWeight={800}>PR</text>
-                                        </g>
-                                      );
-                                    }
-                                    return <circle key={`dot-${payload.date}`} cx={cx} cy={cy} r={3} fill={chartColor} />;
-                                  }}
-                                />
-                              </ComposedChart>
-                            </ResponsiveContainer>
-                          </div>
-                        )}
-
-                        {/* ── Volume bar chart ── */}
-                        {!isWeight && (
-                          <div className="h-52">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <ComposedChart data={chartData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-                                <defs>
-                                  <linearGradient id="volBarGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor={chartColor} stopOpacity={0.9} />
-                                    <stop offset="100%" stopColor={chartColor} stopOpacity={0.3} />
-                                  </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                                <XAxis
-                                  dataKey="date"
-                                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
-                                  axisLine={false} tickLine={false}
-                                  tickFormatter={(v) => formatStoredDate(v, 'MMM d')}
-                                  interval="preserveStartEnd"
-                                />
-                                <YAxis
-                                  domain={[0, vMax * 1.15]}
-                                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
-                                  axisLine={false} tickLine={false}
-                                  width={40}
-                                  tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v))}
-                                />
-                                <Tooltip
-                                  content={({ active, payload, label }) => {
-                                    if (!active || !payload?.length) return null;
-                                    const pt = chartData.find(d => d.date === label);
-                                    if (!pt) return null;
-                                    const idx = chartData.indexOf(pt);
-                                    const prev = idx > 0 ? chartData[idx - 1] : null;
-                                    const delta = prev ? pt.volume - prev.volume : 0;
-                                    const dColor = delta > 0 ? palette.green : delta < 0 ? palette.red : 'var(--text-muted)';
-                                    return (
-                                      <div style={{ background: '#1a1d24', border: `1px solid ${chartColor}50`, borderRadius: 12, padding: '10px 14px', minWidth: 160 }}>
-                                        <p style={{ color: 'var(--text-muted)', fontSize: 10, marginBottom: 6 }}>{formatStoredDate(label, 'EEE, MMM d yyyy')}</p>
-                                        <p style={{ fontWeight: 800, color: chartColor, fontSize: 15 }}>
-                                          {Math.round(pt.volume).toLocaleString()} <span style={{ fontWeight: 500, fontSize: 11, color: 'var(--text-muted)' }}>{displayUnit}</span>
-                                        </p>
-                                        {prev && (
-                                          <p style={{ color: dColor, fontSize: 11, marginTop: 3, fontWeight: 600 }}>
-                                            {delta > 0 ? '▲' : delta < 0 ? '▼' : '—'} {Math.abs(Math.round(delta)).toLocaleString()} vs prev
-                                          </p>
-                                        )}
-                                      </div>
-                                    );
-                                  }}
-                                />
-                                <Bar dataKey="volume" radius={[4, 4, 0, 0]} maxBarSize={32}>
-                                  {chartData.map((entry, idx) => {
-                                    const prev = idx > 0 ? chartData[idx - 1] : null;
-                                    const up = !prev || entry.volume >= prev.volume;
-                                    return <Cell key={entry.date} fill={up ? `${chartColor}CC` : `${palette.red}CC`} />;
-                                  })}
-                                </Bar>
-                                {/* Volume trend line */}
-                                <Line
-                                  type="linear"
-                                  dataKey="vTrend"
-                                  stroke={`${chartColor}80`}
-                                  strokeWidth={1.5}
-                                  strokeDasharray="5 4"
-                                  dot={false}
-                                  activeDot={false}
-                                  isAnimationActive={false}
-                                />
-                              </ComposedChart>
-                            </ResponsiveContainer>
-                          </div>
-                        )}
-
-                        {/* ── Volume mode legend ── */}
-                        {!isWeight && (
-                          <div className="flex items-center gap-4 mt-3 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                            <span className="flex items-center gap-1.5">
-                              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: `${chartColor}CC` }} />
-                              Volume up
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: `${palette.red}CC` }} />
-                              Volume down
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                              <span className="inline-block w-5 h-px border-t-2 border-dashed" style={{ borderColor: `${chartColor}70` }} />
-                              Trend
-                            </span>
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
+                {/* Action buttons */}
+                <div className="flex gap-2.5">
+                  <button
+                    onClick={() => navigate('/food/scan')}
+                    className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[14px] font-bold text-black active:scale-[0.97] transition-all"
+                    style={{ background: '#C8FF00', boxShadow: '0 4px 20px rgba(200,255,0,0.25)' }}
+                  >
+                    <Camera className="w-4 h-4" /> Scan Meal
+                  </button>
+                  <button
+                    onClick={() => navigate('/food/history')}
+                    className="flex items-center justify-center px-5 py-3.5 rounded-2xl active:scale-[0.97] transition-all"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)' }}
+                    title="View history"
+                  >
+                    <History className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
-            );
-          })()}
+
+              {/* Recent scans */}
+              <div className="rounded-2xl border border-white/8 bg-[linear-gradient(160deg,#16191F_0%,#111419_100%)] overflow-hidden">
+                <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: 'rgba(255,255,255,0.3)' }}>Recent Scans</p>
+                  <button onClick={() => navigate('/food/history')} className="text-[11px] font-bold" style={{ color: '#C8FF00' }}>View all</button>
+                </div>
+
+                {foodLoading ? (
+                  <div>
+                    {[0, 1, 2].map(i => (
+                      <div key={i} className="flex items-center gap-3 px-5 py-4 border-t border-white/5">
+                        <div className="w-12 h-12 rounded-xl animate-pulse flex-shrink-0" style={{ background: 'rgba(255,255,255,0.06)' }} />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 rounded animate-pulse w-2/3" style={{ background: 'rgba(255,255,255,0.06)' }} />
+                          <div className="h-2.5 rounded animate-pulse w-1/3" style={{ background: 'rgba(255,255,255,0.04)' }} />
+                        </div>
+                        <div className="h-5 w-12 rounded animate-pulse" style={{ background: 'rgba(255,255,255,0.06)' }} />
+                      </div>
+                    ))}
+                  </div>
+                ) : recentScans.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-3 py-10 px-5 text-center">
+                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.15)' }}>
+                      <Utensils className="w-6 h-6" style={{ color: 'rgba(200,255,0,0.6)' }} />
+                    </div>
+                    <p className="text-[14px] font-bold" style={{ color: '#fff' }}>No scans yet</p>
+                    <p className="text-[12px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                      Scan your first meal to start tracking calories and macros.
+                    </p>
+                    <button
+                      onClick={() => navigate('/food/scan')}
+                      className="mt-1 flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[13px] font-bold text-black active:scale-95 transition-all"
+                      style={{ background: '#C8FF00' }}
+                    >
+                      <Camera className="w-4 h-4" /> Scan your first meal
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    {recentScans.map((scan, idx) => {
+                      const foods = (scan.foods_detected as any[]) ?? [];
+                      const names = foods.map((f: any) => f.name).filter(Boolean).join(', ') || 'Unknown food';
+                      const date = new Date(scan.scan_date);
+                      const isToday = date.toDateString() === new Date().toDateString();
+                      const dateLabel = isToday ? `Today ${format(date, 'h:mm a')}` : format(date, 'MMM d, h:mm a');
+                      return (
+                        <button
+                          key={scan.id}
+                          onClick={() => navigate('/food/history')}
+                          className="w-full flex items-center gap-3 px-5 py-4 border-t border-white/5 text-left active:bg-white/5 transition-colors"
+                          style={{ borderTopColor: idx === 0 ? 'rgba(255,255,255,0.05)' : undefined }}
+                        >
+                          {scan.thumbnail_url ? (
+                            <img src={scan.thumbnail_url} alt="" className="w-12 h-12 rounded-xl object-cover flex-shrink-0" style={{ border: '1px solid rgba(255,255,255,0.08)' }} />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center" style={{ background: 'rgba(200,255,0,0.06)', border: '1px solid rgba(200,255,0,0.12)' }}>
+                              <Utensils className="w-5 h-5" style={{ color: 'rgba(200,255,0,0.4)' }} />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-semibold truncate" style={{ color: '#fff' }}>{names}</p>
+                            <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>{dateLabel}</p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-[16px] font-black tabular-nums leading-none" style={{ color: '#C8FF00' }}>{scan.total_calories}</p>
+                            <p className="text-[9px] font-bold uppercase tracking-wider mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>kcal</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {/* ════════════════════════════════════════════════
               PERSONAL RECORDS

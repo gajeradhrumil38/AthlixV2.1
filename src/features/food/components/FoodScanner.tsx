@@ -5,7 +5,7 @@ import {
   compressImage,
   makeThumbnail,
   uploadFoodImage,
-  recognizeFood,
+  recognizeFoodWithGemini,
   calcTotals,
 } from '../../../services/foodRecognition.service';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -131,9 +131,9 @@ export const FoodScanner: React.FC<Props> = ({ onScanComplete }) => {
         uploadFoodImage(user.id, thumb, '_thumb'),
       ]);
 
-      // 3. Call FatSecret recognize
+      // 3. Identify foods via Gemini Vision → FatSecret nutrition lookup
       setStep('recognizing');
-      const foods = await recognizeFood(imageUrl);
+      const foods = await recognizeFoodWithGemini(capturedFile);
 
       // 4. Aggregate totals
       setStep('calculating');

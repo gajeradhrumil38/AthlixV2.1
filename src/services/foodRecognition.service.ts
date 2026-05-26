@@ -173,11 +173,100 @@ function parseDescription(desc: string): Pick<DetectedFood, 'calories' | 'protei
   };
 }
 
+// ─── Gemini Vision helpers ─────────────────────────────────────────────────
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = () => reject(new Error('Failed to read image file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function extractJsonFromText(text: string): unknown {
+  // Strip markdown code fences if Gemini wraps the output
+  const stripped = text.replace(/```(?:json)?\n?/gi, '').trim();
+  return JSON.parse(stripped);
+}
+
 // ─── Public API ────────────────────────────────────────────────────────────
 
 /**
- * Recognize foods in an already-uploaded image URL.
- * Requires FatSecret Premier plan — falls back to empty array on 403/not-available errors.
+ * Identify foods using Gemini Vision, then look up nutrition via FatSecret foods.search.
+ * Reads the API key from localStorage('athlix:gemini_api_key') — set via Settings → AI Chat.
+ */
+export async function recognizeFoodWithGemini(imageFile: File): Promise<DetectedFood[]> {
+  const apiKey = localStorage.getItem('athlix:gemini_api_key');
+  if (!apiKey) throw new Error('Gemini API key not set. Add it in Settings → AI Chat.');
+
+  const model = localStorage.getItem('athlix:gemini_model') || 'gemini-1.5-flash';
+  const base64Data = await fileToBase64(imageFile);
+  const mimeType = imageFile.type || 'image/jpeg';
+
+  const prompt =
+    'Identify every distinct food item visible in this image. ' +
+    'Return ONLY a JSON array, no extra text:\n' +
+    '[{"name":"<specific food name>","servings":<number>,"portionNote":"<brief size>"}]\n' +
+    'Guidelines:\n' +
+    '- name: specific enough for a nutrition DB search (e.g. "grilled chicken breast" not "chicken")\n' +
+    '- servings: decimal estimate (0.5, 1, 1.5, 2 …)\n' +
+    '- portionNote: e.g. "medium fillet", "1 cup cooked", "2 slices"\n' +
+    'Return [] if no food is visible.';
+
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [
+          { inline_data: { mime_type: mimeType, data: base64Data } },
+          { text: prompt },
+        ] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+      }),
+    },
+  );
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => resp.statusText);
+    throw new Error(`Gemini: ${errText}`);
+  }
+
+  const json = await resp.json();
+  const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+
+  let items: Array<{ name: string; servings: number; portionNote?: string }> = [];
+  try {
+    const parsed = extractJsonFromText(text);
+    if (Array.isArray(parsed)) items = parsed;
+  } catch { /* unparseable → treat as no foods */ }
+
+  if (items.length === 0) return [];
+
+  // Look up nutrition for each identified food via FatSecret free search
+  const results = await Promise.all(
+    items.map(async (item) => {
+      try {
+        const matches = await searchFood(item.name);
+        if (matches.length === 0) return null;
+        const food: DetectedFood = { ...matches[0] };
+        food.servings = Math.max(0.5, Math.round((item.servings ?? 1) * 2) / 2);
+        if (item.portionNote) food.servingSize = item.portionNote;
+        return food;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return results.filter((r): r is DetectedFood => r !== null);
+}
+
+/**
+ * Recognize foods in an already-uploaded image URL via FatSecret.
+ * Requires FatSecret Premier plan — kept for reference but not used by the scanner.
  */
 export async function recognizeFood(imageUrl: string): Promise<DetectedFood[]> {
   const raw = await invoke<FatSecretRecognizeResponse>({ action: 'recognize', imageUrl });
