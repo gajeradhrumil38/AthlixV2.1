@@ -185,16 +185,21 @@ const BreathPacer: React.FC = () => {
   const animating = phase.k === 'in' || phase.k === 'out';
 
   return (
-    <div className="flex flex-col items-center justify-center" style={{ padding: '20px 0 10px' }}>
+    <div className="flex flex-col items-center justify-center" style={{ padding: '16px 0 10px' }}>
+      {/* Phase label — fixed above the circle so it never overlaps */}
+      <p className="text-[11px] font-bold uppercase tracking-[0.22em] mb-3" style={{ color: '#C8FF00', minHeight: 16 }}>
+        {phase.label}
+      </p>
+
       <div className="relative flex items-center justify-center"
         style={{ width: 200, height: 200 }}>
         {/* Outer glow */}
         <div className="absolute inset-0 rounded-full"
           style={{ background: 'radial-gradient(closest-side, rgba(200,255,0,0.05), rgba(200,255,0,0) 70%)' }} />
-        {/* Dashed ring */}
+        {/* Dashed outer ring */}
         <div className="absolute rounded-full"
           style={{ inset: 10, border: '1px dashed rgba(200,255,0,0.22)' }} />
-        {/* Breathing ring */}
+        {/* Breathing ring — scales in/out */}
         <div className="absolute rounded-full"
           style={{
             inset: 32,
@@ -205,17 +210,14 @@ const BreathPacer: React.FC = () => {
             transform: `scale(${phase.scale})`,
             transition: animating ? 'transform 4s cubic-bezier(.4,0,.2,1)' : 'transform 0s',
           }} />
-        {/* Center text */}
-        <div className="relative z-10 text-center">
-          <p className="text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color: '#C8FF00' }}>
-            {phase.label}
-          </p>
-          <p className="text-[52px] font-black leading-none tabular-nums mt-1" style={{ color: '#fff' }}>
-            {count}
-          </p>
-        </div>
+        {/* Count — centered, always inside circle */}
+        <p className="relative z-10 tabular-nums font-black leading-none"
+          style={{ fontSize: 64, color: '#C8FF00', letterSpacing: '-0.04em', textShadow: '0 0 32px rgba(200,255,0,0.5)' }}>
+          {count}
+        </p>
       </div>
-      <p className="text-[10px] uppercase tracking-[0.16em] mt-3" style={{ color: 'rgba(255,255,255,0.3)' }}>
+
+      <p className="text-[10px] uppercase tracking-[0.16em] mt-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
         cycle {cycle} · 4-4-4-4 box breath
       </p>
     </div>
