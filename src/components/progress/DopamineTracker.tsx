@@ -20,11 +20,11 @@ const TRIGGER_OPTIONS = ['Stress', 'Boredom', 'Loneliness', 'Fatigue', 'Social m
 const HELPED_OPTIONS  = ['Exercise', 'Cold shower', 'Deep breathing', 'Meditation', 'Journaling', 'Called someone', 'Left the space', 'Distraction'];
 const URGE_LABELS     = ['', 'Very Low', 'Low', 'Medium', 'High', 'Very High'];
 
-const SOS_TIPS = [
-  { icon: Wind,     label: 'Box Breathing',    desc: 'Inhale 4s · Hold 4s · Exhale 4s · Hold 4s. Repeat 4×. This activates the parasympathetic system and breaks the urge cycle.' },
-  { icon: Droplets, label: 'Cold Water',        desc: 'Splash cold water on your face or take a 2-min cold shower. Resets the nervous system and kills the urge fast.' },
-  { icon: Zap,      label: 'Move Your Body',    desc: '20 push-ups or a 10-minute brisk walk. Physical movement redirects dopamine to the prefrontal cortex — your rational brain.' },
-  { icon: Target,   label: 'Remember Your Why', desc: 'Every urge is just a wave — it peaks in 15–20 minutes and then passes. You don\'t have to act on it.' },
+const PHASE_SEQ = [
+  { k: 'in',    label: 'Breathe in',  dur: 4, scale: 1.0  },
+  { k: 'hold1', label: 'Hold',        dur: 4, scale: 1.0  },
+  { k: 'out',   label: 'Breathe out', dur: 4, scale: 0.55 },
+  { k: 'hold2', label: 'Hold',        dur: 4, scale: 0.55 },
 ];
 
 const BENEFITS_TIMELINE = [
@@ -47,6 +47,9 @@ const COACH_MESSAGES: { days: number; msg: string }[] = [
   { days: 90, msg: "90 days. This isn't a streak anymore — it's just who you are now." },
 ];
 
+const DOW_LABELS_MON = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const DOW_FULL_MON   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
 function getCoachMessage(streak: number): string {
   return [...COACH_MESSAGES].reverse().find((m) => streak >= m.days)?.msg
     ?? "Every day clean is a win. You're building something real — don't stop now.";
@@ -58,6 +61,20 @@ const getEntryColor = (entry: DopamineEntry | undefined) => {
   if (!entry) return EMPTY_COLOR;
   if (entry.status === 'relapse') return RELAPSE_COLOR;
   return SUCCESS_COLORS[Math.max(1, Math.min(5, entry.urge))] ?? '#C8FF00';
+};
+
+const computeMomentumPts = (entries: DopamineEntry[]): number[] => {
+  const entryMap = new Map(entries.map((e) => [e.date, e]));
+  const pts: number[] = [];
+  let streak = 0;
+  for (let i = 89; i >= 0; i--) {
+    const d = format(subDays(new Date(), i), 'yyyy-MM-dd');
+    const e = entryMap.get(d);
+    if (!e || e.status === 'relapse') { streak = 0; }
+    else { streak++; }
+    pts.push(streak);
+  }
+  return pts;
 };
 
 const computeStats = (entries: DopamineEntry[]) => {
@@ -89,7 +106,6 @@ const computeStats = (entries: DopamineEntry[]) => {
     ? (successes.reduce((s, e) => s + e.urge, 0) / successes.length).toFixed(1)
     : null;
 
-  // Pattern: top trigger + top helper
   const allTriggers = entries.flatMap((e) => e.triggers ?? []);
   const triggerFreq: Record<string, number> = {};
   allTriggers.forEach((t) => { triggerFreq[t] = (triggerFreq[t] ?? 0) + 1; });
@@ -100,7 +116,6 @@ const computeStats = (entries: DopamineEntry[]) => {
   allHelped.forEach((h) => { helpedFreq[h] = (helpedFreq[h] ?? 0) + 1; });
   const topHelper = Object.entries(helpedFreq).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 
-  // Day-of-week pattern (0=Sun…6=Sat) with most relapses
   const relapseDayCount: Record<number, number> = {};
   entries.filter((e) => e.status === 'relapse').forEach((e) => {
     const dow = parseISO(e.date).getDay();
@@ -110,7 +125,30 @@ const computeStats = (entries: DopamineEntry[]) => {
   const DOW_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const hardestDay = hardestDow ? DOW_NAMES[Number(hardestDow[0])] : null;
 
-  return { current, best, successRate, avgUrge, topTrigger, topHelper, hardestDay };
+  // Total clean days
+  const totalClean = entries.filter((e) => e.status === 'success').length;
+
+  // Day-of-week success % over last 60 days (Mon=0 … Sun=6)
+  const cutoff60 = format(subDays(new Date(), 59), 'yyyy-MM-dd');
+  const last60 = entries.filter((e) => e.date >= cutoff60);
+  const dowTotal   = Array(7).fill(0) as number[];
+  const dowSuccess = Array(7).fill(0) as number[];
+  last60.forEach((e) => {
+    const jsDow = parseISO(e.date).getDay(); // 0=Sun
+    const idx = jsDow === 0 ? 6 : jsDow - 1; // Mon=0..Sun=6
+    dowTotal[idx]++;
+    if (e.status === 'success') dowSuccess[idx]++;
+  });
+  const dowPct = dowTotal.map((t, i) => t > 0 ? Math.round((dowSuccess[i] / t) * 100) : 0);
+
+  // Hardest dow by lowest success rate (among days with data)
+  let hardestDowIdx = 0;
+  let minRate = 101;
+  dowTotal.forEach((t, i) => {
+    if (t > 0 && dowPct[i] < minRate) { minRate = dowPct[i]; hardestDowIdx = i; }
+  });
+
+  return { current, best, successRate, avgUrge, topTrigger, topHelper, hardestDay, totalClean, dowPct, hardestDowIdx };
 };
 
 const getMilestone = (streak: number) => {
@@ -119,6 +157,276 @@ const getMilestone = (streak: number) => {
 
 const getNextMilestone = (streak: number) => {
   return BENEFITS_TIMELINE.find((b) => streak < b.days) ?? null;
+};
+
+// ─── SOS Sub-components ───────────────────────────────────────────────────────
+
+const BreathPacer: React.FC = () => {
+  const [phaseIdx, setPhaseIdx] = useState(0);
+  const [count, setCount] = useState(4);
+  const [cycle, setCycle] = useState(1);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCount((c) => {
+        if (c > 1) return c - 1;
+        setPhaseIdx((prev) => {
+          const next = (prev + 1) % PHASE_SEQ.length;
+          if (next === 0) setCycle((cy) => cy + 1);
+          return next;
+        });
+        return 4;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const phase = PHASE_SEQ[phaseIdx];
+  const animating = phase.k === 'in' || phase.k === 'out';
+
+  return (
+    <div className="flex flex-col items-center justify-center" style={{ padding: '20px 0 10px' }}>
+      <div className="relative flex items-center justify-center"
+        style={{ width: 200, height: 200 }}>
+        {/* Outer glow */}
+        <div className="absolute inset-0 rounded-full"
+          style={{ background: 'radial-gradient(closest-side, rgba(200,255,0,0.05), rgba(200,255,0,0) 70%)' }} />
+        {/* Dashed ring */}
+        <div className="absolute rounded-full"
+          style={{ inset: 10, border: '1px dashed rgba(200,255,0,0.22)' }} />
+        {/* Breathing ring */}
+        <div className="absolute rounded-full"
+          style={{
+            inset: 32,
+            background: 'radial-gradient(circle at 35% 30%, rgba(200,255,0,0.28), rgba(200,255,0,0.06) 60%, rgba(200,255,0,0) 80%)',
+            border: '1px solid rgba(200,255,0,0.45)',
+            boxShadow: '0 0 40px rgba(200,255,0,0.18) inset, 0 0 60px rgba(200,255,0,0.12)',
+            transformOrigin: 'center',
+            transform: `scale(${phase.scale})`,
+            transition: animating ? 'transform 4s cubic-bezier(.4,0,.2,1)' : 'transform 0s',
+          }} />
+        {/* Center text */}
+        <div className="relative z-10 text-center">
+          <p className="text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color: '#C8FF00' }}>
+            {phase.label}
+          </p>
+          <p className="text-[52px] font-black leading-none tabular-nums mt-1" style={{ color: '#fff' }}>
+            {count}
+          </p>
+        </div>
+      </div>
+      <p className="text-[10px] uppercase tracking-[0.16em] mt-3" style={{ color: 'rgba(255,255,255,0.3)' }}>
+        cycle {cycle} · 4-4-4-4 box breath
+      </p>
+    </div>
+  );
+};
+
+const UrgeWave: React.FC = () => {
+  const W = 320, H = 50;
+  const pts: string[] = [];
+  for (let x = 0; x <= W; x += 4) {
+    const t = (x - W / 2) / (W / 4);
+    const y = H - 6 - Math.exp(-(t * t)) * (H - 14);
+    pts.push(`${x},${y.toFixed(1)}`);
+  }
+  const path = 'M ' + pts.join(' L ');
+  const youX = W * 0.30;
+  const tYou = (youX - W / 2) / (W / 4);
+  const youY = H - 6 - Math.exp(-(tYou * tYou)) * (H - 14);
+
+  return (
+    <div className="mx-4 mt-4 rounded-2xl p-4"
+      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+      <p className="text-[9px] font-bold uppercase tracking-[0.18em] mb-1.5" style={{ color: 'rgba(255,255,255,0.3)' }}>
+        Urge curve
+      </p>
+      <p className="text-[13px] font-bold leading-snug mb-3" style={{ color: '#fff' }}>
+        This <span style={{ color: '#C8FF00' }}>peaks in ~15 min</span> then fades.
+        You don't have to act — just outlast it.
+      </p>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: 60 }}>
+        <defs>
+          <linearGradient id="wave-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#f87171" stopOpacity={0.25} />
+            <stop offset="100%" stopColor="#f87171" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <path d={`${path} L ${W},${H} L 0,${H} Z`} fill="url(#wave-fill)" />
+        <path d={path} fill="none" stroke="#f87171" strokeWidth={1.5} strokeOpacity={0.85} />
+        <line x1={W / 2} y1={H - 2} x2={W / 2} y2={6} stroke="rgba(255,255,255,0.08)" strokeDasharray="2 3" />
+        <circle cx={youX} cy={youY} r={7} fill="#C8FF00" opacity={0.18} />
+        <circle cx={youX} cy={youY} r={3.5} fill="#C8FF00" stroke="#0a0a0a" strokeWidth={1} />
+      </svg>
+      <div className="flex justify-between mt-1 text-[9px] uppercase tracking-wider"
+        style={{ color: 'rgba(255,255,255,0.3)' }}>
+        <span style={{ color: '#C8FF00' }}>You are here</span>
+        <span>Peak ~15 min</span>
+        <span>Fades ~25 min</span>
+      </div>
+    </div>
+  );
+};
+
+const AnchorWidget: React.FC<{ currentStreak: number }> = ({ currentStreak }) => (
+  <div className="mx-4 mt-3 rounded-2xl p-4"
+    style={{ background: 'linear-gradient(180deg, rgba(200,255,0,0.06) 0%, rgba(200,255,0,0) 100%)', border: '1px solid rgba(200,255,0,0.22)' }}>
+    <p className="text-[9px] font-bold uppercase tracking-[0.2em] mb-2" style={{ color: 'rgba(200,255,0,0.65)' }}>
+      Who you are now
+    </p>
+    <p className="text-[15px] font-bold leading-snug" style={{ color: '#fff' }}>
+      You're <span style={{ color: '#C8FF00' }}>{currentStreak} day{currentStreak !== 1 ? 's' : ''}</span> into a reset.
+      You're someone who breathes through urges, not someone who acts on them.
+    </p>
+    <div className="grid grid-cols-2 gap-2 mt-3">
+      <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <p className="text-[9px] uppercase tracking-wider mb-1.5" style={{ color: 'rgba(255,255,255,0.3)' }}>If you act</p>
+        <p className="text-[20px] font-black leading-none" style={{ color: '#f87171' }}>→ Day 0</p>
+        <p className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Streak resets. {currentStreak > 0 ? `Day ${currentStreak} lost.` : ''}</p>
+      </div>
+      <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <p className="text-[9px] uppercase tracking-wider mb-1.5" style={{ color: 'rgba(255,255,255,0.3)' }}>To rebuild</p>
+        <p className="text-[20px] font-black leading-none tabular-nums" style={{ color: '#fff' }}>~{currentStreak}d</p>
+        <p className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Of work to recover what you have.</p>
+      </div>
+    </div>
+  </div>
+);
+
+const SOS_ACTIONS = [
+  { icon: Droplets, t: 'Splash cold water on your face', s: '2 minutes. Resets your nervous system fast.' },
+  { icon: Zap,      t: '20 push-ups or a brisk walk',   s: 'Redirects dopamine to your prefrontal cortex.' },
+  { icon: Wind,     t: 'Leave the room',                s: 'Change your environment. Break the cue chain.' },
+  { icon: Heart,    t: 'Text someone who knows',         s: 'One message. Accountability is your shortcut out.' },
+];
+
+const ActionsWidget: React.FC = () => (
+  <div className="mx-4 mt-3 space-y-2">
+    <p className="text-[12px] font-bold mb-2" style={{ color: 'rgba(255,255,255,0.5)' }}>
+      If it's still here — do one thing
+    </p>
+    {SOS_ACTIONS.map(({ icon: Icon, t, s }) => (
+      <div key={t} className="flex items-start gap-3 rounded-xl p-3"
+        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: 'rgba(255,255,255,0.07)' }}>
+          <Icon className="w-4 h-4" style={{ color: '#C8FF00' }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-bold" style={{ color: '#fff' }}>{t}</p>
+          <p className="text-[11px] mt-0.5 leading-snug" style={{ color: 'rgba(255,255,255,0.45)' }}>{s}</p>
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+// ─── Minimap Sub-components ───────────────────────────────────────────────────
+
+const MomentumLine: React.FC<{ pts: number[] }> = ({ pts }) => {
+  const W = 320, H = 64;
+  const max = Math.max(...pts, 1);
+  const stepX = W / (pts.length - 1);
+  const ys = pts.map((v) => H - (v / max) * (H - 8) - 4);
+  const xs = pts.map((_, i) => i * stepX);
+  const linePath = xs.map((x, i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+  const fillPath = `${linePath} L${W},${H} L0,${H} Z`;
+  const lastX = xs[xs.length - 1];
+  const lastY = ys[ys.length - 1];
+  const dips: number[] = [];
+  for (let i = 1; i < pts.length; i++) if (pts[i] < pts[i - 1]) dips.push(i);
+  const currentStreak = pts[pts.length - 1];
+
+  return (
+    <div className="px-4 pb-1 pt-1">
+      <div className="rounded-xl overflow-hidden" style={{ background: 'radial-gradient(120% 80% at 90% 100%, rgba(200,255,0,0.05), transparent 60%)', padding: '12px 4px 6px' }}>
+        <div className="flex items-baseline justify-between px-2 mb-2">
+          <span className="text-[9px] font-bold uppercase tracking-[0.16em]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            Momentum · last 90 days
+          </span>
+          <span className="text-[11px] font-bold" style={{ color: '#C8FF00' }}>
+            ▲ {currentStreak} consecutive
+          </span>
+        </div>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: 64 }}>
+          <defs>
+            <linearGradient id="mom-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor="#C8FF00" stopOpacity={0.35} />
+              <stop offset="100%" stopColor="#C8FF00" stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="mom-line" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%"   stopColor="#5e7f00" />
+              <stop offset="100%" stopColor="#C8FF00" />
+            </linearGradient>
+          </defs>
+          <line x1={0} y1={H - 4} x2={W} y2={H - 4} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
+          <path d={fillPath} fill="url(#mom-fill)" />
+          <path d={linePath} fill="none" stroke="url(#mom-line)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+          {dips.map((i, k) => (
+            <circle key={k} cx={xs[i]} cy={ys[i]} r={2.4} fill="#f87171" stroke="#0a0a0a" strokeWidth={1} />
+          ))}
+          <circle cx={lastX} cy={lastY} r={6} fill="#C8FF00" opacity={0.18} />
+          <circle cx={lastX} cy={lastY} r={3.2} fill="#C8FF00" stroke="#0a0a0a" strokeWidth={1.2} />
+        </svg>
+      </div>
+    </div>
+  );
+};
+
+const DowBars: React.FC<{ dowPct: number[]; hardestDowIdx: number }> = ({ dowPct, hardestDowIdx }) => {
+  const maxPct = Math.max(...dowPct, 1);
+  return (
+    <div className="px-4 pt-3 pb-1" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: 8 }}>
+      <div className="flex items-baseline justify-between mb-2">
+        <span className="text-[9px] font-bold uppercase tracking-[0.16em]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+          Consistency by day · last 60d
+        </span>
+        <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,255,255,0.4)' }}>
+          Weakest: <span style={{ color: '#FAC775', fontWeight: 700 }}>
+            {DOW_FULL_MON[hardestDowIdx]}s ({dowPct[hardestDowIdx]}%)
+          </span>
+        </span>
+      </div>
+      <div className="grid gap-1.5 items-end" style={{ gridTemplateColumns: 'repeat(7,1fr)', height: 44 }}>
+        {dowPct.map((pct, i) => {
+          const isHardest = i === hardestDowIdx;
+          const h = Math.max(8, (pct / 100) * 44);
+          return (
+            <div key={i} className="relative flex items-end rounded-t-sm" style={{ height: '100%', background: 'rgba(255,255,255,0.04)', borderRadius: '4px 4px 2px 2px', overflow: 'hidden' }}>
+              <div
+                className="w-full relative"
+                style={{
+                  height: h,
+                  borderRadius: '4px 4px 2px 2px',
+                  background: isHardest
+                    ? 'linear-gradient(180deg,#FAC775 0%,#c89940 100%)'
+                    : 'linear-gradient(180deg,#C8FF00 0%,#96CC00 100%)',
+                }}>
+                <span
+                  className="absolute text-[8.5px] font-bold tabular-nums"
+                  style={{
+                    top: h < 18 ? -12 : 3,
+                    left: 0, right: 0,
+                    textAlign: 'center',
+                    color: h < 18 ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.7)',
+                  }}>
+                  {pct}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="grid mt-1.5 gap-1.5" style={{ gridTemplateColumns: 'repeat(7,1fr)' }}>
+        {DOW_LABELS_MON.map((d, i) => (
+          <span key={i} className="text-center text-[9px] font-bold"
+            style={{ color: i === hardestDowIdx ? '#FAC775' : 'rgba(255,255,255,0.25)' }}>
+            {d}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -156,8 +464,6 @@ export const DopamineTracker: React.FC = () => {
       .finally(() => setLoading(false));
   }, [user]);
 
-
-  // SOS urge surfing timer
   const startSosTimer = () => {
     setSosTimer(15 * 60);
     sosIntervalRef.current = setInterval(() => {
@@ -245,8 +551,10 @@ export const DopamineTracker: React.FC = () => {
   }, [editingDate, user]);
 
   const stats = useMemo(() => computeStats(entries), [entries]);
+  const momentumPts = useMemo(() => computeMomentumPts(entries), [entries]);
   const milestone = getMilestone(stats.current);
   const nextMilestone = getNextMilestone(stats.current);
+  const hasDowData = stats.dowPct.some((_, i) => true) && entries.length >= 5;
 
   const canGoNext = getMonth(viewMonth) !== getMonth(new Date()) || getYear(viewMonth) !== getYear(new Date());
 
@@ -277,6 +585,12 @@ export const DopamineTracker: React.FC = () => {
   const editingDateLabel = editingDate
     ? (editingDate === today ? 'Today' : format(parseISO(editingDate), 'EEE, MMM d'))
     : '';
+
+  const closeSOS = () => {
+    setShowSOS(false);
+    setSosTimer(null);
+    if (sosIntervalRef.current) clearInterval(sosIntervalRef.current);
+  };
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -332,7 +646,6 @@ export const DopamineTracker: React.FC = () => {
         {/* Goal progress */}
         {nextMilestone && (
           <div className="rounded-xl px-3.5 py-3.5 space-y-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-            {/* Goal header */}
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: 'rgba(255,255,255,0.28)' }}>Your Goal</p>
@@ -347,14 +660,12 @@ export const DopamineTracker: React.FC = () => {
                 <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.25)' }}>there</p>
               </div>
             </div>
-            {/* Progress bar */}
             <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
               <div
                 className="h-full rounded-full transition-all duration-700"
                 style={{ width: `${Math.min(100, (stats.current / nextMilestone.days) * 100)}%`, background: 'linear-gradient(90deg,#C8FF00,#96CC00)' }}
               />
             </div>
-            {/* Days count */}
             <div className="flex justify-between">
               <span className="text-[11px] font-semibold tabular-nums" style={{ color: 'rgba(255,255,255,0.4)' }}>
                 {stats.current} done
@@ -369,9 +680,9 @@ export const DopamineTracker: React.FC = () => {
         {/* Stats row */}
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: 'Best', value: `${stats.best}d`, sub: 'streak' },
-            { label: 'Rate', value: stats.successRate != null ? `${stats.successRate}%` : '—', sub: '30-day' },
-            { label: 'Avg Urge', value: stats.avgUrge ?? '—', sub: '/ 5' },
+            { label: 'Best',     value: `${stats.best}d`,                                    sub: 'streak' },
+            { label: 'Rate',     value: stats.successRate != null ? `${stats.successRate}%` : '—', sub: '30-day' },
+            { label: 'Avg Urge', value: stats.avgUrge ?? '—',                                sub: '/ 5' },
           ].map((s) => (
             <div key={s.label} className="rounded-xl p-3 text-center" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
               <p className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>{s.label}</p>
@@ -393,7 +704,7 @@ export const DopamineTracker: React.FC = () => {
         </button>
       </div>
 
-      {/* ── Pattern Insights (show only when enough data) ── */}
+      {/* ── Pattern Insights ── */}
       {entries.length >= 5 && (stats.topTrigger || stats.topHelper || stats.hardestDay) && (
         <div className="rounded-2xl p-4" style={{ background: '#16191F', border: '1px solid rgba(255,255,255,0.08)' }}>
           <div className="flex items-center gap-2 mb-3">
@@ -432,36 +743,46 @@ export const DopamineTracker: React.FC = () => {
         </div>
       )}
 
-      {/* ── Monthly Calendar ── */}
-      <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(160deg,#16191F 0%,#111419 100%)', border: '1px solid rgba(255,255,255,0.08)' }}>
+      {/* ── Minimap Card ── */}
+      <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(160deg,#16191F 0%,#111419 100%)', border: '1px solid rgba(255,255,255,0.08)' }}>
 
-        {/* Month nav header */}
-        <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={() => setViewMonth((m) => addMonths(m, -1))}
-            className="w-8 h-8 rounded-xl flex items-center justify-center active:scale-90 transition-all"
-            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
-          >
-            <ChevronLeft className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.6)' }} />
-          </button>
-
-          <div className="text-center">
-            <p className="text-[16px] font-bold" style={{ color: '#fff' }}>{format(viewMonth, 'MMMM yyyy')}</p>
-            <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.25)' }}>Tap any day to log</p>
+        {/* Minimap header + month nav */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+          <div>
+            <span className="text-[14px] font-bold" style={{ color: '#fff', letterSpacing: '-0.01em' }}>
+              Minimap{' '}
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em] ml-1" style={{ color: 'rgba(255,255,255,0.3)' }}>
+              your reset
+            </span>
           </div>
-
-          <button
-            onClick={() => canGoNext && setViewMonth((m) => addMonths(m, 1))}
-            disabled={!canGoNext}
-            className="w-8 h-8 rounded-xl flex items-center justify-center active:scale-90 transition-all disabled:opacity-20"
-            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
-          >
-            <ChevronRight className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.6)' }} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setViewMonth((m) => addMonths(m, -1))}
+              className="w-7 h-7 rounded-lg flex items-center justify-center active:scale-90 transition-all"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              <ChevronLeft className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.6)' }} />
+            </button>
+            <span className="text-[12px] font-bold px-2" style={{ color: '#fff', letterSpacing: '-0.01em' }}>
+              {format(viewMonth, 'MMMM yyyy')}
+            </span>
+            <button
+              onClick={() => canGoNext && setViewMonth((m) => addMonths(m, 1))}
+              disabled={!canGoNext}
+              className="w-7 h-7 rounded-lg flex items-center justify-center active:scale-90 transition-all disabled:opacity-20"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              <ChevronRight className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.6)' }} />
+            </button>
+          </div>
         </div>
 
+        {/* Momentum line chart */}
+        {!loading && entries.length > 0 && <MomentumLine pts={momentumPts} />}
+
         {/* Day-of-week column headers */}
-        <div className="grid grid-cols-7 mb-1.5">
+        <div className="grid grid-cols-7 px-4 mb-1.5 mt-2">
           {DAY_LABELS.map((d, i) => (
             <div key={i} className="text-center text-[10px] font-bold uppercase tracking-wider py-1"
               style={{ color: i >= 5 ? 'rgba(250,199,117,0.5)' : 'rgba(255,255,255,0.25)' }}>
@@ -470,22 +791,22 @@ export const DopamineTracker: React.FC = () => {
           ))}
         </div>
 
-        {/* Calendar grid — square rounded cells */}
+        {/* Calendar grid */}
         {loading ? (
-          <div className="grid grid-cols-7 gap-1.5">
+          <div className="grid grid-cols-7 gap-1.5 px-4">
             {Array.from({ length: 35 }).map((_, i) => (
               <div key={i} className="rounded-xl animate-pulse" style={{ aspectRatio: '1', background: 'rgba(255,255,255,0.04)' }} />
             ))}
           </div>
         ) : (
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 px-4">
             {weeks.map((week, wi) => (
               <div key={wi} className="grid grid-cols-7 gap-1.5">
                 {week.map((cell, di) => {
                   const isClickable = !cell.isFuture && cell.inMonth;
                   const isWeekend = di >= 5;
                   const bg = cell.entry ? getEntryColor(cell.entry)
-                    : isWeekend ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.05)';
+                    : isWeekend ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.035)';
 
                   return (
                     <motion.button
@@ -503,17 +824,19 @@ export const DopamineTracker: React.FC = () => {
                         border: cell.isToday
                           ? `2px solid ${TODAY_BORDER}`
                           : !cell.inMonth ? 'none'
-                          : cell.entry ? '1px solid rgba(255,255,255,0.05)'
+                          : cell.entry ? '1px solid rgba(0,0,0,0.2)'
                           : '1px dashed rgba(255,255,255,0.1)',
                         opacity: !cell.inMonth ? 0.15 : cell.isFuture ? 0.3 : 1,
                         cursor: isClickable ? 'pointer' : 'default',
                       }}
                     >
                       <span
-                        className="text-[12px] font-semibold leading-none select-none"
+                        className="text-[10.5px] font-bold leading-none select-none tabular-nums"
                         style={{
                           color: cell.entry
-                            ? (cell.entry.status === 'success' ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.75)')
+                            ? (cell.isToday && (cell.entry.status === 'success' || cell.entry.status === 'relapse')
+                              ? 'rgba(0,0,0,0.85)'
+                              : cell.entry.status === 'success' ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.75)')
                             : cell.isToday ? TODAY_BORDER
                             : cell.inMonth ? 'rgba(255,255,255,0.4)'
                             : 'rgba(255,255,255,0.2)',
@@ -529,18 +852,51 @@ export const DopamineTracker: React.FC = () => {
           </div>
         )}
 
-        {/* Legend */}
-        <div className="flex items-center justify-center gap-3 mt-4">
+        {/* Day-of-week bars */}
+        {!loading && hasDowData && (
+          <DowBars dowPct={stats.dowPct} hardestDowIdx={stats.hardestDowIdx} />
+        )}
+
+        {/* Stat strip — 4 stats */}
+        <div className="grid grid-cols-4 mt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           {[
-            { c: 'rgba(255,255,255,0.05)', border: true,  label: 'Empty' },
-            { c: SUCCESS_COLORS[1], border: false, label: 'Strong' },
-            { c: RELAPSE_COLOR,    border: false, label: 'Struggle' },
-          ].map(({ c, border, label }) => (
-            <div key={label} className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-[4px]" style={{ background: c, border: border ? '1px dashed rgba(255,255,255,0.15)' : 'none' }} />
-              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>{label}</span>
+            { lb: 'Now',   vv: `${stats.current}`, unit: 'd', sub: 'streak', lime: true },
+            { lb: 'Best',  vv: `${stats.best}`,    unit: 'd', sub: 'ever',   lime: false },
+            { lb: 'Rate',  vv: stats.successRate != null ? `${stats.successRate}` : '—', unit: stats.successRate != null ? '%' : '', sub: '30 day', lime: false },
+            { lb: 'Clean', vv: `${stats.totalClean}`, unit: '',  sub: 'total',  gold: true },
+          ].map((s, i, arr) => (
+            <div key={s.lb} className="text-center py-3"
+              style={{ borderRight: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] mb-1.5" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                {s.lb}
+              </p>
+              <p className="text-[18px] font-black leading-none tabular-nums"
+                style={{ color: (s as any).lime ? '#C8FF00' : (s as any).gold ? '#FAC775' : '#fff', letterSpacing: '-0.03em' }}>
+                {s.vv}<small className="text-[10px] font-semibold ml-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>{s.unit}</small>
+              </p>
+              <p className="text-[9px] mt-1 uppercase tracking-[0.06em]" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                {s.sub}
+              </p>
             </div>
           ))}
+        </div>
+
+        {/* Legend — full urge scale */}
+        <div className="flex items-center justify-center gap-3 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-[3px]" style={{ background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.15)' }} />
+            <span className="text-[9.5px]" style={{ color: 'rgba(255,255,255,0.3)' }}>Empty</span>
+          </div>
+          <div className="flex items-center gap-1">
+            {SUCCESS_COLORS.slice(1).map((c, i) => (
+              <div key={i} className="w-2.5 h-2.5 rounded-[3px]" style={{ background: c }} />
+            ))}
+            <span className="text-[9.5px] ml-1" style={{ color: 'rgba(255,255,255,0.3)' }}>Strong (easier→harder)</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-[3px]" style={{ background: RELAPSE_COLOR }} />
+            <span className="text-[9.5px]" style={{ color: 'rgba(255,255,255,0.3)' }}>Struggle</span>
+          </div>
         </div>
       </div>
 
@@ -754,7 +1110,6 @@ export const DopamineTracker: React.FC = () => {
                     {saving ? 'Saving…' : editingEntry ? 'Update Entry' : 'Save Entry'}
                   </button>
 
-                  {/* Delete — only show when editing an existing entry */}
                   {editingEntry && (
                     <button onClick={deleteEntry} disabled={deleting || saving}
                       className="w-full py-3 rounded-xl text-[13px] font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
@@ -770,34 +1125,60 @@ export const DopamineTracker: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* ── SOS Modal ── */}
+      {/* ── SOS Modal — redesigned ── */}
       <AnimatePresence>
         {showSOS && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[200] flex items-end justify-center"
-            style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)' }}>
+            style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}>
             <motion.div initial={{ y: 80 }} animate={{ y: 0 }} exit={{ y: 80 }}
               transition={{ type: 'spring', damping: 28, stiffness: 260 }}
               className="w-full max-w-[480px] rounded-t-[24px] overflow-y-auto no-scrollbar pb-[max(28px,env(safe-area-inset-bottom))]"
-              style={{ background: '#0f1118', border: '1px solid rgba(248,113,113,0.2)', maxHeight: '90vh' }}>
+              style={{
+                background: 'radial-gradient(80% 50% at 50% 0%, rgba(248,113,113,0.15), transparent 55%), radial-gradient(70% 50% at 50% 100%, rgba(200,255,0,0.07), transparent 55%), #0d0f13',
+                border: '1px solid rgba(248,113,113,0.2)',
+                maxHeight: '92vh',
+              }}>
 
-              <div className="w-9 h-1 rounded-full mx-auto mt-4 mb-4 opacity-30" style={{ background: '#f87171' }} />
-              <div className="px-5 mb-4">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className="w-5 h-5" style={{ color: '#f87171' }} />
-                    <p className="text-[16px] font-bold" style={{ color: '#fff' }}>Urge is Spiking</p>
-                  </div>
-                  <button onClick={() => { setShowSOS(false); setSosTimer(null); if (sosIntervalRef.current) clearInterval(sosIntervalRef.current); }}
-                    className="h-7 w-7 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                    <X className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.5)' }} />
-                  </button>
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#f87171', boxShadow: '0 0 0 0 rgba(248,113,113,0.6)' }} />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: '#f87171' }}>SOS · urge spike</p>
                 </div>
-                <p className="text-[13px]" style={{ color: 'rgba(255,255,255,0.4)' }}>Every urge is a wave. It will peak and pass. You just need to wait it out.</p>
+                <button onClick={closeSOS}
+                  className="h-7 w-7 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(255,255,255,0.06)' }}>
+                  <X className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.5)' }} />
+                </button>
+              </div>
+
+              {/* Hero text */}
+              <div className="text-center px-6 pb-2">
+                <h2 className="text-[26px] font-bold leading-tight" style={{ color: '#fff', letterSpacing: '-0.025em' }}>
+                  Ride the wave.
+                </h2>
+                <p className="text-[13px] mt-2 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                  An urge is a wave, not a command. Breathe with the circle. Don't move. It will pass.
+                </p>
+              </div>
+
+              {/* Breathing pacer */}
+              <BreathPacer />
+
+              {/* Urge wave visualization */}
+              <UrgeWave />
+
+              {/* Identity anchor */}
+              <AnchorWidget currentStreak={stats.current} />
+
+              {/* Action list */}
+              <div className="mt-4">
+                <ActionsWidget />
               </div>
 
               {/* Urge surfing timer */}
-              <div className="mx-5 mb-4 rounded-xl p-4" style={{ background: 'rgba(200,255,0,0.04)', border: '1px solid rgba(200,255,0,0.12)' }}>
+              <div className="mx-4 mt-4 rounded-2xl p-4" style={{ background: 'rgba(200,255,0,0.04)', border: '1px solid rgba(200,255,0,0.12)' }}>
                 {sosTimer === null ? (
                   <div className="flex items-center justify-between">
                     <div>
@@ -821,43 +1202,15 @@ export const DopamineTracker: React.FC = () => {
                 )}
               </div>
 
-              {/* Streak reminder */}
-              <div className="mx-5 mb-4 rounded-xl p-4 flex items-center gap-3"
-                style={{ background: 'rgba(200,255,0,0.06)', border: '1px solid rgba(200,255,0,0.15)' }}>
-                <Flame className="w-6 h-6 shrink-0" style={{ color: '#C8FF00' }} />
-                <div>
-                  <p className="text-[11px] uppercase tracking-wider mb-0.5" style={{ color: 'rgba(200,255,0,0.5)' }}>Your streak at stake</p>
-                  <p className="text-[22px] font-black leading-none" style={{ color: '#C8FF00' }}>
-                    {stats.current} day{stats.current !== 1 ? 's' : ''}
-                  </p>
-                  <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                    {stats.topHelper ? `Your best weapon: ${stats.topHelper}` : "Don't lose what you've built."}
-                  </p>
-                </div>
-              </div>
-
-              <div className="px-5 space-y-2 mb-4">
-                {SOS_TIPS.map(({ icon: Icon, label, desc }) => (
-                  <div key={label} className="rounded-xl p-3.5 flex items-start gap-3"
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: 'rgba(255,255,255,0.07)' }}>
-                      <Icon className="w-4 h-4" style={{ color: '#C8FF00' }} />
-                    </div>
-                    <div>
-                      <p className="text-[13px] font-bold mb-0.5" style={{ color: '#fff' }}>{label}</p>
-                      <p className="text-[12px] leading-snug" style={{ color: 'rgba(255,255,255,0.45)' }}>{desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="px-5">
-                <button
-                  onClick={() => { setShowSOS(false); setSosTimer(null); if (sosIntervalRef.current) clearInterval(sosIntervalRef.current); }}
+              <div className="px-4 mt-4 mb-2">
+                <button onClick={closeSOS}
                   className="w-full py-3.5 rounded-xl text-[14px] font-bold active:scale-[0.98] transition-all"
                   style={{ background: 'rgba(200,255,0,0.1)', border: '1px solid rgba(200,255,0,0.2)', color: '#C8FF00' }}>
-                  I've got this
+                  I rode the wave
                 </button>
+                <p className="text-[10px] text-center mt-3 leading-snug" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                  No matter what happens next — you opened this page instead of acting. That's already a win.
+                </p>
               </div>
             </motion.div>
           </motion.div>
