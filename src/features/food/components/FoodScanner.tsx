@@ -45,15 +45,17 @@ export const FoodScanner: React.FC<Props> = ({ onScanComplete }) => {
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
       // Detect torch support
       const track = stream.getVideoTracks()[0];
       const caps = track.getCapabilities?.() as any;
       setTorchAvail(!!caps?.torch);
+      // Show the viewfinder first — <video> is always in DOM so ref is valid immediately
       setCameraActive(true);
+      // Attach stream; ref is guaranteed non-null since <video> is always rendered
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
     } catch {
       setError('Camera access denied. Please allow camera permission or use gallery upload.');
     }
@@ -238,15 +240,38 @@ export const FoodScanner: React.FC<Props> = ({ onScanComplete }) => {
       ) : (
         <div className="flex flex-col gap-4">
 
-          {/* Camera viewfinder */}
+          {/* Camera viewfinder — <video> always in DOM so ref is always valid */}
           <div className="relative overflow-hidden rounded-2xl"
-            style={{ background: '#0d0f13', minHeight: cameraActive ? 0 : 280, aspectRatio: cameraActive ? '4/3' : undefined }}>
-            {cameraActive ? (
+            style={{ background: '#0d0f13', minHeight: cameraActive ? 0 : 280, aspectRatio: '4/3' }}>
+
+            {/* Video — always mounted, hidden when camera is off */}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+              style={{ display: cameraActive ? 'block' : 'none' }}
+            />
+
+            {/* Placeholder — shown when camera is inactive */}
+            {!cameraActive && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                  style={{ background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.15)' }}>
+                  <Camera className="w-7 h-7" style={{ color: 'rgba(200,255,0,0.6)' }} />
+                </div>
+                <p className="text-[13px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                  Camera preview appears here
+                </p>
+              </div>
+            )}
+
+            {/* Overlays — only when camera is active */}
+            {cameraActive && (
               <>
-                <video ref={videoRef} autoPlay playsInline muted
-                  className="w-full h-full object-cover" style={{ display: 'block' }} />
                 {/* Corner brackets */}
-                {['top-3 left-3', 'top-3 right-3', 'bottom-3 left-3', 'bottom-3 right-3'].map((pos, i) => (
+                {(['top-3 left-3', 'top-3 right-3', 'bottom-3 left-3', 'bottom-3 right-3'] as const).map((pos, i) => (
                   <div key={i} className={`absolute ${pos} w-6 h-6`}
                     style={{
                       borderTop:    i < 2 ? '2px solid #C8FF00' : 'none',
@@ -273,17 +298,6 @@ export const FoodScanner: React.FC<Props> = ({ onScanComplete }) => {
                   <X className="w-4 h-4" style={{ color: '#fff' }} />
                 </button>
               </>
-            ) : (
-              /* Placeholder */
-              <div className="flex flex-col items-center justify-center h-full gap-3" style={{ minHeight: 280 }}>
-                <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
-                  style={{ background: 'rgba(200,255,0,0.08)', border: '1px solid rgba(200,255,0,0.15)' }}>
-                  <Camera className="w-7 h-7" style={{ color: 'rgba(200,255,0,0.6)' }} />
-                </div>
-                <p className="text-[13px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                  Camera preview appears here
-                </p>
-              </div>
             )}
           </div>
 

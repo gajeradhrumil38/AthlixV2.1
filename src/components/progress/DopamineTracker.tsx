@@ -80,11 +80,15 @@ const computeMomentumPts = (entries: DopamineEntry[]): number[] => {
 const computeStats = (entries: DopamineEntry[]) => {
   const entryMap = new Map(entries.map((e) => [e.date, e]));
 
+  // If today has no entry yet, start counting from yesterday (grace period)
+  const todayKey = format(new Date(), 'yyyy-MM-dd');
+  const hasToday = entryMap.has(todayKey);
+  const startIdx = hasToday ? 0 : 1;
+
   let current = 0;
-  for (let i = 0; i <= 365; i++) {
+  for (let i = startIdx; i <= 365; i++) {
     const d = format(subDays(new Date(), i), 'yyyy-MM-dd');
     const e = entryMap.get(d);
-    if (i === 0 && !e) continue;
     if (!e || e.status === 'relapse') break;
     current++;
   }
@@ -182,7 +186,8 @@ const BreathPacer: React.FC = () => {
   }, []);
 
   const phase = PHASE_SEQ[phaseIdx];
-  const animating = phase.k === 'in' || phase.k === 'out';
+  // 'in' expands (0.55→1.0), 'out' contracts (1.0→0.55), holds snap-keep current scale
+  const duration = phase.k === 'in' || phase.k === 'out' ? 4 : 0;
 
   return (
     <div className="flex flex-col items-center justify-center" style={{ padding: '16px 0 10px' }}>
@@ -199,18 +204,19 @@ const BreathPacer: React.FC = () => {
         {/* Dashed outer ring */}
         <div className="absolute rounded-full"
           style={{ inset: 10, border: '1px dashed rgba(200,255,0,0.22)' }} />
-        {/* Breathing ring — scales in/out */}
-        <div className="absolute rounded-full"
+        {/* Breathing ring — Framer Motion handles scale so it always transitions correctly */}
+        <motion.div
+          className="absolute rounded-full"
           style={{
             inset: 32,
             background: 'radial-gradient(circle at 35% 30%, rgba(200,255,0,0.28), rgba(200,255,0,0.06) 60%, rgba(200,255,0,0) 80%)',
             border: '1px solid rgba(200,255,0,0.45)',
             boxShadow: '0 0 40px rgba(200,255,0,0.18) inset, 0 0 60px rgba(200,255,0,0.12)',
-            transformOrigin: 'center',
-            transform: `scale(${phase.scale})`,
-            transition: animating ? 'transform 4s cubic-bezier(.4,0,.2,1)' : 'transform 0s',
-          }} />
-        {/* Count — centered, always inside circle */}
+          }}
+          animate={{ scale: phase.scale }}
+          transition={{ duration, ease: [0.4, 0, 0.2, 1] }}
+        />
+        {/* Count — centered, lime with glow */}
         <p className="relative z-10 tabular-nums font-black leading-none"
           style={{ fontSize: 64, color: '#C8FF00', letterSpacing: '-0.04em', textShadow: '0 0 32px rgba(200,255,0,0.5)' }}>
           {count}
@@ -376,7 +382,6 @@ const MomentumLine: React.FC<{ pts: number[] }> = ({ pts }) => {
 };
 
 const DowBars: React.FC<{ dowPct: number[]; hardestDowIdx: number }> = ({ dowPct, hardestDowIdx }) => {
-  const maxPct = Math.max(...dowPct, 1);
   return (
     <div className="px-4 pt-3 pb-1" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: 8 }}>
       <div className="flex items-baseline justify-between mb-2">
@@ -556,7 +561,7 @@ export const DopamineTracker: React.FC = () => {
   const momentumPts = useMemo(() => computeMomentumPts(entries), [entries]);
   const milestone = getMilestone(stats.current);
   const nextMilestone = getNextMilestone(stats.current);
-  const hasDowData = stats.dowPct.some((_, i) => true) && entries.length >= 5;
+  const hasDowData = stats.dowPct.some((p) => p > 0) && entries.length >= 5;
 
   const canGoNext = getMonth(viewMonth) !== getMonth(new Date()) || getYear(viewMonth) !== getYear(new Date());
 
