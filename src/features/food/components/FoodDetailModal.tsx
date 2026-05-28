@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { X, Trash2, Share2, Edit3, Check, UtensilsCrossed, Plus } from 'lucide-react';
 import type { DetectedFood, FoodScan } from '../types';
-import { calcTotals, searchFood } from '../../../services/foodRecognition.service';
+import { calcTotals, searchFood } from '../services/foodRecognition.service';
 import { deleteFoodScan, updateFoodScan } from '../../../lib/foodData';
-import { deleteFoodImage } from '../../../services/foodRecognition.service';
+import { deleteFoodImage } from '../services/foodRecognition.service';
 
 interface Props {
   scan: FoodScan;

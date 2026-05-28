@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { convertWeight, type WeightUnit } from '../lib/units';
-import { whoopService } from '../services/whoopService';
+import { whoopService } from '../features/whoop/services/whoopService';
 
 /* ── WHOOP connect sub-section ─────────────────────────────── */
 const WhoopConnect: React.FC<{ userId: string }> = ({ userId }) => {

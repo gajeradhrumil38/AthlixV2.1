@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Activity, ArrowLeft, Bookmark, BookmarkCheck, CalendarDays, Check, ChevronLeft, ChevronRight, Pause, Play, Plus, Timer, Trash2, Weight, X } from 'lucide-react';
 import { muscleColor } from '../../lib/muscleColors';
 import toast from 'react-hot-toast';
-import type { WorkoutState, ExerciseEntry, Set as WorkoutSet } from '../../legacy-pages/Log';
+import type { WorkoutState, ExerciseEntry, Set as WorkoutSet } from '../../pages/Log';
 import { ExerciseContent } from './ExerciseContent';
 import { ExercisePicker } from './ExercisePicker';
 import { DialPicker } from './DialPicker';

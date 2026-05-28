@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { format, subDays } from 'date-fns';
 import { Activity, X } from 'lucide-react';
-import { whoopService } from '../../services/whoopService';
+import { whoopService } from '../services/whoopService';
 import { useAuth } from '../../contexts/AuthContext';
-import type { WhoopRecovery, WhoopSleep, WhoopCycle } from '../../types/whoop';
+import type { WhoopRecovery, WhoopSleep, WhoopCycle } from '../types';
 
 type Tab = 'day' | 'week' | 'month';
 

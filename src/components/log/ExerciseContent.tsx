@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Copy, X } from 'lucide-react';
-import type { ExerciseEntry } from '../../legacy-pages/Log';
+import type { ExerciseEntry } from '../../pages/Log';
 import { SetRow } from './SetRow';
 import {
   DistanceUnit,

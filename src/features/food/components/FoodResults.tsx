@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CheckCircle2, Edit3, Plus, RotateCcw, Trash2, X, Search } from 'lucide-react';
 import type { DetectedFood, ScanState } from '../types';
-import { calcTotals, searchFood } from '../../../services/foodRecognition.service';
+import { calcTotals, searchFood } from '../services/foodRecognition.service';
 
 interface Props {
   state: ScanState;

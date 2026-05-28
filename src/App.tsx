@@ -8,23 +8,22 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { HeartRateProvider } from './contexts/HeartRateContext';
 import { RestTimerProvider } from './contexts/RestTimerContext';
-import { Layout } from './components/Layout';
-import { LoadingScreen } from './components/LoadingScreen';
-import { Auth } from './legacy-pages/Auth';
-import { Home } from './legacy-pages/Home';
-import { Calendar } from './legacy-pages/Calendar';
-import { Log } from './legacy-pages/Log';
-import { Timeline } from './legacy-pages/Timeline';
-import { Settings } from './legacy-pages/Settings';
-import { Progress } from './legacy-pages/Progress';
-
-import { DashboardLayoutEditor } from './legacy-pages/DashboardLayoutEditor';
+import { Layout } from './components/layout/Layout';
+import { LoadingScreen } from './components/layout/LoadingScreen';
+import { Auth } from './pages/Auth';
+import { Home } from './pages/Home';
+import { Calendar } from './pages/Calendar';
+import { Log } from './pages/Log';
+import { Timeline } from './pages/Timeline';
+import { Settings } from './pages/Settings';
+import { Progress } from './pages/Progress';
+import { DashboardLayoutEditor } from './pages/DashboardLayoutEditor';
 import { ActiveRun } from './features/running/pages/ActiveRun';
 import { RunHistory } from './features/running/pages/RunHistory';
 import { FoodScannerPage } from './features/food/pages/FoodScannerPage';
 import { FoodHistoryPage } from './features/food/pages/FoodHistoryPage';
-import { WhoopCallback } from './legacy-pages/WhoopCallback';
-import { ResetPassword } from './legacy-pages/ResetPassword';
+import { WhoopCallback } from './pages/WhoopCallback';
+import { ResetPassword } from './pages/ResetPassword';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading, isPasswordRecovery } = useAuth();

@@ -5,7 +5,7 @@ import { ExercisePicker } from './ExercisePicker';
 import { DialPicker } from './DialPicker';
 import { useAuth } from '../../contexts/AuthContext';
 import { saveTemplate, checkTemplateNameExists, getLastExerciseSession } from '../../lib/supabaseData';
-import type { ExerciseEntry } from '../../legacy-pages/Log';
+import type { ExerciseEntry } from '../../pages/Log';
 import toast from 'react-hot-toast';
 
 interface PlannedSet {

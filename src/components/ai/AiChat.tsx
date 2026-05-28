@@ -4,8 +4,8 @@ import { Sparkles, X, Send, Loader2, Settings as SettingsIcon, RotateCcw, Copy, 
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { format, subDays, differenceInCalendarDays } from 'date-fns';
-import { useAuth } from '../contexts/AuthContext';
-import { DialPicker } from './log/DialPicker';
+import { useAuth } from '../../contexts/AuthContext';
+import { DialPicker } from '../log/DialPicker';
 import {
   getWorkouts,
   getPersonalRecords,
@@ -17,7 +17,7 @@ import {
   type LocalExercise,
   type LocalPersonalRecord,
   type LocalExerciseLibraryItem,
-} from '../lib/supabaseData';
+} from '../../lib/supabaseData';
 
 /* ── Per-set data type ────────────────────────────────────────────── */
 interface SetEntry { reps: number; weight: number; }

@@ -7,7 +7,7 @@ import {
   uploadFoodImage,
   recognizeFoodWithGemini,
   calcTotals,
-} from '../../../services/foodRecognition.service';
+} from '../services/foodRecognition.service';
 import { useAuth } from '../../../contexts/AuthContext';
 
 // Step labels shown during processing

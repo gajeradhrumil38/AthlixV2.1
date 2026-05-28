@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { AppIcon, IconName } from '../config/icons';
-import { AiChat } from './AiChat';
+import { AppIcon, IconName } from '../../config/icons';
+import { AiChat } from '../ai/AiChat';
 
 const navItems: { path: string; icon: IconName; label: string }[] = [
   { path: '/',          icon: 'Home',      label: 'Home'      },

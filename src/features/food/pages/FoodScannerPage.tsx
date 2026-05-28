@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { FoodScanner } from '../components/FoodScanner';
 import { FoodResults } from '../components/FoodResults';
 import type { DetectedFood, ScanState } from '../types';
-import { calcTotals } from '../../../services/foodRecognition.service';
+import { calcTotals } from '../services/foodRecognition.service';
 import { saveFoodScan } from '../../../lib/foodData';
 import { useAuth } from '../../../contexts/AuthContext';
 

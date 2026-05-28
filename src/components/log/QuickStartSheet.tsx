@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ClipboardList, ArrowRight, CalendarPlus, Pencil, Trash2, Play, ChevronRight, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import type { ExerciseEntry } from '../../legacy-pages/Log';
+import type { ExerciseEntry } from '../../pages/Log';
 import { buildExercisesFromWorkout, getTemplates, deleteTemplate, getWorkouts } from '../../lib/supabaseData';
 import { parseDateAtStartOfDay } from '../../lib/dates';
 import { muscleColor } from '../../lib/muscleColors';

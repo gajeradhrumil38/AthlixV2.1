@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
-import type { WhoopRecovery, WhoopSleep, WhoopCycle } from '../types/whoop';
-import { supabase } from '../lib/supabase';
+import type { WhoopRecovery, WhoopSleep, WhoopCycle } from '../types';
+import { supabase } from '../../../lib/supabase';
 
 const EDGE_FN = 'https://mrntwydykqsdawpklumf.supabase.co/functions/v1';
 const BASE = 'https://api.prod.whoop.com/developer';

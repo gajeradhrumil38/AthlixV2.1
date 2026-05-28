@@ -1,6 +1,6 @@
 import React from 'react';
 import { Check } from 'lucide-react';
-import type { Set } from '../../legacy-pages/Log';
+import type { Set } from '../../pages/Log';
 
 interface SetRowField {
   field: 'weight' | 'reps';

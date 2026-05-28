@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns';
 import { Search, SlidersHorizontal, Trash2, X, ChevronRight, UtensilsCrossed } from 'lucide-react';
 import type { FoodScan } from '../types';
 import { deleteFoodScan, getFoodScans } from '../../../lib/foodData';
-import { deleteFoodImage } from '../../../services/foodRecognition.service';
+import { deleteFoodImage } from '../services/foodRecognition.service';
 import { useAuth } from '../../../contexts/AuthContext';
 
 interface Props {

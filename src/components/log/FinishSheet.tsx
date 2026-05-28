@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Check, Trophy, Clock, Weight, Activity } from 'lucide-react';
-import type { WorkoutState } from '../../legacy-pages/Log';
+import type { WorkoutState } from '../../pages/Log';
 import { convertWeight, type WeightUnit } from '../../lib/units';
 import { isWeightExerciseType, resolveExerciseInputType } from '../../lib/exerciseTypes';
 

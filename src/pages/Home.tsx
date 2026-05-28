@@ -12,7 +12,7 @@ import { getBodyWeightLogs, getPersonalRecords, getWorkouts } from '../lib/supab
 import { parseDateAtStartOfDay } from '../lib/dates';
 import { getExerciseMuscleProfile, getMuscleSlugLabel, PRIMARY_LOAD_WEIGHT, SECONDARY_LOAD_WEIGHT } from '../lib/exerciseMuscles';
 import { convertWeight, isWeightUnit, type WeightUnit } from '../lib/units';
-import { WhoopDashboard } from '../components/whoop/WhoopDashboard';
+import { WhoopDashboard } from '../features/whoop/components/WhoopDashboard';
 import { MuscleRadar } from '../components/home/MuscleRadar';
 
 // --- Utility Functions ---
