@@ -135,32 +135,6 @@ const MiniRoute: React.FC<{ path: GpsPoint[]; size?: number }> = ({ path, size =
   );
 };
 
-// ── Pace sparkline ────────────────────────────────────────────────────────────
-const PaceSparkline: React.FC<{ splits: { km: number; pace: number }[] }> = ({ splits }) => {
-  if (splits.length < 2) return null;
-  const W = 80; const H = 36;
-  const paces = splits.map((s) => s.pace);
-  const minP = Math.min(...paces);
-  const maxP = Math.max(...paces);
-  const range = maxP - minP || 1;
-  const pts = paces.map((p, i) => {
-    const x = (i / (paces.length - 1)) * (W - 4) + 2;
-    const y = H - 4 - ((maxP - p) / range) * (H - 8);
-    return `${x},${y}`;
-  }).join(' ');
-  return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
-      <polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth="1.5"
-        strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
-      {paces.map((p, i) => {
-        const x = (i / (paces.length - 1)) * (W - 4) + 2;
-        const y = H - 4 - ((maxP - p) / range) * (H - 8);
-        return <circle key={i} cx={x} cy={y} r={2} fill="var(--accent)" opacity="0.8" />;
-      })}
-    </svg>
-  );
-};
-
 // ── Effort bars ───────────────────────────────────────────────────────────────
 const EffortBars: React.FC<{ effort: number }> = ({ effort }) => (
   <div className="flex items-end gap-[3px]">
@@ -657,63 +631,66 @@ export const RunHistory: React.FC = () => {
                 >
                   <button onClick={() => setSelected(run)}
                     className="w-full px-4 pt-3.5 pb-3 text-left transition-all active:scale-[0.98]">
-                    {/* Row 1 */}
-                    <div className="flex items-center justify-between mb-0.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-victory text-[15px] font-black leading-none"
-                          style={{ color: pr ? 'var(--accent)' : 'white' }}>
-                          {format(new Date(run.timestamp), 'EEE, MMM d').toUpperCase()}
-                        </span>
-                        {pr && (
-                          <span className="rounded-full px-1.5 py-0.5 text-[8px] font-black tracking-[0.1em]"
-                            style={{ background: 'linear-gradient(135deg, #fac775 0%, #d99a3a 100%)', color: '#000' }}>
-                            PR
+                    {/* Layout: stats on left, mini map on right */}
+                    <div className="flex items-stretch gap-3">
+                      {/* Left: date + stats */}
+                      <div className="flex-1 min-w-0">
+                        {/* Row 1 */}
+                        <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                          <span className="font-victory text-[15px] font-black leading-none"
+                            style={{ color: pr ? 'var(--accent)' : 'white' }}>
+                            {format(new Date(run.timestamp), 'EEE, MMM d').toUpperCase()}
                           </span>
-                        )}
-                        {demo && (
-                          <span className="rounded px-1.5 py-0.5 text-[8px] font-black uppercase tracking-[0.1em]"
-                            style={{ background: 'rgba(200,255,0,0.1)', color: 'rgba(200,255,0,0.5)', border: '1px solid rgba(200,255,0,0.15)' }}>
-                            DEMO
-                          </span>
-                        )}
-                        {run.fromCloud && !demo && (
-                          <Cloud className="h-3 w-3" style={{ color: 'rgba(255,255,255,0.2)' }} />
-                        )}
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-white/20 shrink-0" />
-                    </div>
-
-                    <p className="mb-3 text-[10px] font-semibold text-white/25">
-                      {format(new Date(run.timestamp), 'EEEE · h:mm a')} · {demo ? 'Cedar Rapids, IA' : 'Outdoor'}
-                    </p>
-
-                    {/* Stats row */}
-                    <div className="flex items-center gap-0 min-w-0">
-                      <div className="flex items-baseline gap-1 mr-3 shrink-0">
-                        <span className="font-victory text-[28px] font-black tabular-nums leading-none text-white">
-                          {d.toFixed(2)}
-                        </span>
-                        <span className="text-[9px] font-bold text-white/30 uppercase">{distanceUnit}</span>
-                      </div>
-                      <div className="h-8 w-px bg-white/[0.08] mr-3 shrink-0" />
-                      <div className="flex items-baseline gap-1 mr-3 shrink-0">
-                        <span className="font-victory text-[20px] font-black tabular-nums leading-none text-white">
-                          {formatDuration(run.duration)}
-                        </span>
-                      </div>
-                      <div className="h-8 w-px bg-white/[0.08] mr-3 shrink-0" />
-                      <div className="flex flex-col shrink-0">
-                        <span className="font-victory text-[20px] font-black tabular-nums leading-none text-white">
-                          {p > 0 ? formatPace(p) : '--:--'}
-                        </span>
-                        <span className="text-[8px] font-bold text-white/25">/{distanceUnit}</span>
-                      </div>
-                      <div className="flex-1 min-w-0" />
-                      {run.splits && run.splits.length >= 2 && (
-                        <div className="shrink-0 ml-1">
-                          <PaceSparkline splits={run.splits} />
+                          {pr && (
+                            <span className="rounded-full px-1.5 py-0.5 text-[8px] font-black tracking-[0.1em]"
+                              style={{ background: 'linear-gradient(135deg, #fac775 0%, #d99a3a 100%)', color: '#000' }}>
+                              PR
+                            </span>
+                          )}
+                          {demo && (
+                            <span className="rounded px-1.5 py-0.5 text-[8px] font-black uppercase tracking-[0.1em]"
+                              style={{ background: 'rgba(200,255,0,0.1)', color: 'rgba(200,255,0,0.5)', border: '1px solid rgba(200,255,0,0.15)' }}>
+                              DEMO
+                            </span>
+                          )}
+                          {run.fromCloud && !demo && (
+                            <Cloud className="h-3 w-3 shrink-0" style={{ color: 'rgba(255,255,255,0.2)' }} />
+                          )}
                         </div>
-                      )}
+
+                        <p className="mb-2.5 text-[10px] font-semibold text-white/25">
+                          {format(new Date(run.timestamp), 'EEEE · h:mm a')} · {demo ? 'Cedar Rapids, IA' : 'Outdoor'}
+                        </p>
+
+                        {/* Stats */}
+                        <div className="flex items-center gap-0">
+                          <div className="flex items-baseline gap-1 mr-3 shrink-0">
+                            <span className="font-victory text-[26px] font-black tabular-nums leading-none text-white">
+                              {d.toFixed(2)}
+                            </span>
+                            <span className="text-[9px] font-bold text-white/30 uppercase">{distanceUnit}</span>
+                          </div>
+                          <div className="h-7 w-px bg-white/[0.08] mr-3 shrink-0" />
+                          <div className="flex items-baseline gap-1 mr-3 shrink-0">
+                            <span className="font-victory text-[18px] font-black tabular-nums leading-none text-white">
+                              {formatDuration(run.duration)}
+                            </span>
+                          </div>
+                          <div className="h-7 w-px bg-white/[0.08] mr-3 shrink-0" />
+                          <div className="flex flex-col shrink-0">
+                            <span className="font-victory text-[18px] font-black tabular-nums leading-none text-white">
+                              {p > 0 ? formatPace(p) : '--:--'}
+                            </span>
+                            <span className="text-[8px] font-bold text-white/25">/{distanceUnit}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: mini route map */}
+                      <div className="flex flex-col items-end justify-between shrink-0">
+                        <ChevronRight className="h-4 w-4 text-white/20 mb-1" />
+                        <MiniRoute path={run.path} size={68} />
+                      </div>
                     </div>
                   </button>
 
