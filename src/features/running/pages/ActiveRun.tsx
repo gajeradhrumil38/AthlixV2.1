@@ -324,7 +324,7 @@ export const ActiveRun: React.FC = () => {
   } = useRunTracking();
 
   const [distanceUnit] = useState<'km' | 'mi'>(() => {
-    try { const s = localStorage.getItem('athlix_distance_unit'); return s === 'mi' ? 'mi' : 'mi'; }
+    try { const s = localStorage.getItem('athlix_distance_unit'); return s === 'km' ? 'km' : 'mi'; }
     catch { return 'mi'; }
   });
 
@@ -500,7 +500,7 @@ export const ActiveRun: React.FC = () => {
 
   /* ── Run complete ───────────────────────────────────────────── */
   if (finished) {
-    const cal = Math.round(finished.distance * 1.609344 * 65);
+    const cal = Math.round(finished.distance * (finished.unit === 'mi' ? 1.609344 : 1) * 65);
     const effort = finished.pace <= 0 ? 3
       : finished.pace < 4 ? 5
       : finished.pace < 5 ? 4
@@ -967,8 +967,8 @@ export const ActiveRun: React.FC = () => {
                 </div>
                 <div className="flex flex-col items-center gap-0.5">
                   <span className="text-[8px] font-black uppercase tracking-[0.18em] text-white/30">BPM</span>
-                  <span className="font-victory text-[24px] font-black tabular-nums leading-none text-white">152</span>
-                  <span className="text-[9px] font-bold text-white/25">Z3</span>
+                  <span className="font-victory text-[24px] font-black tabular-nums leading-none text-white">--</span>
+                  <span className="text-[9px] font-bold text-white/25">BPM</span>
                 </div>
               </div>
 

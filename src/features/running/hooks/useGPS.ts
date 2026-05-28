@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { calculateDistance } from '../utils/gpsCalculations';
 import type { GpsPoint } from '../utils/gpsCalculations';
 
@@ -19,7 +19,7 @@ export const useGPS = (): UseGPSReturn => {
   const watchIdRef = useRef<number | null>(null);
   const lastPointRef = useRef<GpsPoint | null>(null);
 
-  const startTracking = () => {
+  const startTracking = useCallback(() => {
     if (!window.isSecureContext) {
       setError('Location tracking requires HTTPS (or localhost).');
       setErrorCode(null);
@@ -78,18 +78,18 @@ export const useGPS = (): UseGPSReturn => {
       return false;
     }
     return true;
-  };
+  }, []);
 
-  const stopTracking = () => {
+  const stopTracking = useCallback(() => {
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
     lastPointRef.current = null;
     setTracking(false);
-  };
+  }, []);
 
-  useEffect(() => () => stopTracking(), []);
+  useEffect(() => () => stopTracking(), [stopTracking]);
 
   return { position, error, errorCode, tracking, startTracking, stopTracking };
 };
