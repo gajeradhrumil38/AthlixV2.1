@@ -9,10 +9,12 @@ const FALLBACK: [number, number] = [28.6139, 77.209];
 function FitRoute({ path }: { path: GpsPoint[] }) {
   const map = useMap();
   useEffect(() => {
+    map.invalidateSize();
     if (path.length > 1) {
       const bounds = L.latLngBounds(path.map((p) => [p.lat, p.lng] as [number, number]));
       map.fitBounds(bounds, { padding: [70, 70], animate: false });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return null;
 }
@@ -26,24 +28,29 @@ export const RunRouteBackground: React.FC<{ path: GpsPoint[] }> = ({ path }) => 
         ]
       : FALLBACK;
 
-  // Simplify then smooth the full saved route for the post-run background view.
   const smoothPath = useMemo(() => {
     if (path.length < 2) return path.map(p => [p.lat, p.lng] as [number, number]);
-    const simplified = douglasPeucker(path, 2.5e-5); // ~2.8 m tolerance
+    const simplified = douglasPeucker(path, 2.5e-5);
     return catmullRomPath(simplified, 8);
   }, [path]);
 
   return (
     <div
-      className="absolute inset-0 pointer-events-none select-none"
-      style={{ filter: 'blur(1.5px) brightness(0.58) saturate(1.1)', opacity: 0.98 }}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        userSelect: 'none',
+        filter: 'blur(1.5px) brightness(0.58) saturate(1.1)',
+        opacity: 0.98,
+      }}
     >
       <style>{`
         .rrbg .leaflet-container { background: #0d0f14 !important; }
         .rrbg .leaflet-control-attribution,
         .rrbg .leaflet-control-zoom { display: none !important; }
       `}</style>
-      <div className="rrbg h-full w-full">
+      <div className="rrbg" style={{ position: 'absolute', inset: 0 }}>
         <MapContainer
           center={center}
           zoom={14}

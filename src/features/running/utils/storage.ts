@@ -1,3 +1,4 @@
+import { supabase } from '../../../lib/supabase';
 import type { GpsPoint } from './gpsCalculations';
 
 export interface SavedRun {
@@ -8,6 +9,7 @@ export interface SavedRun {
   pace: number;
   timestamp: number;
   splits?: { km: number; pace: number }[];
+  fromCloud?: boolean;
 }
 
 const KEY = 'athlix:runs';
@@ -121,3 +123,77 @@ export const deleteRun = (id: number): void => {
     // Ignore storage write failures
   }
 };
+
+// ─── Supabase cloud sync ───────────────────────────────────────────────────────
+
+export async function saveRunToCloud(userId: string, run: SavedRun): Promise<number | null> {
+  try {
+    const { data, error } = await supabase
+      .from('runs')
+      .insert({
+        user_id: userId,
+        run_ts: run.timestamp,
+        distance: run.distance,
+        duration: run.duration,
+        pace: run.pace,
+        path: run.path,
+        splits: run.splits ?? [],
+      })
+      .select('id')
+      .single();
+    if (error) return null;
+    return (data as any)?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function loadRunsFromCloud(userId: string): Promise<SavedRun[]> {
+  try {
+    const { data, error } = await supabase
+      .from('runs')
+      .select('id, run_ts, distance, duration, pace, path, splits')
+      .eq('user_id', userId)
+      .order('run_ts', { ascending: false })
+      .limit(120);
+    if (error || !data) return [];
+    return (data as any[]).map((r) => ({
+      id: r.id as number,
+      timestamp: r.run_ts as number,
+      distance: Number(r.distance),
+      duration: Number(r.duration),
+      pace: Number(r.pace),
+      path: (Array.isArray(r.path) ? r.path : []) as GpsPoint[],
+      splits: (Array.isArray(r.splits) ? r.splits : []) as { km: number; pace: number }[],
+      fromCloud: true,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteRunFromCloud(id: number): Promise<void> {
+  try {
+    await supabase.from('runs').delete().eq('id', id);
+  } catch { /* silent */ }
+}
+
+/** Merge local + cloud runs, deduplicating by timestamp (within 2 s). Cloud wins on conflict. */
+export function mergeRuns(local: SavedRun[], cloud: SavedRun[]): SavedRun[] {
+  const merged = new Map<number, SavedRun>();
+  // Add local first
+  for (const r of local) merged.set(r.timestamp, r);
+  // Cloud overwrites if within ±2000 ms of any local entry
+  for (const cr of cloud) {
+    let matched = false;
+    for (const [ts] of merged) {
+      if (Math.abs(ts - cr.timestamp) < 2000) {
+        merged.set(ts, { ...cr, id: merged.get(ts)!.id }); // keep local id
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) merged.set(cr.timestamp, cr);
+  }
+  return Array.from(merged.values()).sort((a, b) => b.timestamp - a.timestamp);
+}

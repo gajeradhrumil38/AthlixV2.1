@@ -12,7 +12,7 @@ import { saveWorkout } from '../../../lib/supabaseData';
 import { useRunTracking } from '../hooks/useRunTracking';
 import { RunMap } from '../components/RunMap';
 import { RunRouteBackground } from '../components/RunRouteBackground';
-import { saveRun, getRuns } from '../utils/storage';
+import { saveRun, getRuns, saveRunToCloud } from '../utils/storage';
 import { formatDuration, formatPace } from '../utils/gpsCalculations';
 import type { GpsPoint } from '../utils/gpsCalculations';
 
@@ -343,6 +343,7 @@ export const ActiveRun: React.FC = () => {
   const [activeGoal, setActiveGoal] = useState<GoalType>('5k');
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [showGoalPicker, setShowGoalPicker] = useState(false);
+  const [showStartConfirm, setShowStartConfirm] = useState(false);
 
   // Last run stats computed once from storage
   const [lastRun] = useState(() => {
@@ -410,7 +411,10 @@ export const ActiveRun: React.FC = () => {
     const summary = stopRun();
     const displayDist = distanceUnit === 'mi' ? summary.distance * 0.621371 : summary.distance;
     const displayPaceVal = distanceUnit === 'mi' ? summary.pace * 1.609344 : summary.pace;
-    saveRun(summary);
+    const saved = saveRun(summary);
+    if (user) {
+      void saveRunToCloud(user.id, saved);
+    }
     if (user) {
       const durationMinutes = Math.max(1, Math.round(summary.duration / 60000));
       const roundedDist = Math.max(0, Number(displayDist.toFixed(2)));
@@ -910,12 +914,15 @@ export const ActiveRun: React.FC = () => {
                 </div>
               </div>
 
-              {/* Slide to start */}
-              <SlideControl
-                label="SLIDE TO START RUN"
-                icon={<Play className="h-5 w-5 fill-black text-black" />}
-                onConfirm={startRun}
-              />
+              {/* Start run button */}
+              <button
+                onClick={() => setShowStartConfirm(true)}
+                className="w-full h-14 rounded-full font-victory text-[16px] font-black tracking-[0.22em] text-black transition-all active:scale-[0.97] flex items-center justify-center gap-2.5"
+                style={{ background: 'var(--accent)', boxShadow: '0 0 24px rgba(200,255,0,0.3)' }}
+              >
+                <Play className="h-5 w-5 fill-black" />
+                START RUN
+              </button>
 
               {/* View history */}
               <button
@@ -1053,6 +1060,73 @@ export const ActiveRun: React.FC = () => {
           )}
         </AnimatePresence>
       </div>
+
+      {/* ── Start confirm popup ── */}
+      <AnimatePresence>
+        {showStartConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[60] flex items-end justify-center px-4 pb-6"
+            style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)' }}
+            onClick={() => setShowStartConfirm(false)}
+          >
+            <motion.div
+              initial={{ y: 48, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 48, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-3xl p-5 flex flex-col gap-4"
+              style={{ background: '#161a22', border: '1px solid rgba(255,255,255,0.1)' }}
+            >
+              {/* Handle */}
+              <div className="mx-auto h-1 w-10 rounded-full bg-white/15" />
+
+              <div className="text-center">
+                <p className="text-[18px] font-black text-white">Ready to run?</p>
+                <p className="mt-1.5 text-[13px] font-semibold text-white/40">
+                  Goal: <span style={{ color: 'var(--accent)' }}>{goalLabel}</span>
+                </p>
+                <p className="mt-1 text-[12px] text-white/25">
+                  Make sure GPS is locked before you start
+                </p>
+              </div>
+
+              {/* GPS status pill */}
+              <div
+                className="flex items-center justify-center gap-2 rounded-2xl py-3"
+                style={{ background: 'rgba(200,255,0,0.06)', border: '1px solid rgba(200,255,0,0.14)' }}
+              >
+                <span className="h-2 w-2 rounded-full" style={{ background: 'var(--accent)' }} />
+                <span className="text-[12px] font-bold tracking-[0.1em]" style={{ color: 'var(--accent)' }}>
+                  GPS READY · HIGH ACCURACY
+                </span>
+              </div>
+
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => setShowStartConfirm(false)}
+                  className="flex-1 h-12 rounded-full text-[13px] font-black tracking-[0.1em] text-white/60 transition-all active:scale-[0.97]"
+                  style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
+                >
+                  CANCEL
+                </button>
+                <button
+                  onClick={() => { setShowStartConfirm(false); startRun(); }}
+                  className="flex-1 h-12 rounded-full text-[14px] font-black tracking-[0.12em] text-black transition-all active:scale-[0.97] flex items-center justify-center gap-2"
+                  style={{ background: 'var(--accent)' }}
+                >
+                  <Play className="h-4 w-4 fill-black" />
+                  LET'S GO
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Stop confirm dialog ── */}
       <AnimatePresence>
