@@ -11,6 +11,7 @@ import { getRuns, deleteRun, loadRunsFromCloud, deleteRunFromCloud, mergeRuns } 
 import type { SavedRun } from '../utils/storage';
 import { RunRouteBackground } from '../components/RunRouteBackground';
 import { formatDuration, formatPace } from '../utils/gpsCalculations';
+import type { GpsPoint } from '../utils/gpsCalculations';
 import { useAuth } from '../../../contexts/AuthContext';
 
 // ── Demo runs (shown only when user has zero real runs) ──────────────────────
@@ -74,6 +75,64 @@ const DEMO_RUNS: SavedRun[] = [
 const useDistanceUnit = (): 'km' | 'mi' => {
   try { const s = localStorage.getItem('athlix_distance_unit'); return s === 'mi' ? 'mi' : 'km'; }
   catch { return 'km'; }
+};
+
+// ── Mini route SVG thumbnail ──────────────────────────────────────────────────
+const MiniRoute: React.FC<{ path: GpsPoint[]; size?: number }> = ({ path, size = 68 }) => {
+  if (path.length < 2) return (
+    <div style={{ width: size, height: size, borderRadius: 12,
+      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Footprints style={{ width: 20, height: 20, color: 'rgba(200,255,0,0.2)' }} />
+    </div>
+  );
+
+  const lats = path.map(p => p.lat);
+  const lngs = path.map(p => p.lng);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+  const latRange = maxLat - minLat || 0.001;
+  const lngRange = maxLng - minLng || 0.001;
+
+  // Preserve aspect ratio inside the square
+  const aspect = lngRange / latRange;
+  const pad = 7;
+  const innerSize = size - pad * 2;
+  let drawW: number, drawH: number;
+  if (aspect >= 1) { drawW = innerSize; drawH = innerSize / aspect; }
+  else              { drawH = innerSize; drawW = innerSize * aspect; }
+  const offX = (innerSize - drawW) / 2 + pad;
+  const offY = (innerSize - drawH) / 2 + pad;
+
+  const toX = (lng: number) => offX + ((lng - minLng) / lngRange) * drawW;
+  const toY = (lat: number) => offY + ((maxLat - lat) / latRange) * drawH;
+
+  // Subsample to ≤50 points for thumbnail
+  const step = Math.max(1, Math.floor(path.length / 50));
+  const pts = path.filter((_, i) => i % step === 0 || i === path.length - 1);
+  const polyline = pts.map(p => `${toX(p.lng).toFixed(1)},${toY(p.lat).toFixed(1)}`).join(' ');
+  const sx = toX(pts[0].lng), sy = toY(pts[0].lat);
+  const ex = toX(pts[pts.length - 1].lng), ey = toY(pts[pts.length - 1].lat);
+
+  return (
+    <div style={{ width: size, height: size, borderRadius: 12, overflow: 'hidden',
+      background: 'rgba(13,15,20,0.9)', border: '1px solid rgba(200,255,0,0.18)',
+      flexShrink: 0 }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: 'block' }}>
+        {/* Subtle glow under route */}
+        <polyline points={polyline} fill="none" stroke="#C8FF00" strokeWidth="5" strokeLinecap="round"
+          strokeLinejoin="round" opacity="0.07" />
+        {/* Route line */}
+        <polyline points={polyline} fill="none" stroke="#C8FF00" strokeWidth="1.8" strokeLinecap="round"
+          strokeLinejoin="round" opacity="0.88" />
+        {/* Start dot */}
+        <circle cx={sx} cy={sy} r={2.5} fill="#C8FF00" opacity="0.6" />
+        {/* End dot */}
+        <circle cx={ex} cy={ey} r={3} fill="#C8FF00" />
+        <circle cx={ex} cy={ey} r={5.5} fill="#C8FF00" opacity="0.15" />
+      </svg>
+    </div>
+  );
 };
 
 // ── Pace sparkline ────────────────────────────────────────────────────────────
