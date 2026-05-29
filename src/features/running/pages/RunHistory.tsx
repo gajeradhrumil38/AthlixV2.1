@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft, ChevronRight, Footprints, Trash2, Calendar,
-  Clock, Zap, Flame, Share2, X, Cloud, RefreshCw,
+  Share2, X, Cloud, RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, subMonths, addMonths } from 'date-fns';
@@ -508,43 +508,45 @@ export const RunHistory: React.FC = () => {
       {/* ── Weekly summary card ── */}
       {!calFilterDate && (
         <div className="px-4 pb-3">
-          <div className="relative overflow-hidden rounded-2xl p-4"
-            style={{ background: 'rgba(200,255,0,0.06)', border: '1px solid rgba(200,255,0,0.14)' }}>
-            <svg className="absolute inset-0 h-full w-full" xmlns="http://www.w3.org/2000/svg"
-              style={{ opacity: 0.05, pointerEvents: 'none' }}>
-              <defs>
-                <pattern id="wkGrid" width="24" height="24" patternUnits="userSpaceOnUse">
-                  <path d="M 24 0 L 0 0 0 24" fill="none" stroke="rgba(200,255,0,1)" strokeWidth="0.5" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#wkGrid)" />
-            </svg>
+          <div className="relative overflow-hidden p-4"
+            style={{
+              background: 'rgba(16,18,24,0.165)',
+              backdropFilter: 'blur(18px) saturate(150%)',
+              WebkitBackdropFilter: 'blur(18px) saturate(150%)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 20,
+              boxShadow: '0 10px 34px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05) inset',
+            }}>
+            {/* Dot-grid background */}
+            <div className="absolute inset-0 pointer-events-none" style={{ opacity: 0.5,
+              backgroundImage: `linear-gradient(rgba(200,255,0,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(200,255,0,0.035) 1px,transparent 1px)`,
+              backgroundSize: '30px 30px', borderRadius: 20 }} />
             <div className="relative z-10">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-[9px] font-black uppercase tracking-[0.24em]" style={{ color: 'var(--accent)' }}>
-                  THIS WEEK
-                </span>
-                <span className="text-[10px] font-black"
-                  style={{ color: weeklyStats.weekChange >= 0 ? 'var(--accent)' : 'rgba(255,100,100,0.8)' }}>
-                  {weeklyStats.weekChange >= 0 ? '+' : ''}{dist(weeklyStats.weekChange).toFixed(2)} {distanceUnit} vs last week
-                </span>
-              </div>
               <div className="flex items-end justify-between">
                 <div>
-                  <div className="flex items-baseline gap-1.5 mb-3">
-                    <span className="font-victory text-[40px] font-black leading-none text-white tabular-nums">
-                      {dist(weeklyStats.weekKm).toFixed(2)}
+                  <span className="text-[9px] font-black uppercase tracking-[0.24em]" style={{ color: 'var(--accent)' }}>
+                    THIS WEEK
+                  </span>
+                  <div className="flex items-baseline gap-1.5 mt-2 mb-1">
+                    <span className="font-victory text-[44px] font-black leading-none text-white tabular-nums">
+                      {dist(weeklyStats.weekKm).toFixed(1)}
                     </span>
-                    <span className="font-victory text-[18px] font-black text-white/40">{distanceUnit.toUpperCase()}</span>
+                    <span className="font-victory text-[18px] font-black" style={{ color: 'var(--accent)' }}>{distanceUnit.toUpperCase()}</span>
+                  </div>
+                  <div className="text-[11px] font-semibold mb-3" style={{ color: 'rgba(255,255,255,0.42)' }}>
+                    <span style={{ color: weeklyStats.weekChange >= 0 ? 'var(--accent)' : 'rgba(255,100,100,0.8)' }}>
+                      {weeklyStats.weekChange >= 0 ? '+' : ''}{dist(weeklyStats.weekChange).toFixed(1)} {distanceUnit}
+                    </span>
+                    {' '}vs last week
                   </div>
                   <div className="flex gap-5">
                     <div>
                       <span className="text-[8px] font-black uppercase tracking-[0.15em] text-white/30">TIME</span>
-                      <p className="font-victory text-[16px] font-black text-white">{formatDuration(weeklyStats.weekTime)}</p>
+                      <p className="font-victory text-[18px] font-black text-white mt-0.5">{formatDuration(weeklyStats.weekTime)}</p>
                     </div>
                     <div>
                       <span className="text-[8px] font-black uppercase tracking-[0.15em] text-white/30">RUNS</span>
-                      <p className="font-victory text-[16px] font-black text-white">{weeklyStats.weekCount}</p>
+                      <p className="font-victory text-[18px] font-black text-white mt-0.5">{weeklyStats.weekCount}</p>
                     </div>
                   </div>
                 </div>
@@ -556,13 +558,13 @@ export const RunHistory: React.FC = () => {
       )}
 
       {/* ── Tabs ── */}
-      <div className="flex px-4 pb-2 gap-0 relative">
+      <div className="flex px-4 gap-0 relative mb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         {(['all', 'outdoor', 'treadmill'] as RunTab[]).map((tab) => {
           const active = runTab === tab;
           const labels: Record<RunTab, string> = { all: 'All', outdoor: 'Outdoor', treadmill: 'Treadmill' };
           return (
             <button key={tab} onClick={() => setRunTab(tab)}
-              className="relative px-4 py-2.5 text-[12px] font-black uppercase tracking-[0.14em] transition-all"
+              className={`relative py-2.5 text-[12px] font-black uppercase tracking-[0.14em] transition-all ${tab === 'all' ? 'pl-0 pr-4' : 'px-4'}`}
               style={{ color: active ? 'var(--accent)' : 'rgba(255,255,255,0.3)' }}>
               {labels[tab]}
               {active && (
@@ -592,8 +594,8 @@ export const RunHistory: React.FC = () => {
           </div>
           {!calFilterDate && (
             <button onClick={() => navigate('/run')}
-              className="mt-1 rounded-full px-8 font-victory text-[14px] font-black tracking-[0.2em] text-black transition-all active:scale-[0.97]"
-              style={{ background: 'var(--accent)', height: 52 }}>
+              className="mt-1 h-[60px] rounded-full px-8 font-victory text-[14px] font-black tracking-[0.2em] text-black transition-all active:scale-[0.97]"
+              style={{ background: 'var(--accent)', boxShadow: '0 0 0 5px rgba(200,255,0,0.12), 0 10px 28px rgba(200,255,0,0.32)' }}>
               START A RUN
             </button>
           )}
@@ -623,14 +625,18 @@ export const RunHistory: React.FC = () => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ delay: Math.min(idx * 0.04, 0.3) }}
-                  className="rounded-2xl overflow-hidden"
+                  className="overflow-hidden"
                   style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    border: pr ? '1px solid rgba(200,255,0,0.25)' : '1px solid rgba(255,255,255,0.07)',
+                    background: 'rgba(16,18,24,0.165)',
+                    backdropFilter: 'blur(18px) saturate(150%)',
+                    WebkitBackdropFilter: 'blur(18px) saturate(150%)',
+                    border: pr ? '1px solid rgba(200,255,0,0.28)' : '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: 20,
+                    boxShadow: '0 10px 34px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05) inset',
                   }}
                 >
                   <button onClick={() => setSelected(run)}
-                    className="w-full px-4 pt-3.5 pb-3 text-left transition-all active:scale-[0.98]">
+                    className="w-full px-4 py-3.5 text-left transition-all active:scale-[0.98]">
                     {/* Layout: stats on left, mini map on right */}
                     <div className="flex items-stretch gap-3">
                       {/* Left: date + stats */}
@@ -663,21 +669,21 @@ export const RunHistory: React.FC = () => {
                         </p>
 
                         {/* Stats */}
-                        <div className="flex items-center gap-0">
-                          <div className="flex items-baseline gap-1 mr-3 shrink-0">
+                        <div className="flex items-stretch">
+                          <div className="flex items-baseline gap-1 pr-3 shrink-0">
                             <span className="font-victory text-[26px] font-black tabular-nums leading-none text-white">
                               {d.toFixed(2)}
                             </span>
                             <span className="text-[9px] font-bold text-white/30 uppercase">{distanceUnit}</span>
                           </div>
-                          <div className="h-7 w-px bg-white/[0.08] mr-3 shrink-0" />
-                          <div className="flex items-baseline gap-1 mr-3 shrink-0">
+                          <div className="self-center h-7 w-px bg-white/[0.08] shrink-0" />
+                          <div className="flex items-baseline px-3 shrink-0">
                             <span className="font-victory text-[18px] font-black tabular-nums leading-none text-white">
                               {formatDuration(run.duration)}
                             </span>
                           </div>
-                          <div className="h-7 w-px bg-white/[0.08] mr-3 shrink-0" />
-                          <div className="flex flex-col shrink-0">
+                          <div className="self-center h-7 w-px bg-white/[0.08] shrink-0" />
+                          <div className="flex flex-col justify-center pl-3 shrink-0">
                             <span className="font-victory text-[18px] font-black tabular-nums leading-none text-white">
                               {p > 0 ? formatPace(p) : '--:--'}
                             </span>
@@ -695,7 +701,7 @@ export const RunHistory: React.FC = () => {
                   </button>
 
                   {/* Delete strip */}
-                  <div className="flex items-center justify-end px-4 pb-2.5"
+                  <div className="flex items-center justify-end px-4 pb-3"
                     style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                     <button onClick={() => setConfirmDelete(run)}
                       className="flex items-center gap-1.5 py-1 px-2 rounded-lg transition-all active:scale-95 group"
@@ -728,7 +734,7 @@ export const RunHistory: React.FC = () => {
               exit={{ scale: 0.92, opacity: 0, y: 8 }}
               transition={{ type: 'spring', stiffness: 340, damping: 28 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-[320px] rounded-2xl p-6 flex flex-col gap-5"
+              className="w-full max-w-[320px] rounded-3xl p-6 flex flex-col gap-5"
               style={{ background: '#161a22', border: '1px solid rgba(255,255,255,0.1)' }}>
               <div className="flex justify-center">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full"
@@ -777,8 +783,7 @@ export const RunHistory: React.FC = () => {
       {/* ── Detail overlay ── */}
       <AnimatePresence>
         {selected && (() => {
-          const calKm = selected.distance * (distanceUnit === 'mi' ? 0.621371 : 1);
-          const cal = Math.round(calKm * 65);
+          const cal = Math.round(selected.distance * 65);
           const effort = selected.pace <= 0 ? 3
             : selected.pace < 4 ? 5
             : selected.pace < 5 ? 4
@@ -858,7 +863,7 @@ export const RunHistory: React.FC = () => {
 
               {/* Stats pinned to bottom */}
               <div
-                className="absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center gap-4 px-5 cursor-default"
+                className="absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center gap-3 px-5 cursor-default"
                 style={{ paddingBottom: 'max(28px, env(safe-area-inset-bottom))' }}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -877,21 +882,25 @@ export const RunHistory: React.FC = () => {
 
                 <motion.div
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }}
-                  className="w-full grid grid-cols-4 gap-0 rounded-2xl overflow-hidden"
-                  style={{ background: 'rgba(13,15,20,0.7)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.08)' }}
+                  className="w-full grid grid-cols-4 gap-0 overflow-hidden"
+                  style={{
+                    background: 'rgba(16,18,24,0.165)',
+                    backdropFilter: 'blur(18px) saturate(150%)',
+                    WebkitBackdropFilter: 'blur(18px) saturate(150%)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: 20,
+                    boxShadow: '0 10px 34px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05) inset',
+                  }}
                 >
                   {[
-                    { icon: <Clock className="h-2.5 w-2.5 text-white/25" />, label: 'TIME', value: formatDuration(selected.duration), sub: null },
-                    { icon: <Zap className="h-2.5 w-2.5 text-white/25" />, label: 'PACE', value: selected.pace > 0 ? formatPace(paceDisplay(selected.pace)) : '--:--', sub: `/${distanceUnit}` },
-                    { icon: <Flame className="h-2.5 w-2.5 text-white/25" />, label: 'CAL', value: String(cal), sub: null },
-                    { icon: null, label: 'EFFORT', value: null, sub: null },
+                    { label: 'TIME', value: formatDuration(selected.duration), sub: null },
+                    { label: 'PACE', value: selected.pace > 0 ? formatPace(paceDisplay(selected.pace)) : '--:--', sub: `/${distanceUnit}` },
+                    { label: 'CAL', value: String(cal), sub: null },
+                    { label: 'EFFORT', value: null, sub: null },
                   ].map((stat, i) => (
                     <div key={i} className="flex flex-col items-center gap-1 py-3 px-1"
                       style={{ borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-                      <div className="flex items-center gap-1">
-                        {stat.icon}
-                        <span className="text-[8px] font-black uppercase tracking-[0.16em] text-white/30">{stat.label}</span>
-                      </div>
+                      <span className="text-[8px] font-black uppercase tracking-[0.16em] text-white/30">{stat.label}</span>
                       {stat.value !== null ? (
                         <>
                           <span className="font-victory text-[20px] font-black tabular-nums leading-none text-white">{stat.value}</span>
@@ -911,8 +920,15 @@ export const RunHistory: React.FC = () => {
                 {selected.splits && selected.splits.length > 0 && (
                   <motion.div
                     initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.36 }}
-                    className="w-full rounded-2xl p-4"
-                    style={{ background: 'rgba(13,15,20,0.7)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    className="w-full p-4"
+                    style={{
+                      background: 'rgba(16,18,24,0.165)',
+                      backdropFilter: 'blur(18px) saturate(150%)',
+                      WebkitBackdropFilter: 'blur(18px) saturate(150%)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: 20,
+                      boxShadow: '0 10px 34px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05) inset',
+                    }}>
                     <div className="mb-3 flex items-center justify-between">
                       <span className="text-[10px] font-black uppercase tracking-[0.22em] text-white/40">
                         SPLITS · /{distanceUnit}

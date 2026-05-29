@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Square, MapPin, AlertCircle, ChevronLeft, LocateOff, Play, Pause,
-  Home, History, Target, Layers, Lock, Share2, Flame, Clock, Zap, Pencil,
+  Home, History, Target, Layers, Lock, Share2, Pencil,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -18,19 +18,21 @@ import type { GpsPoint } from '../utils/gpsCalculations';
 
 /* ── Glass pill style ───────────────────────────────────────────── */
 const glassPillStyle: React.CSSProperties = {
-  background: 'rgba(20,20,20,0.72)',
-  backdropFilter: 'blur(14px)',
-  WebkitBackdropFilter: 'blur(14px)',
+  background: 'rgba(16,18,24,0.6)',
+  backdropFilter: 'blur(16px) saturate(150%)',
+  WebkitBackdropFilter: 'blur(16px) saturate(150%)',
   border: '1px solid rgba(255,255,255,0.08)',
   borderRadius: 999,
+  boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
 };
 
 const glassCardStyle: React.CSSProperties = {
-  background: 'rgba(20,20,20,0.72)',
-  backdropFilter: 'blur(14px)',
-  WebkitBackdropFilter: 'blur(14px)',
+  background: 'rgba(16,18,24,0.165)',
+  backdropFilter: 'blur(18px) saturate(150%)',
+  WebkitBackdropFilter: 'blur(18px) saturate(150%)',
   border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 14,
+  borderRadius: 20,
+  boxShadow: '0 10px 34px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05) inset',
 };
 
 /* ── Circle button ──────────────────────────────────────────────── */
@@ -48,6 +50,43 @@ const CircleBtn: React.FC<{ onClick: () => void; children: React.ReactNode; red?
     {children}
   </button>
 );
+
+/* ── Progress ring ──────────────────────────────────────────────── */
+const RingMetric: React.FC<{
+  pct: number;
+  distDisplay: string;
+  distUnit: string;
+  goalDisplay: string;
+  dimmed?: boolean;
+}> = ({ pct, distDisplay, distUnit, goalDisplay, dimmed }) => {
+  const R = 88, C = 2 * Math.PI * R;
+  return (
+    <div style={{ position: 'relative', width: 210, height: 210, opacity: dimmed ? 0.88 : 1 }}>
+      <svg width="210" height="210" viewBox="0 0 210 210"
+        style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}>
+        <circle cx="105" cy="105" r={R} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="10" />
+        <circle cx="105" cy="105" r={R} fill="none" stroke="var(--accent)" strokeWidth="10" strokeLinecap="round"
+          strokeDasharray={C} strokeDashoffset={C * (1 - Math.min(1, Math.max(0, pct)))}
+          style={{ filter: 'drop-shadow(0 0 9px rgba(200,255,0,0.55))', transition: 'stroke-dashoffset 0.8s ease' }} />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 4 }}>
+        <span className="font-victory tabular-nums" style={{ fontSize: 58, lineHeight: 0.84, color: '#f3f5f7' }}>
+          {distDisplay}
+        </span>
+        <span className="font-victory" style={{ fontSize: 14, color: 'var(--accent)', letterSpacing: '0.16em', lineHeight: 1 }}>
+          {distUnit.toUpperCase()}
+        </span>
+        {goalDisplay && (
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 4 }}>
+            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.42)' }}>Goal</span>
+            <span className="font-victory" style={{ fontSize: 13, color: 'var(--accent)' }}>{goalDisplay}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 /* ── Hex-grid GPS loading overlay ──────────────────────────────── */
 const HexOverlay: React.FC<{ show: boolean }> = ({ show }) => (
@@ -93,101 +132,6 @@ const HexOverlay: React.FC<{ show: boolean }> = ({ show }) => (
   </AnimatePresence>
 );
 
-/* ── Animated waveform ──────────────────────────────────────────── */
-const TrackingWave: React.FC = () => (
-  <div className="flex items-center gap-[3px]">
-    {[0.45, 0.75, 1, 0.75, 0.45].map((h, i) => (
-      <div
-        key={i}
-        className="w-[3px] rounded-full bg-[var(--accent)]"
-        style={{
-          height: `${Math.round(h * 14)}px`,
-          animation: `waveBar 0.75s ${i * 0.12}s ease-in-out infinite alternate`,
-        }}
-      />
-    ))}
-    <style>{`
-      @keyframes waveBar {
-        from { transform: scaleY(0.4); opacity: 0.5; }
-        to   { transform: scaleY(1);   opacity: 1;   }
-      }
-    `}</style>
-  </div>
-);
-
-/* ── Slide-to-action control ───────────────────────────────────── */
-interface SlideControlProps {
-  label: string;
-  icon: React.ReactNode;
-  onConfirm: () => void;
-  danger?: boolean;
-}
-
-const SlideControl: React.FC<SlideControlProps> = ({ label, icon, onConfirm, danger = false }) => {
-  const [offset, setOffset] = useState(0);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const startX = useRef(0);
-  const fired = useRef(false);
-  const dragging = useRef(false);
-
-  const accent = danger ? '#ef4444' : 'var(--accent)';
-  const fill   = danger ? 'rgba(239,68,68,0.12)' : 'rgba(200,255,0,0.08)';
-  const iconColor = danger ? 'text-white' : 'text-black';
-
-  const maxOffset = () => {
-    if (!trackRef.current) return 200;
-    return trackRef.current.offsetWidth - 56 - 8;
-  };
-
-  const onDown = useCallback((e: React.PointerEvent) => {
-    if (fired.current) return;
-    dragging.current = true;
-    startX.current = e.clientX;
-    e.currentTarget.setPointerCapture(e.pointerId);
-  }, []);
-
-  const onMove = useCallback((e: React.PointerEvent) => {
-    if (!dragging.current || fired.current) return;
-    const max = maxOffset();
-    const dx = Math.max(0, Math.min(e.clientX - startX.current, max));
-    setOffset(dx);
-    if (dx >= max * 0.82) {
-      fired.current = true;
-      dragging.current = false;
-      setTimeout(() => { onConfirm(); setOffset(0); fired.current = false; }, 180);
-    }
-  }, [onConfirm]);
-
-  const onUp = useCallback(() => {
-    if (!fired.current) { dragging.current = false; setOffset(0); }
-  }, []);
-
-  return (
-    <div
-      ref={trackRef}
-      className="relative h-14 w-full select-none overflow-hidden rounded-full"
-      style={{ background: fill, border: `1px solid ${accent}30` }}
-    >
-      <div
-        className="pointer-events-none absolute inset-y-0 left-0 rounded-full"
-        style={{ width: offset + 56 + 8, background: `${accent}20`, transition: 'none' }}
-      />
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <span className="text-[13px] font-bold tracking-widest text-white/40 uppercase">{label}</span>
-      </div>
-      <div
-        className={`absolute top-1 z-10 flex h-12 w-12 cursor-grab items-center justify-center rounded-full shadow-lg active:cursor-grabbing ${iconColor}`}
-        style={{ left: 4 + offset, background: accent }}
-        onPointerDown={onDown}
-        onPointerMove={onMove}
-        onPointerUp={onUp}
-        onPointerCancel={onUp}
-      >
-        {icon}
-      </div>
-    </div>
-  );
-};
 
 /* ── Goal card ──────────────────────────────────────────────────── */
 type GoalType = 'open' | '5k' | '30min' | 'pace';
@@ -401,12 +345,6 @@ export const ActiveRun: React.FC = () => {
     : activeGoal === 'pace' ? `PACE GOAL`
     : 'OPEN RUN';
 
-  const goalProgressText = activeGoal === '5k'
-    ? `${displayDistance.toFixed(2)} / ${distOpts[goalDistIdx]} ${distanceUnit.toUpperCase()}`
-    : activeGoal === '30min'
-    ? `${formatDuration(elapsedTime)} / ${goalMinutes}:00`
-    : '';
-
   const handleStop = async () => {
     const summary = stopRun();
     const displayDist = distanceUnit === 'mi' ? summary.distance * 0.621371 : summary.distance;
@@ -555,26 +493,31 @@ export const ActiveRun: React.FC = () => {
           </CircleBtn>
         </div>
 
-        {/* PR badge */}
-        {isPR && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3, type: 'spring', stiffness: 280 }}
-            className="absolute right-5 z-20 flex items-center gap-1 rounded-full px-3 py-1.5"
-            style={{
-              top: 'calc(max(16px, env(safe-area-inset-top)) + 52px)',
-              background: 'linear-gradient(135deg, #fac775 0%, #d99a3a 100%)',
-            }}
-          >
-            <span className="text-[10px] font-black tracking-[0.14em] text-black">PR</span>
-          </motion.div>
-        )}
+        {/* PR badge / RUN SAVED badge */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.3, type: 'spring', stiffness: 280 }}
+          className="absolute right-5 z-20 flex items-center gap-1 rounded-full px-3 py-2"
+          style={{
+            top: 'calc(max(16px, env(safe-area-inset-top)) + 52px)',
+            background: isPR
+              ? 'linear-gradient(135deg, #fac775 0%, #d99a3a 100%)'
+              : 'rgba(200,255,0,0.16)',
+            border: isPR ? 'none' : '1px solid rgba(200,255,0,0.32)',
+            boxShadow: isPR ? '0 8px 24px rgba(250,199,117,0.3)' : 'none',
+          }}
+        >
+          <span className="text-[10px] font-black tracking-[0.14em]"
+            style={{ color: isPR ? '#1a0f00' : 'var(--accent)' }}>
+            {isPR ? '★ PERSONAL BEST' : '✓ RUN SAVED'}
+          </span>
+        </motion.div>
 
         {/* Content */}
         <div
-          className="relative z-10 flex flex-1 flex-col items-center justify-end gap-4 px-5"
-          style={{ paddingBottom: 'max(32px, env(safe-area-inset-bottom))' }}
+          className="relative z-10 flex flex-1 flex-col items-center justify-end gap-3 px-5"
+          style={{ paddingBottom: 'max(28px, env(safe-area-inset-bottom))' }}
         >
           {/* Hero distance */}
           <motion.div
@@ -588,62 +531,42 @@ export const ActiveRun: React.FC = () => {
             <span className="font-victory text-[28px] font-black" style={{ color: 'var(--accent)' }}>{finished.unit.toUpperCase()}</span>
           </motion.div>
 
-          {/* 4-stat grid card */}
+          {/* 4-stat horizontal card */}
           <motion.div
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
-            className="w-full rounded-2xl p-4"
-            style={glassCardStyle}
+            className="w-full flex"
+            style={{ ...glassCardStyle, padding: '16px 4px' }}
           >
-            <div className="grid grid-cols-2 gap-3">
-              {/* TIME */}
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-1.5">
-                  <Clock className="h-3 w-3 text-white/30" />
-                  <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30">Time</span>
-                </div>
-                <span className="font-victory text-[26px] font-black tabular-nums leading-none text-white">
-                  {formatDuration(finished.duration)}
-                </span>
+            {[
+              { label: 'TIME', value: formatDuration(finished.duration), sub: null },
+              { label: 'PACE', value: finished.pace > 0 ? formatPace(finished.pace) : '--:--', sub: `/${finished.unit}` },
+              { label: 'CAL', value: String(cal), sub: 'kcal' },
+              { label: 'EFFORT', value: null, sub: '/5', effort },
+            ].map((s, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center justify-center gap-1 py-3"
+                style={{ borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
+                <span className="text-[8px] font-black uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.35)' }}>{s.label}</span>
+                {s.value !== null ? (
+                  <>
+                    <span className="font-victory text-[24px] font-black tabular-nums leading-none text-white">{s.value}</span>
+                    {s.sub && <span className="text-[9px] font-medium" style={{ color: 'rgba(255,255,255,0.28)' }}>{s.sub}</span>}
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center gap-1.5">
+                    <EffortBars effort={s.effort!} />
+                    <span className="text-[10px] font-black" style={{ color: 'rgba(255,255,255,0.4)' }}>{s.effort}/5</span>
+                  </div>
+                )}
               </div>
-
-              {/* AVG PACE */}
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-1.5">
-                  <Zap className="h-3 w-3 text-white/30" />
-                  <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30">Avg Pace</span>
-                </div>
-                <span className="font-victory text-[26px] font-black tabular-nums leading-none text-white">
-                  {finished.pace > 0 ? formatPace(finished.pace) : '--:--'}
-                </span>
-                <span className="text-[10px] font-bold text-white/25">/{finished.unit}</span>
-              </div>
-
-              {/* CAL */}
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-1.5">
-                  <Flame className="h-3 w-3 text-white/30" />
-                  <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30">Cal</span>
-                </div>
-                <span className="font-victory text-[26px] font-black tabular-nums leading-none text-white">{cal}</span>
-              </div>
-
-              {/* EFFORT */}
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30">Effort</span>
-                <div className="flex items-center gap-2 mt-1">
-                  <EffortBars effort={effort} />
-                  <span className="text-[13px] font-black text-white/50">{effort}/5</span>
-                </div>
-              </div>
-            </div>
+            ))}
           </motion.div>
 
           {/* Splits list */}
           {finished.splits && finished.splits.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
-              className="w-full rounded-2xl p-4"
-              style={glassCardStyle}
+              className="w-full"
+              style={{ ...glassCardStyle, padding: 16 }}
             >
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-[0.22em] text-white/40">SPLITS · /{finished.unit}</span>
@@ -683,8 +606,8 @@ export const ActiveRun: React.FC = () => {
           <motion.button
             initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}
             onClick={() => navigate('/')}
-            className="h-14 w-full rounded-full font-victory text-[16px] font-black tracking-[0.2em] text-black transition-all active:scale-[0.97]"
-            style={{ background: 'var(--accent)' }}
+            className="h-[60px] w-full rounded-full font-victory text-[17px] font-black tracking-[0.22em] text-black transition-all active:scale-[0.97]"
+            style={{ background: 'var(--accent)', boxShadow: '0 0 0 5px rgba(200,255,0,0.12), 0 10px 28px rgba(200,255,0,0.32)' }}
           >
             DONE
           </motion.button>
@@ -726,7 +649,7 @@ export const ActiveRun: React.FC = () => {
         style={{
           zIndex: 50,
           paddingTop: 'max(14px, env(safe-area-inset-top))',
-          paddingBottom: 12,
+          paddingBottom: 8,
           background: isRunning && !isPaused
             ? 'linear-gradient(to bottom, rgba(13,15,20,0.75) 0%, transparent 100%)'
             : undefined,
@@ -751,26 +674,29 @@ export const ActiveRun: React.FC = () => {
         )}
 
         {isRunning && !isPaused && (
-          <div className="flex flex-col items-center gap-1.5">
-            {/* Recording pill */}
-            <div
-              className="flex items-center gap-2 rounded-full px-3 py-1.5"
-              style={glassPillStyle}
-            >
-              <span
-                className="h-2 w-2 rounded-full bg-red-500"
-                style={{ animation: 'recBlink 1.1s step-end infinite' }}
-              />
-              <style>{`@keyframes recBlink { 0%,100%{opacity:1} 50%{opacity:0.2} }`}</style>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">
-                RECORDING · {activeGoal === '5k' ? '5K' : activeGoal === '30min' ? '30M' : activeGoal === 'pace' ? 'PACE' : 'FREE'} · KM {Math.ceil(totalDistance)}
-              </span>
-            </div>
+          <div
+            className="flex items-center gap-2 rounded-full px-3 py-1.5"
+            style={glassPillStyle}
+          >
+            <span
+              className="h-2 w-2 rounded-full bg-red-500 shrink-0"
+              style={{ animation: 'recBlink 1.1s step-end infinite' }}
+            />
+            <style>{`@keyframes recBlink { 0%,100%{opacity:1} 50%{opacity:0.2} }`}</style>
+            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white">
+              REC · {activeGoal === '5k' ? '5K' : activeGoal === '30min' ? '30M' : activeGoal === 'pace' ? 'PACE' : 'FREE'}
+            </span>
           </div>
         )}
 
         {isRunning && isPaused && (
-          <span className="font-victory text-[13px] font-black tracking-wide" style={{ color: 'var(--accent)' }}>PAUSED</span>
+          <div className="flex items-center gap-2 rounded-full px-3 py-1.5" style={glassPillStyle}>
+            <span style={{ display: 'flex', gap: 3 }}>
+              <span style={{ width: 3, height: 11, borderRadius: 2, background: 'var(--accent)' }} />
+              <span style={{ width: 3, height: 11, borderRadius: 2, background: 'var(--accent)' }} />
+            </span>
+            <span className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--accent)' }}>PAUSED</span>
+          </div>
         )}
 
         <div className="flex items-center gap-2">
@@ -791,47 +717,15 @@ export const ActiveRun: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Goal progress bar — shown when running ── */}
-      {isRunning && !isPaused && (activeGoal === '5k' || activeGoal === '30min') && (
-        <div
-          className="absolute left-4 right-4"
-          style={{
-            zIndex: 48,
-            top: 'calc(max(14px, env(safe-area-inset-top)) + 68px)',
-          }}
-        >
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl p-3"
-            style={glassCardStyle}
-          >
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-[9px] font-black uppercase tracking-[0.22em] text-white/40">{goalLabel}</span>
-              <span className="text-[11px] font-black tabular-nums text-white/60">{goalProgressText}</span>
-            </div>
-            <div className="h-[5px] w-full rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
-              <motion.div
-                className="h-full rounded-full"
-                animate={{ width: `${goalProgress * 100}%` }}
-                transition={{ duration: 0.6, ease: 'easeOut' }}
-                style={{
-                  background: 'var(--accent)',
-                  boxShadow: '0 0 10px rgba(200,255,0,0.6)',
-                }}
-              />
-            </div>
-          </motion.div>
-        </div>
-      )}
 
       {/* ── Bottom panel ── */}
       <div
-        className="absolute bottom-0 left-0 right-0 flex flex-col px-4 pt-4"
+        className="absolute bottom-0 left-0 right-0 flex flex-col px-4"
         style={{
           zIndex: 50,
-          paddingBottom: 'max(24px, env(safe-area-inset-bottom))',
-          background: 'linear-gradient(to top, #0d0f14 0%, #0d0f14 42%, rgba(13,15,20,0.80) 65%, transparent 100%)',
+          paddingTop: isRunning ? 0 : 12,
+          paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+          background: 'linear-gradient(to top, #0d0f14 0%, #0d0f14 38%, rgba(13,15,20,0.82) 58%, transparent 100%)',
         }}
       >
         <AnimatePresence mode="wait">
@@ -843,82 +737,89 @@ export const ActiveRun: React.FC = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 4 }}
-              className="flex flex-col gap-3"
+              className="flex flex-col gap-2.5"
             >
-              {/* Goal row — borderless, tap to change */}
-              <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2">
-                  <Target className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--accent)' }} />
-                  <span className="text-[9px] font-black uppercase tracking-[0.18em] text-white/30">Goal</span>
-                  <div className="h-3 w-px bg-white/10" />
-                  <span className="font-victory text-[20px] font-black leading-none text-white">
-                    {activeGoal === '5k'    ? `${distOpts[goalDistIdx]} ${distanceUnit.toUpperCase()}`
-                   : activeGoal === '30min' ? `${TIME_OPTIONS[goalTimeIdx]} MIN`
-                   : activeGoal === 'pace'  ? PACE_OPTIONS[goalPaceIdx]
-                   : 'OPEN'}
-                  </span>
-                  <span className="text-[11px] font-medium text-white/30">
-                    {activeGoal === '5k'    ? 'Distance'
-                   : activeGoal === '30min' ? 'Time'
-                   : activeGoal === 'pace'  ? `/${distanceUnit}`
-                   : 'Free run'}
-                  </span>
+              {/* Goal — GlassCard */}
+              <div style={{ ...glassCardStyle, overflow: 'hidden' }}>
+                <div className="flex items-center justify-between p-4 gap-3">
+                  <div className="flex items-center gap-3">
+                    <Target className="h-5 w-5 shrink-0" style={{ color: 'var(--accent)' }} />
+                    <div>
+                      <span className="block text-[9px] font-black uppercase tracking-[0.18em] mb-1" style={{ color: 'var(--accent)' }}>Goal</span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="font-victory text-[28px] font-black leading-none text-white">
+                          {activeGoal === '5k'    ? distOpts[goalDistIdx]
+                         : activeGoal === '30min' ? TIME_OPTIONS[goalTimeIdx]
+                         : activeGoal === 'pace'  ? PACE_OPTIONS[goalPaceIdx]
+                         : 'OPEN'}
+                        </span>
+                        <span className="font-victory text-[14px] font-black" style={{ color: 'var(--accent)' }}>
+                          {activeGoal === '5k'    ? distanceUnit.toUpperCase()
+                         : activeGoal === '30min' ? 'MIN'
+                         : activeGoal === 'pace'  ? `/${distanceUnit}`
+                         : ''}
+                        </span>
+                        <span className="text-[11px] font-medium text-white/35">
+                          {activeGoal === '5k'    ? 'Distance'
+                         : activeGoal === '30min' ? 'Time'
+                         : activeGoal === 'pace'  ? 'Pace'
+                         : 'Free run'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowGoalPicker(true)}
+                    className="flex items-center gap-0.5 text-[11px] font-black tracking-[0.06em] transition-opacity active:opacity-60 shrink-0"
+                    style={{ color: 'var(--accent)' }}
+                  >
+                    Change <ChevronLeft className="h-3.5 w-3.5 rotate-180" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setShowGoalPicker(true)}
-                  className="text-[11px] font-black tracking-[0.1em] transition-opacity active:opacity-60"
-                  style={{ color: 'var(--accent)' }}
-                >
-                  Change ›
-                </button>
               </div>
 
-              {/* Quick stats — no box, just spaced columns */}
-              <div className="grid grid-cols-3 px-1">
-                {/* Last run */}
-                <div className="flex flex-col items-center gap-1 py-2">
-                  <span className="text-[8px] font-bold uppercase tracking-[0.18em] text-white/25">Last Run</span>
-                  {lastRun ? (
-                    <>
-                      <span className="font-victory text-[22px] font-black leading-none text-white">
-                        {(distanceUnit === 'mi' ? lastRun.distance * 0.621371 : lastRun.distance).toFixed(1)}
-                      </span>
-                      <span className="text-[9px] font-semibold text-white/30">{distanceUnit}</span>
-                      <span className="text-[8px] text-white/20">
-                        {Math.floor((Date.now() - lastRun.timestamp) / (24 * 60 * 60 * 1000))}d ago
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-[15px] font-black text-white/15">--</span>
-                  )}
-                </div>
-
-                {/* This week — center, highlighted */}
-                <div className="flex flex-col items-center gap-1 py-2" style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
-                  <span className="text-[8px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--accent)', opacity: 0.7 }}>This Week</span>
-                  <span className="font-victory text-[22px] font-black leading-none" style={{ color: 'var(--accent)' }}>
-                    {(distanceUnit === 'mi' ? weekStats.km * 0.621371 : weekStats.km).toFixed(1)}
-                  </span>
-                  <span className="text-[9px] font-semibold text-white/30">{distanceUnit}</span>
-                  <span className="text-[8px] text-white/20">{weekStats.count} runs</span>
-                </div>
-
-                {/* Streak */}
-                <div className="flex flex-col items-center gap-1 py-2">
-                  <span className="text-[8px] font-bold uppercase tracking-[0.18em] text-white/25">Streak</span>
-                  <span className="font-victory text-[22px] font-black leading-none" style={{ color: streak > 0 ? 'var(--accent)' : 'rgba(255,255,255,0.15)' }}>
-                    {streak}
-                  </span>
-                  <span className="text-[9px] font-semibold text-white/30">{streak === 1 ? 'day' : 'days'}</span>
-                  {streak > 0 && <span className="text-[10px]">🔥</span>}
-                </div>
+              {/* Quick stats row */}
+              <div className="grid grid-cols-3">
+                {[
+                  {
+                    label: 'Last Run',
+                    value: lastRun ? (distanceUnit === 'mi' ? lastRun.distance * 0.621371 : lastRun.distance).toFixed(1) : '--',
+                    sub: lastRun ? `${distanceUnit} · ${Math.floor((Date.now() - lastRun.timestamp) / (24*60*60*1000))}d ago` : '',
+                    hl: false,
+                  },
+                  {
+                    label: 'This Week',
+                    value: (distanceUnit === 'mi' ? weekStats.km * 0.621371 : weekStats.km).toFixed(1),
+                    sub: `${distanceUnit} · ${weekStats.count} runs`,
+                    hl: true,
+                  },
+                  {
+                    label: 'Streak',
+                    value: String(streak),
+                    sub: streak === 1 ? 'day' : 'days',
+                    hl: streak > 0,
+                  },
+                ].map((s, i) => (
+                  <div key={i} className="flex flex-col items-center gap-0.5 py-1.5"
+                    style={{ borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+                    <span className="text-[8px] font-black uppercase tracking-[0.16em]"
+                      style={{ color: s.hl ? 'var(--accent)' : 'rgba(255,255,255,0.35)' }}>
+                      {s.label}
+                    </span>
+                    <span className="font-victory text-[22px] font-black leading-none"
+                      style={{ color: s.hl ? 'var(--accent)' : '#f3f5f7' }}>
+                      {s.value}
+                    </span>
+                    {s.sub && <span className="text-[8px] font-medium" style={{ color: 'rgba(255,255,255,0.28)' }}>{s.sub}</span>}
+                  </div>
+                ))}
               </div>
 
               {/* Start run button */}
               <button
                 onClick={() => setShowStartConfirm(true)}
-                className="w-full h-14 rounded-full font-victory text-[16px] font-black tracking-[0.22em] text-black transition-all active:scale-[0.97] flex items-center justify-center gap-2.5"
-                style={{ background: 'var(--accent)', boxShadow: '0 0 24px rgba(200,255,0,0.3)' }}
+                className="w-full h-[60px] rounded-full font-victory text-[17px] font-black tracking-[0.22em] text-black transition-all active:scale-[0.97] flex items-center justify-center gap-3"
+                style={{ background: 'var(--accent)', boxShadow: '0 0 0 6px rgba(200,255,0,0.12), 0 12px 34px rgba(200,255,0,0.36)' }}
               >
                 <Play className="h-5 w-5 fill-black" />
                 START RUN
@@ -927,7 +828,8 @@ export const ActiveRun: React.FC = () => {
               {/* View history */}
               <button
                 onClick={() => navigate('/run/history')}
-                className="btn-glow btn-glow-accent w-full py-3 flex items-center justify-center gap-2 text-[12px] font-bold tracking-[0.12em] text-[var(--text-secondary)]"
+                className="w-full py-3 flex items-center justify-center gap-2 text-[12px] font-black tracking-[0.12em] transition-opacity active:opacity-60"
+                style={{ color: 'rgba(255,255,255,0.38)', letterSpacing: '0.08em' }}
               >
                 <History className="h-3.5 w-3.5" />
                 VIEW RUN HISTORY ›
@@ -942,76 +844,76 @@ export const ActiveRun: React.FC = () => {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col gap-2"
+              className="flex flex-col items-center"
             >
-              {/* Hero number */}
-              <div className="flex items-baseline justify-center gap-2">
-                <span className="font-victory leading-none tabular-nums text-white" style={{ fontSize: 96 }}>
-                  {displayDistance.toFixed(2)}
-                </span>
-                <span className="font-victory text-[28px] font-black text-white/30" style={{ fontSize: 28 }}>
-                  {distanceUnit}
-                </span>
+              {/* Ring metric */}
+              <div className="flex justify-center" style={{ marginBottom: 4 }}>
+                <RingMetric
+                  pct={goalProgress}
+                  distDisplay={displayDistance.toFixed(2)}
+                  distUnit={distanceUnit}
+                  goalDisplay={
+                    activeGoal === '5k'    ? `${distOpts[goalDistIdx]} ${distanceUnit.toUpperCase()}`
+                    : activeGoal === '30min' ? `${TIME_OPTIONS[goalTimeIdx]}M`
+                    : activeGoal === 'pace' ? PACE_OPTIONS[goalPaceIdx]
+                    : 'OPEN'
+                  }
+                />
               </div>
 
-              {/* Divider */}
-              <div className="h-px w-full" style={{ background: 'rgba(255,255,255,0.07)' }} />
-
-              {/* 3-col stats */}
-              <div className="grid grid-cols-3">
-                <div className="flex flex-col items-center gap-0.5">
-                  <span className="text-[8px] font-black uppercase tracking-[0.18em] text-white/30">TIME</span>
-                  <span className="font-victory text-[24px] font-black tabular-nums leading-none text-white">
-                    {formatDuration(elapsedTime)}
-                  </span>
-                </div>
-                <div className="flex flex-col items-center gap-0.5">
-                  <span className="text-[8px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--accent)' }}>PACE</span>
-                  <span className="font-victory text-[24px] font-black tabular-nums leading-none" style={{ color: 'var(--accent)' }}>
-                    {displayPace > 0 ? formatPace(displayPace) : '--:--'}
-                  </span>
-                  <span className="text-[9px] font-bold text-white/25">/{distanceUnit}</span>
-                </div>
-                <div className="flex flex-col items-center gap-0.5">
-                  <span className="text-[8px] font-black uppercase tracking-[0.18em] text-white/30">BPM</span>
-                  <span className="font-victory text-[24px] font-black tabular-nums leading-none text-white">--</span>
-                  <span className="text-[9px] font-bold text-white/25">BPM</span>
-                </div>
+              {/* Vertical blended metric rows */}
+              <div className="w-full" style={{ marginBottom: 12 }}>
+                {[
+                  { label: 'PACE', value: displayPace > 0 ? formatPace(displayPace) : '--:--', unit: `/${distanceUnit}`, hl: true },
+                  { label: 'TIME', value: formatDuration(elapsedTime), unit: 'elapsed', hl: false },
+                  { label: 'CAL', value: String(Math.round(displayDistance * (distanceUnit === 'mi' ? 1.609344 : 1) * 65)), unit: 'kcal', hl: false },
+                ].map((row, i) => (
+                  <div key={i} className="flex flex-col items-center text-center"
+                    style={{ padding: '10px 0', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] mb-1"
+                      style={{ color: row.hl ? 'var(--accent)' : 'rgba(255,255,255,0.42)' }}>
+                      {row.label}
+                    </span>
+                    <div className="flex items-baseline justify-center gap-1.5">
+                      <span className="font-victory tabular-nums leading-none"
+                        style={{ fontSize: 38, color: row.hl ? 'var(--accent)' : '#f3f5f7' }}>
+                        {row.value}
+                      </span>
+                      <span className="text-[11px] font-semibold whitespace-nowrap"
+                        style={{ color: 'rgba(255,255,255,0.3)' }}>
+                        {row.unit}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* Alerts */}
               {needsInternet && (
-                <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-semibold text-amber-200" style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                <div className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-semibold text-amber-200" style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', marginBottom: 8 }}>
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   Map tiles need internet — GPS tracking continues offline.
                 </div>
               )}
 
               {/* Controls row */}
-              <div className="flex items-center gap-3">
-                {/* PAUSE pill */}
+              <div className="flex w-full items-center gap-3">
                 <button
                   onClick={pauseRun}
-                  className="flex h-14 flex-1 items-center justify-center gap-2 rounded-full transition-all active:scale-[0.95]"
-                  style={{ background: 'rgba(255,255,255,0.07)', border: '1.5px solid rgba(255,255,255,0.18)' }}
+                  className="flex h-[60px] flex-1 items-center justify-center gap-2.5 rounded-full transition-all active:scale-[0.95]"
+                  style={{ background: 'rgba(255,255,255,0.07)', border: '1.5px solid rgba(255,255,255,0.16)' }}
                 >
-                  <Pause className="h-[18px] w-[18px] fill-white text-white" />
+                  <Pause className="h-5 w-5 fill-white text-white" />
                   <span className="font-victory text-[15px] font-black tracking-[0.18em] text-white uppercase">PAUSE</span>
                 </button>
-
-                {/* Stop circle */}
                 <button
                   onClick={() => setShowStopConfirm(true)}
                   className="flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-full transition-all active:scale-95"
-                  style={{
-                    background: 'rgba(239,68,68,0.85)',
-                    boxShadow: '0 0 20px rgba(239,68,68,0.4)',
-                  }}
+                  style={{ background: '#ef4444', boxShadow: '0 0 0 6px rgba(239,68,68,0.16), 0 10px 28px rgba(239,68,68,0.4)' }}
                 >
                   <Square className="h-6 w-6 fill-white text-white" />
                 </button>
               </div>
-
             </motion.div>
           )}
 
@@ -1022,38 +924,68 @@ export const ActiveRun: React.FC = () => {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col gap-3"
+              className="flex flex-col items-center"
             >
-              <div className="grid grid-cols-3">
+              {/* Ring metric — dimmed to signal paused */}
+              <div className="flex justify-center" style={{ marginBottom: 4 }}>
+                <RingMetric
+                  pct={goalProgress}
+                  distDisplay={displayDistance.toFixed(2)}
+                  distUnit={distanceUnit}
+                  goalDisplay={
+                    activeGoal === '5k'    ? `${distOpts[goalDistIdx]} ${distanceUnit.toUpperCase()}`
+                    : activeGoal === '30min' ? `${TIME_OPTIONS[goalTimeIdx]}M`
+                    : activeGoal === 'pace' ? PACE_OPTIONS[goalPaceIdx]
+                    : 'OPEN'
+                  }
+                  dimmed
+                />
+              </div>
+
+              {/* Vertical blended metric rows */}
+              <div className="w-full" style={{ marginBottom: 12 }}>
                 {[
-                  { label: 'DISTANCE', value: displayDistance.toFixed(2), unit: distanceUnit },
-                  { label: 'TIME', value: formatDuration(elapsedTime), unit: '' },
-                  { label: 'PACE', value: displayPace > 0 ? formatPace(displayPace) : '--:--', unit: `/${distanceUnit}` },
-                ].map(({ label, value, unit }, i) => (
-                  <div key={i} className="flex flex-col items-center gap-0.5">
-                    <span className="text-[9px] font-black uppercase tracking-[0.18em]" style={{ color: 'rgba(200,255,0,0.7)' }}>{label}</span>
-                    <span className="font-victory text-[28px] font-black tabular-nums leading-none text-white">{value}</span>
-                    {unit ? <span className="text-[10px] font-bold text-white/30">{unit}</span> : <span className="h-[16px]" />}
+                  { label: 'PACE', value: displayPace > 0 ? formatPace(displayPace) : '--:--', unit: `/${distanceUnit}`, hl: true },
+                  { label: 'TIME', value: formatDuration(elapsedTime), unit: 'elapsed', hl: false },
+                  { label: 'CAL', value: String(Math.round(displayDistance * (distanceUnit === 'mi' ? 1.609344 : 1) * 65)), unit: 'kcal', hl: false },
+                ].map((row, i) => (
+                  <div key={i} className="flex flex-col items-center text-center"
+                    style={{ padding: '10px 0', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] mb-1"
+                      style={{ color: row.hl ? 'var(--accent)' : 'rgba(255,255,255,0.42)' }}>
+                      {row.label}
+                    </span>
+                    <div className="flex items-baseline justify-center gap-1.5">
+                      <span className="font-victory tabular-nums leading-none"
+                        style={{ fontSize: 38, color: row.hl ? 'var(--accent)' : '#f3f5f7' }}>
+                        {row.value}
+                      </span>
+                      <span className="text-[11px] font-semibold whitespace-nowrap"
+                        style={{ color: 'rgba(255,255,255,0.3)' }}>
+                        {row.unit}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
 
-              <div className="flex gap-2.5">
+              {/* Resume + Finish */}
+              <div className="flex w-full gap-3">
                 <button
                   onClick={resumeRun}
-                  className="flex h-14 flex-1 items-center justify-center gap-2 rounded-full text-black transition-all active:scale-[0.97]"
-                  style={{ background: 'var(--accent)' }}
+                  className="flex h-[62px] flex-1 items-center justify-center gap-2.5 rounded-full text-black transition-all active:scale-[0.97]"
+                  style={{ background: 'var(--accent)', boxShadow: '0 0 0 5px rgba(200,255,0,0.12), 0 10px 28px rgba(200,255,0,0.34)' }}
                 >
                   <Play className="h-5 w-5 fill-black" />
-                  <span className="font-victory text-[16px] font-black tracking-[0.18em] uppercase">Resume</span>
+                  <span className="font-victory text-[15px] font-black tracking-[0.18em] uppercase">RESUME</span>
                 </button>
                 <button
                   onClick={() => { void handleStop(); }}
-                  className="flex h-14 flex-1 items-center justify-center gap-2 rounded-full text-white transition-all active:scale-[0.97]"
-                  style={{ background: 'rgba(239,68,68,0.85)' }}
+                  className="flex h-[62px] flex-1 items-center justify-center gap-2.5 rounded-full text-white transition-all active:scale-[0.97]"
+                  style={{ background: 'rgba(239,68,68,0.9)' }}
                 >
                   <Square className="h-4 w-4 fill-white" />
-                  <span className="font-victory text-[16px] font-black tracking-[0.18em] uppercase">Finish</span>
+                  <span className="font-victory text-[15px] font-black tracking-[0.18em] uppercase">FINISH</span>
                 </button>
               </div>
             </motion.div>
@@ -1224,15 +1156,17 @@ export const ActiveRun: React.FC = () => {
                   return (
                     <div
                       key={key}
-                      className="relative rounded-2xl overflow-hidden"
+                      className="relative overflow-hidden"
                       style={{
+                        borderRadius: 16,
                         background: active ? 'rgba(200,255,0,0.09)' : 'rgba(255,255,255,0.04)',
                         border: active ? '1.5px solid var(--accent)' : '1px solid rgba(255,255,255,0.08)',
                       }}
                     >
                       <button
                         onClick={() => { setActiveGoal(key); setShowGoalPicker(false); }}
-                        className="w-full flex flex-col items-center pt-4 pb-3 px-2 transition-all active:scale-95"
+                        className="w-full flex flex-col items-center transition-all active:opacity-80"
+                        style={{ padding: '16px 8px 12px' }}
                       >
                         <span
                           className="font-victory text-[26px] font-black leading-none"
