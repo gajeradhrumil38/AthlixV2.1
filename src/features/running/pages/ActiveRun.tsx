@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useCallback } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -268,8 +268,8 @@ export const ActiveRun: React.FC = () => {
   } = useRunTracking();
 
   const [distanceUnit] = useState<'km' | 'mi'>(() => {
-    try { const s = localStorage.getItem('athlix_distance_unit'); return s === 'km' ? 'km' : 'mi'; }
-    catch { return 'mi'; }
+    try { const s = localStorage.getItem('athlix_distance_unit'); return s === 'mi' ? 'mi' : 'km'; }
+    catch { return 'km'; }
   });
 
   const distOpts = distanceUnit === 'mi' ? DIST_OPTIONS_MI : DIST_OPTIONS_KM;
@@ -317,6 +317,7 @@ export const ActiveRun: React.FC = () => {
     distance: number;
     duration: number;
     pace: number;
+    rawPace: number;
     unit: 'km' | 'mi';
     path: GpsPoint[];
     splits: { km: number; pace: number }[];
@@ -377,6 +378,7 @@ export const ActiveRun: React.FC = () => {
       distance: displayDist,
       duration: summary.duration,
       pace: displayPaceVal,
+      rawPace: summary.pace,
       unit: distanceUnit,
       path: summary.path,
       splits: summary.splits,
@@ -452,8 +454,9 @@ export const ActiveRun: React.FC = () => {
 
     // Check if this is a PR (best pace among all saved runs)
     const allRuns = getRuns();
-    const isPR = allRuns.length > 0 && finished.pace > 0 &&
-      finished.pace <= Math.min(...allRuns.map((r) => r.pace).filter((p) => p > 0));
+    const validPaces = allRuns.map((r) => r.pace).filter((p) => p > 0);
+    const isPR = validPaces.length > 0 && finished.rawPace > 0 &&
+      finished.rawPace <= Math.min(...validPaces);
 
     return (
       <div className="relative flex min-h-screen flex-col overflow-hidden" style={{ background: '#0d0f14' }}>
@@ -667,8 +670,11 @@ export const ActiveRun: React.FC = () => {
               className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
               style={glassPillStyle}
             >
-              <MapPin className="h-2.5 w-2.5" style={{ color: 'var(--accent)' }} />
-              <span className="text-[9px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--accent)' }}>GPS LOCKED</span>
+              <MapPin className="h-2.5 w-2.5" style={{ color: currentPosition ? 'var(--accent)' : 'rgba(255,255,255,0.4)' }} />
+              <span className="text-[9px] font-black uppercase tracking-[0.18em]"
+                style={{ color: currentPosition ? 'var(--accent)' : 'rgba(255,255,255,0.4)' }}>
+                {currentPosition ? 'GPS LOCKED' : 'ACQUIRING GPS'}
+              </span>
             </div>
           </div>
         )}
@@ -866,7 +872,7 @@ export const ActiveRun: React.FC = () => {
                 {[
                   { label: 'PACE', value: displayPace > 0 ? formatPace(displayPace) : '--:--', unit: `/${distanceUnit}`, hl: true },
                   { label: 'TIME', value: formatDuration(elapsedTime), unit: 'elapsed', hl: false },
-                  { label: 'CAL', value: String(Math.round(displayDistance * (distanceUnit === 'mi' ? 1.609344 : 1) * 65)), unit: 'kcal', hl: false },
+                  { label: 'CAL', value: String(Math.round(totalDistance * 65)), unit: 'kcal', hl: false },
                 ].map((row, i) => (
                   <div key={i} className="flex flex-col items-center text-center"
                     style={{ padding: '10px 0', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
@@ -947,7 +953,7 @@ export const ActiveRun: React.FC = () => {
                 {[
                   { label: 'PACE', value: displayPace > 0 ? formatPace(displayPace) : '--:--', unit: `/${distanceUnit}`, hl: true },
                   { label: 'TIME', value: formatDuration(elapsedTime), unit: 'elapsed', hl: false },
-                  { label: 'CAL', value: String(Math.round(displayDistance * (distanceUnit === 'mi' ? 1.609344 : 1) * 65)), unit: 'kcal', hl: false },
+                  { label: 'CAL', value: String(Math.round(totalDistance * 65)), unit: 'kcal', hl: false },
                 ].map((row, i) => (
                   <div key={i} className="flex flex-col items-center text-center"
                     style={{ padding: '10px 0', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
@@ -1265,8 +1271,8 @@ export const ActiveRun: React.FC = () => {
 
                 <button
                   onClick={() => setEditingGoal(null)}
-                  className="h-13 w-full rounded-full font-victory text-[15px] font-black tracking-[0.18em] text-black transition-all active:scale-[0.97]"
-                  style={{ background: 'var(--accent)', height: 52 }}
+                  className="h-[60px] w-full rounded-full font-victory text-[15px] font-black tracking-[0.18em] text-black transition-all active:scale-[0.97]"
+                  style={{ background: 'var(--accent)', boxShadow: '0 0 0 5px rgba(200,255,0,0.12), 0 10px 28px rgba(200,255,0,0.32)' }}
                 >
                   DONE
                 </button>
