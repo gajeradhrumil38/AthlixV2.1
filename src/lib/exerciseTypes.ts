@@ -314,7 +314,6 @@ const EXACT_TYPE_MAP: Record<string, ExerciseInputType> = {
 
   // ── Cardio timed ──
   'skipping':                   'time_only',
-  'jump rope':                  'time_only',
   'boxing':                     'time_only',
   'shadow boxing':              'time_only',
   'hiit':                       'time_only',

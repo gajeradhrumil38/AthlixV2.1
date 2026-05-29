@@ -10,7 +10,7 @@
  * The edge function at supabase/functions/food-scan/index.ts handles OAuth 1.0a signing.
  */
 
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../../lib/supabase';
 import type {
   DetectedFood,
   FatSecretFoodEntry,
@@ -19,7 +19,7 @@ import type {
   FatSecretRecognizeResponse,
   FatSecretSearchResponse,
   FatSecretFoodResponse,
-} from '../features/food/types';
+} from '../types';
 
 // ─── Image processing (client-side Canvas) ────────────────────────────────
 

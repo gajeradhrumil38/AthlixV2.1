@@ -267,10 +267,17 @@ export const ActiveRun: React.FC = () => {
     startRun, pauseRun, resumeRun, stopRun,
   } = useRunTracking();
 
-  const [distanceUnit] = useState<'km' | 'mi'>(() => {
+  const [distanceUnit, setDistanceUnit] = useState<'km' | 'mi'>(() => {
     try { const s = localStorage.getItem('athlix_distance_unit'); return s === 'mi' ? 'mi' : 'km'; }
     catch { return 'km'; }
   });
+
+  const toggleUnit = () => {
+    const next = distanceUnit === 'km' ? 'mi' : 'km';
+    try { localStorage.setItem('athlix_distance_unit', next); } catch {}
+    setDistanceUnit(next);
+    setGoalDistIdx(next === 'mi' ? 5 : 3); // reset to 3.1 mi or 5 km
+  };
 
   const distOpts = distanceUnit === 'mi' ? DIST_OPTIONS_MI : DIST_OPTIONS_KM;
   const [goalDistIdx,  setGoalDistIdx]  = useState(() => distanceUnit === 'mi' ? 5 : 3); // 3.1 mi / 5 km
@@ -1142,9 +1149,30 @@ export const ActiveRun: React.FC = () => {
               {/* Handle */}
               <div className="mx-auto h-1 w-10 rounded-full bg-white/15" />
 
-              <div className="flex items-center gap-2 mb-1">
-                <Target className="h-4 w-4" style={{ color: 'var(--accent)' }} />
-                <span className="text-[13px] font-black uppercase tracking-[0.18em] text-white">Choose Goal</span>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4" style={{ color: 'var(--accent)' }} />
+                  <span className="text-[13px] font-black uppercase tracking-[0.18em] text-white">Choose Goal</span>
+                </div>
+                {/* Unit toggle */}
+                <button
+                  onClick={toggleUnit}
+                  className="flex overflow-hidden rounded-full"
+                  style={{ border: '1px solid rgba(255,255,255,0.1)' }}
+                >
+                  {(['km', 'mi'] as const).map((u) => (
+                    <span
+                      key={u}
+                      className="px-3 py-1.5 text-[11px] font-black tracking-[0.1em] uppercase transition-all"
+                      style={{
+                        background: distanceUnit === u ? 'var(--accent)' : 'rgba(255,255,255,0.06)',
+                        color: distanceUnit === u ? '#000' : 'rgba(255,255,255,0.38)',
+                      }}
+                    >
+                      {u}
+                    </span>
+                  ))}
+                </button>
               </div>
 
               <div className="grid grid-cols-2 gap-2.5">
