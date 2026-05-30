@@ -333,47 +333,73 @@ interface ProductItemProps {
   onSkip:  () => void;
 }
 const ProductItem: React.FC<ProductItemProps> = ({ product, entry, colors, onDone, onSkip }) => {
-  const [timerActive, setTimerActive] = useState(false);
-  const status    = entry?.status ?? 'pending';
-  const isDone    = status === 'done';
-  const isSkipped = status === 'skipped';
+  const [timerActive, setTimerActive]     = useState(false);
+  // Optimistic flag — updates the circle IMMEDIATELY on tap, before state propagates.
+  const [optimisticDone, setOptimisticDone] = useState(false);
+
+  const status     = entry?.status ?? 'pending';
+  const isDone     = status === 'done' || optimisticDone;
+  const isSkipped  = status === 'skipped' && !optimisticDone;
+  const inProgress = timerActive && !isDone; // timer running, not yet confirmed
+
+  // When state reverts to pending (external undo), clear the optimistic flag.
+  useEffect(() => {
+    if (status === 'pending') { setOptimisticDone(false); setTimerActive(false); }
+    if (status !== 'pending')  setTimerActive(false);
+  }, [status]);
 
   const handleDone = useCallback(() => {
-    if (product.durationSec > 0 && status === 'pending') setTimerActive(true);
-    else onDone();
-  }, [product.durationSec, status, onDone]);
+    if (isDone) return;
+    if (product.durationSec > 0) {
+      setTimerActive(true);           // timer products: show countdown first
+    } else {
+      setOptimisticDone(true);        // no timer: fill circle immediately
+      onDone();
+    }
+  }, [product.durationSec, isDone, onDone]);
 
   const handleTimerComplete = useCallback(() => {
     setTimerActive(false);
+    setOptimisticDone(true);          // fill circle the moment timer ends
     onDone();
   }, [onDone]);
 
-  useEffect(() => {
-    if (status !== 'pending') setTimerActive(false);
-  }, [status]);
+  const handleUndo = useCallback(() => {
+    setOptimisticDone(false);
+    setTimerActive(false);
+    onSkip();                         // DayPanel detects done/skipped → resets to pending
+  }, [onSkip]);
 
-  // Background and border pick: done→sage, skipped→flat dark, pending→subcat tint
   const bg     = isDone ? DONE.dim    : isSkipped ? 'rgba(255,255,255,0.025)' : colors.dim;
   const border = isDone ? DONE.border : isSkipped ? 'rgba(255,255,255,0.05)'  : colors.border;
+
+  // Circle appearance:
+  //   done        → solid sage fill + dark checkmark
+  //   in-progress → subcat-dim fill + subcat border + small centre dot
+  //   skipped     → neutral faint ring
+  //   pending     → transparent + subcat ring
+  const circleBg = isDone ? DONE.accent : inProgress ? colors.dim : 'transparent';
+  const circleBorder = isDone ? DONE.accent
+    : inProgress ? colors.accent
+    : isSkipped  ? 'rgba(255,255,255,0.15)'
+    : colors.accent;
 
   return (
     <div
       className="rounded-2xl px-4 py-3 mb-2"
-      style={{ background: bg, border: `1px solid ${border}`, opacity: isSkipped ? 0.5 : 1, transition: 'all 0.2s ease' }}
+      style={{ background: bg, border: `1px solid ${border}`, opacity: isSkipped ? 0.5 : 1, transition: 'background 0.2s ease, border-color 0.2s ease' }}
     >
       <div className="flex items-center gap-3">
-        {/* Status circle */}
+        {/* Status circle — fills green instantly on tap via optimistic state */}
         <div
           className="shrink-0 flex items-center justify-center rounded-full"
-          style={{
-            width: 26, height: 26,
-            background: isDone ? DONE.accent : 'transparent',
-            border: `1.5px solid ${isDone ? DONE.accent : isSkipped ? 'rgba(255,255,255,0.15)' : colors.accent}`,
-            transition: 'all 0.2s ease',
-          }}
+          style={{ width: 26, height: 26, background: circleBg, border: `1.5px solid ${circleBorder}`, transition: 'all 0.18s ease' }}
         >
           {isDone    && <Check size={13} color="#0a0c10" strokeWidth={3} />}
           {isSkipped && <X    size={11} color="rgba(255,255,255,0.35)" strokeWidth={2.5} />}
+          {inProgress && (
+            <div className="rounded-full" style={{ width: 6, height: 6, background: colors.accent, opacity: 0.9 }} />
+          )}
         </div>
 
         <span
@@ -387,17 +413,15 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, entry, colors, onDon
         >
           {product.name}
           {product.oneTime && (
-            <span className="ml-2 text-[10px] font-bold tracking-[0.08em] uppercase" style={{ color: N.muted }}>
-              today
-            </span>
+            <span className="ml-2 text-[10px] font-bold tracking-[0.08em] uppercase" style={{ color: N.muted }}>today</span>
           )}
-          {product.durationSec > 0 && !timerActive && !isDone && !isSkipped && (
+          {product.durationSec > 0 && !inProgress && !isDone && !isSkipped && (
             <span className="ml-2 text-[11px]" style={{ color: N.muted }}>{product.durationSec}s</span>
           )}
         </span>
 
-        {/* Action buttons */}
-        {!isDone && !isSkipped && (
+        {/* Buttons: shown only when pending and not in timer */}
+        {!isDone && !isSkipped && !inProgress && (
           <div className="flex gap-1.5 shrink-0">
             <button
               onClick={handleDone}
@@ -417,7 +441,7 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, entry, colors, onDon
         )}
         {(isDone || isSkipped) && (
           <button
-            onClick={onSkip}
+            onClick={handleUndo}
             className="text-[11px] font-medium active:opacity-50 transition-opacity"
             style={{ color: N.muted }}
           >
@@ -426,7 +450,7 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, entry, colors, onDon
         )}
       </div>
 
-      {timerActive && (
+      {inProgress && (
         <TimerBar durationSec={product.durationSec} onComplete={handleTimerComplete} barColor={colors.accent} />
       )}
     </div>
