@@ -1,32 +1,68 @@
 import React, { useReducer, useEffect, useRef, useState, useCallback } from 'react';
 import { ChevronDown, ChevronUp, Check, X, SkipForward, Edit3, Plus, Trash2, ArrowUp, ArrowDown, Sparkles } from 'lucide-react';
 
-// ── Palette ──────────────────────────────────────────────
-const SK = {
-  accent:     '#D4A5B8',
-  accentDim:  'rgba(212,165,184,0.12)',
-  accentGlow: 'rgba(212,165,184,0.28)',
-  done:       '#7EC8A4',
-  doneDim:    'rgba(126,200,164,0.1)',
-  skip:       'rgba(255,255,255,0.28)',
-  border:     'rgba(212,165,184,0.14)',
-  borderMid:  'rgba(255,255,255,0.07)',
+// ── Colour system ─────────────────────────────────────────
+// Three semantic colours only: amber (morning) · blue (night) · sage (done).
+// All chrome — headers, cards, buttons — stays neutral white/dark.
+
+const MORNING = {
+  accent: '#C8A870',                    // warm amber
+  dim:    'rgba(200,168,112,0.09)',
+  border: 'rgba(200,168,112,0.18)',
+  glow:   'rgba(200,168,112,0.22)',
 } as const;
+
+const NIGHT = {
+  accent: '#7A9BC8',                    // cool steel blue
+  dim:    'rgba(122,155,200,0.09)',
+  border: 'rgba(122,155,200,0.18)',
+  glow:   'rgba(122,155,200,0.22)',
+} as const;
+
+const CUSTOM = {
+  accent: 'rgba(255,255,255,0.5)',
+  dim:    'rgba(255,255,255,0.04)',
+  border: 'rgba(255,255,255,0.10)',
+  glow:   'rgba(255,255,255,0.10)',
+} as const;
+
+const DONE = {
+  accent: '#6EC4A0',                    // sage green
+  dim:    'rgba(110,196,160,0.09)',
+  border: 'rgba(110,196,160,0.18)',
+} as const;
+
+// Neutral chrome tokens (no hue)
+const N = {
+  heading:   'rgba(255,255,255,0.90)',
+  secondary: 'rgba(255,255,255,0.45)',
+  muted:     'rgba(255,255,255,0.22)',
+  hairline:  'rgba(255,255,255,0.07)',
+  surface:   'rgba(255,255,255,0.03)',
+  card:      'rgba(255,255,255,0.05)',
+} as const;
+
+interface SubcatColors { accent: string; dim: string; border: string; glow: string; }
+function subcatColor(sub: string): SubcatColors {
+  if (sub === 'Morning') return MORNING;
+  if (sub === 'Night')   return NIGHT;
+  return CUSTOM;
+}
 
 // ── Types ────────────────────────────────────────────────
 type Status  = 'pending' | 'done' | 'skipped';
 type DayName = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
 const DAY_NAMES: DayName[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-interface ProductEntry    { productId: string; status: Status; scheduledDate: string; }
-interface SubcatDay       { products: ProductEntry[]; }
-interface DayData         { subcats: Record<string, SubcatDay>; }
-interface WeekData        { days: Record<string, DayData>; }
-interface RoutineProduct  { id: string; name: string; durationSec: number; oneTime?: boolean; }
+interface ProductEntry   { productId: string; status: Status; scheduledDate: string; }
+interface SubcatDay      { products: ProductEntry[]; }
+interface DayData        { subcats: Record<string, SubcatDay>; }
+interface WeekData       { days: Record<string, DayData>; }
+interface RoutineProduct { id: string; name: string; durationSec: number; oneTime?: boolean; }
 interface AppState {
-  weeks:         Record<string, WeekData>;
-  routine:       Record<string, RoutineProduct[]>;
-  subcategories: string[];
+  weeks:          Record<string, WeekData>;
+  routine:        Record<string, RoutineProduct[]>;
+  subcategories:  string[];
   productLibrary: { id: string; name: string }[];
 }
 
@@ -43,7 +79,7 @@ function weekStartDate(weekId: string): Date {
   const [year, wkStr] = weekId.split('-W');
   const wk = parseInt(wkStr, 10);
   const jan4 = new Date(Date.UTC(parseInt(year, 10), 0, 4));
-  const dayOfWeek = (jan4.getUTCDay() || 7);
+  const dayOfWeek = jan4.getUTCDay() || 7;
   const startMs = jan4.getTime() - (dayOfWeek - 1) * 86400000 + (wk - 1) * 7 * 86400000;
   return new Date(startMs);
 }
@@ -51,13 +87,12 @@ function weekStartDate(weekId: string): Date {
 function dayDate(weekId: string, day: DayName): string {
   const start = weekStartDate(weekId);
   const idx = DAY_NAMES.indexOf(day);
-  const d = new Date(start.getTime() + idx * 86400000);
-  return d.toISOString().slice(0, 10);
+  return new Date(start.getTime() + idx * 86400000).toISOString().slice(0, 10);
 }
 
 function todayWeekId(): string { return isoWeekId(new Date()); }
 function todayDayName(): DayName {
-  const d = new Date().getDay(); // 0=Sun
+  const d = new Date().getDay();
   return DAY_NAMES[d === 0 ? 6 : d - 1];
 }
 
@@ -73,8 +108,7 @@ function nextDayInfo(weekId: string, day: DayName): { weekId: string; day: DayNa
   const idx = DAY_NAMES.indexOf(day);
   if (idx < 6) return { weekId, day: DAY_NAMES[idx + 1] };
   const start = weekStartDate(weekId);
-  const nextWeek = new Date(start.getTime() + 7 * 86400000);
-  return { weekId: isoWeekId(nextWeek), day: 'Mon' };
+  return { weekId: isoWeekId(new Date(start.getTime() + 7 * 86400000)), day: 'Mon' };
 }
 
 // ── Default state ─────────────────────────────────────────
@@ -99,9 +133,8 @@ function buildEmptyWeek(weekId: string, subcats: string[], routine: Record<strin
   for (const day of DAY_NAMES) {
     const subcatMap: Record<string, SubcatDay> = {};
     for (const sub of subcats) {
-      const prods = routine[sub] ?? [];
       subcatMap[sub] = {
-        products: prods
+        products: (routine[sub] ?? [])
           .filter(p => !p.oneTime)
           .map(p => ({ productId: p.id, status: 'pending', scheduledDate: dayDate(weekId, day) })),
       };
@@ -114,19 +147,16 @@ function buildEmptyWeek(weekId: string, subcats: string[], routine: Record<strin
 function initialState(): AppState {
   try {
     const raw = localStorage.getItem('athlix_skincare_v1');
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw) as AppState;
+      if (parsed && parsed.routine && parsed.subcategories && parsed.weeks) return parsed;
+    }
   } catch {}
   const weeks: Record<string, WeekData> = {};
-  const weekIds = generateWeekIds(2, 2);
-  for (const wid of weekIds) {
+  for (const wid of generateWeekIds(2, 2)) {
     weeks[wid] = buildEmptyWeek(wid, DEFAULT_SUBCATS, DEFAULT_ROUTINE);
   }
-  return {
-    weeks,
-    routine: DEFAULT_ROUTINE,
-    subcategories: DEFAULT_SUBCATS,
-    productLibrary: [],
-  };
+  return { weeks, routine: DEFAULT_ROUTINE, subcategories: DEFAULT_SUBCATS, productLibrary: [] };
 }
 
 // ── Reducer ───────────────────────────────────────────────
@@ -146,20 +176,21 @@ function reducer(state: AppState, action: Action): AppState {
   const s = cloneDeep(state);
 
   const ensureWeek = (weekId: string) => {
-    if (!s.weeks[weekId]) {
-      s.weeks[weekId] = buildEmptyWeek(weekId, s.subcategories, s.routine);
-    }
+    if (!s.weeks[weekId]) s.weeks[weekId] = buildEmptyWeek(weekId, s.subcategories, s.routine);
   };
 
   switch (action.type) {
     case 'ENSURE_WEEKS': {
-      for (const wid of generateWeekIds(2, 2)) ensureWeek(wid);
-      return s;
+      let changed = false;
+      for (const wid of generateWeekIds(2, 2)) {
+        if (!s.weeks[wid]) { ensureWeek(wid); changed = true; }
+      }
+      return changed ? s : state;
     }
     case 'SET_STATUS': {
       ensureWeek(action.weekId);
-      const day = s.weeks[action.weekId].days[action.day];
-      const sub = day?.subcats[action.sub];
+      const dayData = s.weeks[action.weekId].days[action.day];
+      const sub = dayData?.subcats[action.sub];
       if (!sub) return s;
       const entry = sub.products.find(p => p.productId === action.productId);
       if (entry) entry.status = action.status;
@@ -167,22 +198,17 @@ function reducer(state: AppState, action: Action): AppState {
     }
     case 'SKIP_CARRY': {
       ensureWeek(action.weekId);
-      const day = s.weeks[action.weekId].days[action.day];
-      const sub = day?.subcats[action.sub];
+      const dayData = s.weeks[action.weekId].days[action.day];
+      const sub = dayData?.subcats[action.sub];
       if (!sub) return s;
       const entry = sub.products.find(p => p.productId === action.productId);
       if (!entry) return s;
       entry.status = 'skipped';
-      // carry to next day
       const next = nextDayInfo(action.weekId, action.day);
       ensureWeek(next.weekId);
       const nextSub = s.weeks[next.weekId].days[next.day]?.subcats[action.sub];
       if (nextSub && !nextSub.products.find(p => p.productId === action.productId)) {
-        nextSub.products.push({
-          productId: action.productId,
-          status: 'pending',
-          scheduledDate: dayDate(next.weekId, next.day),
-        });
+        nextSub.products.push({ productId: action.productId, status: 'pending', scheduledDate: dayDate(next.weekId, next.day) });
       }
       return s;
     }
@@ -200,7 +226,6 @@ function reducer(state: AppState, action: Action): AppState {
           }
         }
       } else {
-        // one-time: add only to today
         const wid = todayWeekId();
         const day = todayDayName();
         ensureWeek(wid);
@@ -239,9 +264,7 @@ function reducer(state: AppState, action: Action): AppState {
         s.routine[action.name] = [];
         for (const wid of Object.keys(s.weeks)) {
           for (const day of DAY_NAMES) {
-            if (s.weeks[wid].days[day]) {
-              s.weeks[wid].days[day].subcats[action.name] = { products: [] };
-            }
+            if (s.weeks[wid].days[day]) s.weeks[wid].days[day].subcats[action.name] = { products: [] };
           }
         }
       }
@@ -252,9 +275,7 @@ function reducer(state: AppState, action: Action): AppState {
       s.subcategories = s.subcategories.filter(c => c !== action.name);
       delete s.routine[action.name];
       for (const wid of Object.keys(s.weeks)) {
-        for (const day of DAY_NAMES) {
-          delete s.weeks[wid].days[day]?.subcats[action.name];
-        }
+        for (const day of DAY_NAMES) delete s.weeks[wid].days[day]?.subcats[action.name];
       }
       return s;
     }
@@ -263,40 +284,40 @@ function reducer(state: AppState, action: Action): AppState {
 }
 
 // ── Timer Bar ─────────────────────────────────────────────
-interface TimerBarProps {
-  durationSec: number;
-  onComplete: () => void;
-}
-const TimerBar: React.FC<TimerBarProps> = ({ durationSec, onComplete }) => {
+interface TimerBarProps { durationSec: number; onComplete: () => void; barColor: string; }
+const TimerBar: React.FC<TimerBarProps> = ({ durationSec, onComplete, barColor }) => {
   const [remaining, setRemaining] = useState(durationSec);
-  const rafRef = useRef<number>();
-  const startRef = useRef<number>(Date.now());
+  const rafRef       = useRef<number>();
+  const startRef     = useRef<number>(Date.now());
+  const onCompleteRef= useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
-    if (durationSec <= 0) { onComplete(); return; }
+    if (durationSec <= 0) { onCompleteRef.current(); return; }
+    startRef.current = Date.now();
     const tick = () => {
       const elapsed = (Date.now() - startRef.current) / 1000;
       const left = Math.max(0, durationSec - elapsed);
       setRemaining(left);
       if (left > 0) rafRef.current = requestAnimationFrame(tick);
-      else onComplete();
+      else onCompleteRef.current();
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [durationSec, onComplete]);
+  }, [durationSec]);
 
   const pct = durationSec > 0 ? ((durationSec - remaining) / durationSec) * 100 : 100;
 
   return (
-    <div className="mt-2">
-      <div className="flex justify-between mb-1" style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>
-        <span>Timer</span>
+    <div className="mt-2.5">
+      <div className="flex justify-between mb-1.5" style={{ fontSize: 11, color: N.muted }}>
+        <span style={{ letterSpacing: '0.06em' }}>TIMER</span>
         <span>{Math.ceil(remaining)}s</span>
       </div>
-      <div className="rounded-full overflow-hidden" style={{ height: 4, background: 'rgba(255,255,255,0.08)' }}>
+      <div className="rounded-full overflow-hidden" style={{ height: 3, background: 'rgba(255,255,255,0.08)' }}>
         <div
-          className="h-full rounded-full transition-all"
-          style={{ width: `${pct}%`, background: SK.accent }}
+          className="h-full rounded-full"
+          style={{ width: `${pct}%`, background: barColor, transition: 'width 0.1s linear' }}
         />
       </div>
     </div>
@@ -306,20 +327,20 @@ const TimerBar: React.FC<TimerBarProps> = ({ durationSec, onComplete }) => {
 // ── Product Item ──────────────────────────────────────────
 interface ProductItemProps {
   product: RoutineProduct;
-  entry: ProductEntry | undefined;
-  onDone: () => void;
-  onSkip: () => void;
+  entry:   ProductEntry | undefined;
+  colors:  SubcatColors;
+  onDone:  () => void;
+  onSkip:  () => void;
 }
-const ProductItem: React.FC<ProductItemProps> = ({ product, entry, onDone, onSkip }) => {
+const ProductItem: React.FC<ProductItemProps> = ({ product, entry, colors, onDone, onSkip }) => {
   const [timerActive, setTimerActive] = useState(false);
-  const status = entry?.status ?? 'pending';
+  const status    = entry?.status ?? 'pending';
+  const isDone    = status === 'done';
+  const isSkipped = status === 'skipped';
 
   const handleDone = useCallback(() => {
-    if (product.durationSec > 0 && status === 'pending') {
-      setTimerActive(true);
-    } else {
-      onDone();
-    }
+    if (product.durationSec > 0 && status === 'pending') setTimerActive(true);
+    else onDone();
   }, [product.durationSec, status, onDone]);
 
   const handleTimerComplete = useCallback(() => {
@@ -327,53 +348,51 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, entry, onDone, onSki
     onDone();
   }, [onDone]);
 
-  const isDone    = status === 'done';
-  const isSkipped = status === 'skipped';
+  useEffect(() => {
+    if (status !== 'pending') setTimerActive(false);
+  }, [status]);
+
+  // Background and border pick: done→sage, skipped→flat dark, pending→subcat tint
+  const bg     = isDone ? DONE.dim    : isSkipped ? 'rgba(255,255,255,0.025)' : colors.dim;
+  const border = isDone ? DONE.border : isSkipped ? 'rgba(255,255,255,0.05)'  : colors.border;
 
   return (
     <div
       className="rounded-2xl px-4 py-3 mb-2"
-      style={{
-        background: isDone
-          ? SK.doneDim
-          : isSkipped
-            ? 'rgba(255,255,255,0.04)'
-            : SK.accentDim,
-        border: `1px solid ${isDone ? 'rgba(126,200,164,0.18)' : isSkipped ? 'rgba(255,255,255,0.06)' : SK.border}`,
-        opacity: isSkipped ? 0.55 : 1,
-      }}
+      style={{ background: bg, border: `1px solid ${border}`, opacity: isSkipped ? 0.5 : 1, transition: 'all 0.2s ease' }}
     >
       <div className="flex items-center gap-3">
-        {/* Status dot */}
+        {/* Status circle */}
         <div
           className="shrink-0 flex items-center justify-center rounded-full"
           style={{
-            width: 28, height: 28,
-            background: isDone
-              ? SK.done
-              : isSkipped
-                ? 'rgba(255,255,255,0.08)'
-                : SK.accentDim,
-            border: `1.5px solid ${isDone ? SK.done : isSkipped ? 'rgba(255,255,255,0.12)' : SK.accent}`,
+            width: 26, height: 26,
+            background: isDone ? DONE.accent : 'transparent',
+            border: `1.5px solid ${isDone ? DONE.accent : isSkipped ? 'rgba(255,255,255,0.15)' : colors.accent}`,
+            transition: 'all 0.2s ease',
           }}
         >
-          {isDone    && <Check size={14} color="#000" strokeWidth={3} />}
-          {isSkipped && <X size={12} color="rgba(255,255,255,0.4)" strokeWidth={2.5} />}
+          {isDone    && <Check size={13} color="#0a0c10" strokeWidth={3} />}
+          {isSkipped && <X    size={11} color="rgba(255,255,255,0.35)" strokeWidth={2.5} />}
         </div>
 
         <span
-          className="flex-1 text-[14px] font-medium"
+          className="flex-1 text-[14px] font-medium leading-snug"
           style={{
-            color: isDone ? SK.done : isSkipped ? 'rgba(255,255,255,0.35)' : 'var(--text-primary)',
+            color:          isDone ? DONE.accent : isSkipped ? 'rgba(255,255,255,0.3)' : 'var(--text-primary)',
             textDecoration: isSkipped ? 'line-through' : 'none',
-            fontFamily: product.name.length < 12 ? "'Playfair Display', serif" : 'inherit',
+            fontFamily:     product.name.length < 14 ? "'Playfair Display', serif" : 'inherit',
+            transition:     'color 0.2s ease',
           }}
         >
           {product.name}
           {product.oneTime && (
-            <span className="ml-2 text-[10px] font-black tracking-[0.08em] uppercase" style={{ color: SK.accent, opacity: 0.7 }}>
-              one-time
+            <span className="ml-2 text-[10px] font-bold tracking-[0.08em] uppercase" style={{ color: N.muted }}>
+              today
             </span>
+          )}
+          {product.durationSec > 0 && !timerActive && !isDone && !isSkipped && (
+            <span className="ml-2 text-[11px]" style={{ color: N.muted }}>{product.durationSec}s</span>
           )}
         </span>
 
@@ -382,25 +401,25 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, entry, onDone, onSki
           <div className="flex gap-1.5 shrink-0">
             <button
               onClick={handleDone}
-              className="flex items-center justify-center rounded-xl active:scale-95 transition-transform"
-              style={{ width: 34, height: 34, background: SK.done, color: '#000' }}
+              className="flex items-center justify-center rounded-xl active:scale-90 transition-transform"
+              style={{ width: 32, height: 32, background: DONE.accent, color: '#0a0c10' }}
             >
-              <Check size={15} strokeWidth={3} />
+              <Check size={14} strokeWidth={3} />
             </button>
             <button
               onClick={onSkip}
-              className="flex items-center justify-center rounded-xl active:scale-95 transition-transform"
-              style={{ width: 34, height: 34, background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.5)' }}
+              className="flex items-center justify-center rounded-xl active:scale-90 transition-transform"
+              style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.06)', color: N.secondary }}
             >
-              <SkipForward size={14} strokeWidth={2} />
+              <SkipForward size={13} strokeWidth={2} />
             </button>
           </div>
         )}
         {(isDone || isSkipped) && (
           <button
-            onClick={() => { setTimerActive(false); onSkip(); }}
-            className="text-[11px] font-medium active:opacity-60 transition-opacity"
-            style={{ color: 'rgba(255,255,255,0.28)' }}
+            onClick={onSkip}
+            className="text-[11px] font-medium active:opacity-50 transition-opacity"
+            style={{ color: N.muted }}
           >
             undo
           </button>
@@ -408,62 +427,86 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, entry, onDone, onSki
       </div>
 
       {timerActive && (
-        <TimerBar durationSec={product.durationSec} onComplete={handleTimerComplete} />
+        <TimerBar durationSec={product.durationSec} onComplete={handleTimerComplete} barColor={colors.accent} />
       )}
     </div>
   );
 };
 
-// ── Subcat Section ─────────────────────────────────────────
+// ── Subcat Section ────────────────────────────────────────
 interface SubcatSectionProps {
-  sub: string;
+  sub:      string;
   products: RoutineProduct[];
-  dayData: SubcatDay | undefined;
-  onDone:  (productId: string) => void;
-  onSkip:  (productId: string) => void;
+  dayData:  SubcatDay | undefined;
+  isToday:  boolean;
+  onDone:   (productId: string) => void;
+  onSkip:   (productId: string) => void;
 }
-const SubcatSection: React.FC<SubcatSectionProps> = ({ sub, products, dayData, onDone, onSkip }) => {
-  const [open, setOpen] = useState(false);
-  const entries = dayData?.products ?? [];
-  const total   = products.length;
+const SubcatSection: React.FC<SubcatSectionProps> = ({ sub, products, dayData, isToday, onDone, onSkip }) => {
+  const [open, setOpen] = useState(isToday);
+  const colors    = subcatColor(sub);
+  const entries   = dayData?.products ?? [];
+  const total     = entries.length;
   const doneCount = entries.filter(e => e.status === 'done').length;
+  const allDone   = total > 0 && doneCount === total;
+
+  const entryMap  = new Map(entries.map(e => [e.productId, e]));
+  const routineIds= new Set(products.map(p => p.id));
 
   return (
-    <div className="mb-3">
+    <div className="mb-4">
+      {/* Section header row */}
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-2 px-1 py-1.5 active:opacity-70 transition-opacity"
+        className="w-full flex items-center gap-2.5 py-1.5 active:opacity-60 transition-opacity"
       >
+        {/* Colour accent line */}
+        <div className="w-[3px] h-3.5 rounded-full shrink-0" style={{ background: colors.accent, opacity: 0.9 }} />
         <span
-          className="text-[12px] font-black tracking-[0.12em] uppercase"
-          style={{ color: SK.accent }}
+          className="text-[11px] font-black tracking-[0.14em] uppercase shrink-0"
+          style={{ color: colors.accent }}
         >
           {sub}
         </span>
-        <div className="flex-1 h-px" style={{ background: SK.border }} />
-        <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+        <div className="flex-1 h-px" style={{ background: N.hairline }} />
+        {/* Progress indicator */}
+        <span
+          className="text-[11px] font-medium tabular-nums shrink-0"
+          style={{ color: allDone ? DONE.accent : N.muted }}
+        >
           {doneCount}/{total}
         </span>
-        {open
-          ? <ChevronUp size={14} color="rgba(255,255,255,0.3)" />
-          : <ChevronDown size={14} color="rgba(255,255,255,0.3)" />}
+        {allDone
+          ? <Check size={12} color={DONE.accent} strokeWidth={3} />
+          : open
+            ? <ChevronUp  size={13} color={N.muted} />
+            : <ChevronDown size={13} color={N.muted} />}
       </button>
 
       {open && (
-        <div className="mt-1">
-          {products.map(p => (
+        <div className="mt-2">
+          {products.filter(p => !p.oneTime || entryMap.has(p.id)).map(p => (
             <ProductItem
               key={p.id}
               product={p}
-              entry={entries.find(e => e.productId === p.id)}
+              entry={entryMap.get(p.id)}
+              colors={colors}
               onDone={() => onDone(p.id)}
               onSkip={() => onSkip(p.id)}
             />
           ))}
-          {products.length === 0 && (
-            <p className="text-[13px] px-1 py-2" style={{ color: 'rgba(255,255,255,0.25)' }}>
-              No products in {sub}.
-            </p>
+          {entries.filter(e => !routineIds.has(e.productId)).map(e => (
+            <ProductItem
+              key={e.productId}
+              product={{ id: e.productId, name: '(carried)', durationSec: 0 }}
+              entry={e}
+              colors={colors}
+              onDone={() => onDone(e.productId)}
+              onSkip={() => onSkip(e.productId)}
+            />
+          ))}
+          {total === 0 && (
+            <p className="text-[12px] px-1 py-1.5" style={{ color: N.muted }}>No products.</p>
           )}
         </div>
       )}
@@ -473,14 +516,15 @@ const SubcatSection: React.FC<SubcatSectionProps> = ({ sub, products, dayData, o
 
 // ── Day Panel ─────────────────────────────────────────────
 interface DayPanelProps {
-  weekId: string;
-  day: DayName;
+  weekId:   string;
+  day:      DayName;
   weekData: WeekData;
-  subcats: string[];
-  routine: Record<string, RoutineProduct[]>;
+  subcats:  string[];
+  routine:  Record<string, RoutineProduct[]>;
+  isToday:  boolean;
   dispatch: React.Dispatch<Action>;
 }
-const DayPanel: React.FC<DayPanelProps> = ({ weekId, day, weekData, subcats, routine, dispatch }) => {
+const DayPanel: React.FC<DayPanelProps> = ({ weekId, day, weekData, subcats, routine, isToday, dispatch }) => {
   const dayData = weekData.days[day];
 
   const handleDone = (sub: string, productId: string) =>
@@ -496,13 +540,14 @@ const DayPanel: React.FC<DayPanelProps> = ({ weekId, day, weekData, subcats, rou
   };
 
   return (
-    <div className="px-4 pb-4 pt-2">
+    <div className="px-4 pb-4 pt-3">
       {subcats.map(sub => (
         <SubcatSection
           key={sub}
           sub={sub}
           products={routine[sub] ?? []}
           dayData={dayData?.subcats[sub]}
+          isToday={isToday}
           onDone={id => handleDone(sub, id)}
           onSkip={id => handleSkip(sub, id)}
         />
@@ -513,31 +558,31 @@ const DayPanel: React.FC<DayPanelProps> = ({ weekId, day, weekData, subcats, rou
 
 // ── Day Row ───────────────────────────────────────────────
 interface DayRowProps {
-  weekId: string;
-  day: DayName;
+  weekId:   string;
+  day:      DayName;
   weekData: WeekData;
-  subcats: string[];
-  routine: Record<string, RoutineProduct[]>;
+  subcats:  string[];
+  routine:  Record<string, RoutineProduct[]>;
   dispatch: React.Dispatch<Action>;
-  isToday: boolean;
+  isToday:  boolean;
 }
 const DayRow: React.FC<DayRowProps> = ({ weekId, day, weekData, subcats, routine, dispatch, isToday }) => {
   const [open, setOpen] = useState(isToday);
   const dayData = weekData.days[day];
 
-  const totalProducts = subcats.reduce((acc, sub) => acc + (routine[sub]?.length ?? 0), 0);
-  const doneProducts  = subcats.reduce((acc, sub) => {
-    const entries = dayData?.subcats[sub]?.products ?? [];
-    return acc + entries.filter(e => e.status === 'done').length;
-  }, 0);
+  const totalProducts = subcats.reduce((acc, sub) => acc + (dayData?.subcats[sub]?.products.length ?? 0), 0);
+  const doneProducts  = subcats.reduce((acc, sub) =>
+    acc + (dayData?.subcats[sub]?.products.filter(e => e.status === 'done').length ?? 0), 0);
   const allDone = totalProducts > 0 && doneProducts === totalProducts;
 
   return (
     <div
-      className="mb-1 rounded-2xl overflow-hidden"
+      className="mb-1.5 rounded-2xl overflow-hidden"
       style={{
-        border: `1px solid ${isToday ? SK.border : SK.borderMid}`,
-        background: isToday ? SK.accentDim : 'rgba(255,255,255,0.02)',
+        // Today gets a very subtle left accent strip via box-shadow; no hue in the bg
+        border:    `1px solid ${isToday ? 'rgba(255,255,255,0.12)' : N.hairline}`,
+        background: isToday ? 'rgba(255,255,255,0.04)' : N.surface,
+        boxShadow: isToday ? 'inset 3px 0 0 rgba(255,255,255,0.14)' : 'none',
       }}
     >
       <button
@@ -546,28 +591,30 @@ const DayRow: React.FC<DayRowProps> = ({ weekId, day, weekData, subcats, routine
       >
         <span
           className="text-[13px] font-bold w-8 text-left shrink-0"
-          style={{ color: isToday ? SK.accent : 'var(--text-secondary)' }}
+          style={{ color: isToday ? N.heading : N.secondary }}
         >
           {day}
         </span>
         {isToday && (
           <span
             className="text-[9px] font-black tracking-[0.12em] uppercase px-2 py-0.5 rounded-full"
-            style={{ background: SK.accent, color: '#000' }}
+            style={{ background: 'rgba(255,255,255,0.12)', color: N.heading }}
           >
             Today
           </span>
         )}
         <div className="flex-1" />
-        {allDone && <Check size={14} color={SK.done} strokeWidth={3} />}
-        {!allDone && totalProducts > 0 && (
-          <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-            {doneProducts}/{totalProducts}
-          </span>
-        )}
+
+        {/* Progress */}
+        {allDone
+          ? <Check size={13} color={DONE.accent} strokeWidth={3} />
+          : totalProducts > 0
+            ? <span className="text-[11px] tabular-nums" style={{ color: N.muted }}>{doneProducts}/{totalProducts}</span>
+            : null}
+
         {open
-          ? <ChevronUp size={15} color="rgba(255,255,255,0.28)" />
-          : <ChevronDown size={15} color="rgba(255,255,255,0.28)" />}
+          ? <ChevronUp  size={14} color={N.muted} />
+          : <ChevronDown size={14} color={N.muted} />}
       </button>
 
       {open && (
@@ -577,6 +624,7 @@ const DayRow: React.FC<DayRowProps> = ({ weekId, day, weekData, subcats, routine
           weekData={weekData}
           subcats={subcats}
           routine={routine}
+          isToday={isToday}
           dispatch={dispatch}
         />
       )}
@@ -586,28 +634,28 @@ const DayRow: React.FC<DayRowProps> = ({ weekId, day, weekData, subcats, routine
 
 // ── Week Card ─────────────────────────────────────────────
 interface WeekCardProps {
-  weekId: string;
-  weekData: WeekData;
-  subcats: string[];
-  routine: Record<string, RoutineProduct[]>;
-  dispatch: React.Dispatch<Action>;
+  weekId:        string;
+  weekData:      WeekData;
+  subcats:       string[];
+  routine:       Record<string, RoutineProduct[]>;
+  dispatch:      React.Dispatch<Action>;
   currentWeekId: string;
-  currentDay: DayName;
+  currentDay:    DayName;
 }
 const WeekCard: React.FC<WeekCardProps> = ({ weekId, weekData, subcats, routine, dispatch, currentWeekId, currentDay }) => {
-  const isCurrentWeek = weekId === currentWeekId;
-  const [open, setOpen] = useState(isCurrentWeek);
+  const isCurrent = weekId === currentWeekId;
+  const [open, setOpen] = useState(isCurrent);
 
-  const start = weekStartDate(weekId);
-  const end   = new Date(start.getTime() + 6 * 86400000);
-  const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const label = isCurrentWeek ? 'This Week' : `${fmt(start)} – ${fmt(end)}`;
+  const start  = weekStartDate(weekId);
+  const end    = new Date(start.getTime() + 6 * 86400000);
+  const fmt    = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const label  = isCurrent ? 'This Week' : `${fmt(start)} – ${fmt(end)}`;
 
   return (
     <div
       className="mb-4 rounded-3xl overflow-hidden"
       style={{
-        border: `1px solid ${isCurrentWeek ? SK.border : SK.borderMid}`,
+        border:     `1px solid ${isCurrent ? 'rgba(255,255,255,0.11)' : N.hairline}`,
         background: 'var(--bg-surface)',
       }}
     >
@@ -618,7 +666,7 @@ const WeekCard: React.FC<WeekCardProps> = ({ weekId, weekData, subcats, routine,
         <span
           className="text-[15px] font-bold"
           style={{
-            color: isCurrentWeek ? SK.accent : 'var(--text-secondary)',
+            color:      isCurrent ? N.heading : N.secondary,
             fontFamily: "'Playfair Display', serif",
           }}
         >
@@ -626,8 +674,8 @@ const WeekCard: React.FC<WeekCardProps> = ({ weekId, weekData, subcats, routine,
         </span>
         <div className="flex-1" />
         {open
-          ? <ChevronUp size={16} color="rgba(255,255,255,0.3)" />
-          : <ChevronDown size={16} color="rgba(255,255,255,0.3)" />}
+          ? <ChevronUp  size={15} color={N.muted} />
+          : <ChevronDown size={15} color={N.muted} />}
       </button>
 
       {open && (
@@ -641,7 +689,7 @@ const WeekCard: React.FC<WeekCardProps> = ({ weekId, weekData, subcats, routine,
               subcats={subcats}
               routine={routine}
               dispatch={dispatch}
-              isToday={isCurrentWeek && day === currentDay}
+              isToday={isCurrent && day === currentDay}
             />
           ))}
         </div>
@@ -652,19 +700,24 @@ const WeekCard: React.FC<WeekCardProps> = ({ weekId, weekData, subcats, routine,
 
 // ── Edit Page ─────────────────────────────────────────────
 interface EditPageProps {
-  state: AppState;
+  state:    AppState;
   dispatch: React.Dispatch<Action>;
-  onBack: () => void;
+  onBack:   () => void;
 }
 const EditPage: React.FC<EditPageProps> = ({ state, dispatch, onBack }) => {
-  const [activeSub, setActiveSub] = useState(state.subcategories[0] ?? 'Morning');
+  const [activeSub, setActiveSub]           = useState(state.subcategories[0] ?? 'Morning');
   const [newProductName, setNewProductName] = useState('');
-  const [newProductDur, setNewProductDur] = useState('0');
-  const [newSubName, setNewSubName] = useState('');
-  const [oneTimeName, setOneTimeName] = useState('');
-  const [oneTimeSub, setOneTimeSub] = useState(state.subcategories[0] ?? 'Morning');
+  const [newProductDur, setNewProductDur]   = useState('0');
+  const [newSubName, setNewSubName]         = useState('');
+  const [oneTimeName, setOneTimeName]       = useState('');
+  const [oneTimeSub, setOneTimeSub]         = useState(state.subcategories[0] ?? 'Morning');
 
-  const products = state.routine[activeSub] ?? [];
+  useEffect(() => {
+    if (!state.subcategories.includes(oneTimeSub)) setOneTimeSub(state.subcategories[0] ?? 'Morning');
+  }, [state.subcategories, oneTimeSub]);
+
+  const products   = state.routine[activeSub] ?? [];
+  const activeColors = subcatColor(activeSub);
 
   const addProduct = () => {
     const n = newProductName.trim();
@@ -683,129 +736,130 @@ const EditPage: React.FC<EditPageProps> = ({ state, dispatch, onBack }) => {
 
   const addSubcat = () => {
     const n = newSubName.trim();
-    if (!n) return;
+    if (!n || state.subcategories.includes(n)) return;
     dispatch({ type: 'ADD_SUBCAT', name: n });
     setNewSubName('');
   };
 
   const inputStyle: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.05)',
-    border: `1px solid ${SK.border}`,
+    background:   'rgba(255,255,255,0.05)',
+    border:       `1px solid rgba(255,255,255,0.10)`,
     borderRadius: 12,
-    color: 'var(--text-primary)',
-    padding: '10px 14px',
-    fontSize: 14,
-    outline: 'none',
-    width: '100%',
+    color:        'var(--text-primary)',
+    padding:      '10px 14px',
+    fontSize:     14,
+    outline:      'none',
+    width:        '100%',
+    boxSizing:    'border-box',
   };
 
   return (
     <div className="h-full overflow-y-auto" style={{ background: 'var(--bg-base)' }}>
-      {/* Header */}
+      {/* Header — neutral, no hue */}
       <div
-        className="sticky top-0 z-10 flex items-center gap-3 px-5 py-4"
-        style={{
-          background: 'var(--bg-base)',
-          borderBottom: `1px solid ${SK.borderMid}`,
-          paddingTop: 'calc(env(safe-area-inset-top) + 16px)',
-        }}
+        className="sticky top-0 z-10 flex items-center gap-3 px-5 pt-4 pb-4"
+        style={{ background: 'var(--bg-base)', borderBottom: `1px solid ${N.hairline}` }}
       >
         <button
           onClick={onBack}
           className="flex items-center justify-center rounded-xl active:scale-95 transition-transform"
           style={{ width: 36, height: 36, background: 'rgba(255,255,255,0.07)' }}
         >
-          <X size={16} color="var(--text-secondary)" />
+          <X size={16} color={N.secondary} />
         </button>
         <h1
-          className="text-[20px] font-bold flex-1"
-          style={{ fontFamily: "'Playfair Display', serif", color: SK.accent }}
+          className="text-[19px] font-bold flex-1"
+          style={{ fontFamily: "'Playfair Display', serif", color: N.heading }}
         >
           Edit Routine
         </h1>
       </div>
 
       <div className="px-5 pb-10">
-        {/* Subcategory tabs */}
-        <div className="flex gap-2 mt-5 mb-5 overflow-x-auto pb-1">
-          {state.subcategories.map(sub => (
-            <button
-              key={sub}
-              onClick={() => setActiveSub(sub)}
-              className="shrink-0 px-4 py-1.5 rounded-full text-[13px] font-bold transition-all"
-              style={{
-                background: activeSub === sub ? SK.accent : 'rgba(255,255,255,0.07)',
-                color:      activeSub === sub ? '#000'    : 'rgba(255,255,255,0.5)',
-              }}
-            >
-              {sub}
-            </button>
-          ))}
+        {/* Subcat tabs — each shows its own colour when active */}
+        <div className="flex gap-2 mt-5 mb-5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+          {state.subcategories.map(sub => {
+            const c = subcatColor(sub);
+            const isActive = activeSub === sub;
+            return (
+              <button
+                key={sub}
+                onClick={() => setActiveSub(sub)}
+                className="shrink-0 px-4 py-1.5 rounded-full text-[13px] font-bold transition-all active:scale-95"
+                style={{
+                  background: isActive ? c.dim    : 'rgba(255,255,255,0.06)',
+                  color:      isActive ? c.accent : N.muted,
+                  border:     `1px solid ${isActive ? c.border : 'transparent'}`,
+                }}
+              >
+                {sub}
+              </button>
+            );
+          })}
         </div>
 
         {/* Product list */}
         <div className="mb-5">
-          <p className="text-[11px] font-black tracking-[0.1em] uppercase mb-3" style={{ color: 'rgba(255,255,255,0.3)' }}>
-            Products in {activeSub}
+          <p className="text-[11px] font-black tracking-[0.10em] uppercase mb-3" style={{ color: N.muted }}>
+            Products · {activeSub}
           </p>
-          {products.map((p, idx) => (
+          {products.filter(p => !p.oneTime).map((p, idx, arr) => (
             <div
               key={p.id}
               className="flex items-center gap-2 mb-2 px-4 py-3 rounded-2xl"
-              style={{ background: SK.accentDim, border: `1px solid ${SK.border}` }}
+              style={{ background: activeColors.dim, border: `1px solid ${activeColors.border}` }}
             >
               <span className="flex-1 text-[14px] font-medium" style={{ color: 'var(--text-primary)' }}>
                 {p.name}
                 {p.durationSec > 0 && (
-                  <span className="ml-2 text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                    {p.durationSec}s
-                  </span>
+                  <span className="ml-2 text-[11px]" style={{ color: N.muted }}>{p.durationSec}s</span>
                 )}
               </span>
               <button
                 onClick={() => dispatch({ type: 'MOVE_PRODUCT', sub: activeSub, productId: p.id, dir: 'up' })}
                 disabled={idx === 0}
-                className="p-1.5 rounded-lg active:opacity-60 disabled:opacity-20"
-                style={{ color: 'rgba(255,255,255,0.4)' }}
+                className="p-1.5 rounded-lg disabled:opacity-20 transition-opacity"
+                style={{ color: N.secondary }}
               >
                 <ArrowUp size={14} />
               </button>
               <button
                 onClick={() => dispatch({ type: 'MOVE_PRODUCT', sub: activeSub, productId: p.id, dir: 'down' })}
-                disabled={idx === products.length - 1}
-                className="p-1.5 rounded-lg active:opacity-60 disabled:opacity-20"
-                style={{ color: 'rgba(255,255,255,0.4)' }}
+                disabled={idx === arr.length - 1}
+                className="p-1.5 rounded-lg disabled:opacity-20 transition-opacity"
+                style={{ color: N.secondary }}
               >
                 <ArrowDown size={14} />
               </button>
               <button
                 onClick={() => dispatch({ type: 'REMOVE_PRODUCT', sub: activeSub, productId: p.id })}
-                className="p-1.5 rounded-lg active:opacity-60"
-                style={{ color: '#ef4444' }}
+                className="p-1.5 rounded-lg active:opacity-60 transition-opacity"
+                style={{ color: '#e05555' }}
               >
                 <Trash2 size={14} />
               </button>
             </div>
           ))}
-          {products.length === 0 && (
-            <p className="text-[13px] py-2" style={{ color: 'rgba(255,255,255,0.25)' }}>
-              No products yet.
-            </p>
+          {products.filter(p => !p.oneTime).length === 0 && (
+            <p className="text-[13px] py-2" style={{ color: N.muted }}>No products yet.</p>
           )}
         </div>
 
         {/* Add product */}
-        <div className="mb-6 p-4 rounded-3xl" style={{ background: 'var(--bg-surface)', border: `1px solid ${SK.borderMid}` }}>
-          <p className="text-[11px] font-black tracking-[0.1em] uppercase mb-3" style={{ color: SK.accent }}>
-            Add Product to {activeSub}
-          </p>
+        <div className="mb-5 p-4 rounded-3xl" style={{ background: 'var(--bg-surface)', border: `1px solid ${N.hairline}` }}>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-[3px] h-3.5 rounded-full" style={{ background: activeColors.accent }} />
+            <p className="text-[11px] font-black tracking-[0.10em] uppercase" style={{ color: activeColors.accent }}>
+              Add to {activeSub}
+            </p>
+          </div>
           <input
             style={inputStyle}
+            className="mb-2"
             placeholder="Product name…"
             value={newProductName}
             onChange={e => setNewProductName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && addProduct()}
-            className="mb-2"
           />
           <div className="flex gap-2">
             <input
@@ -818,37 +872,39 @@ const EditPage: React.FC<EditPageProps> = ({ state, dispatch, onBack }) => {
             />
             <button
               onClick={addProduct}
-              className="flex-1 flex items-center justify-center gap-2 rounded-2xl font-bold text-[14px] active:scale-95 transition-transform"
-              style={{ background: SK.accent, color: '#000', height: 44 }}
+              className="flex-1 flex items-center justify-center gap-2 rounded-2xl font-bold text-[13px] active:scale-95 transition-transform"
+              style={{ background: activeColors.dim, color: activeColors.accent, border: `1px solid ${activeColors.border}`, height: 44 }}
             >
-              <Plus size={16} strokeWidth={3} />
-              Add
+              <Plus size={15} strokeWidth={3} /> Add
             </button>
           </div>
         </div>
 
         {/* One-time product */}
-        <div className="mb-6 p-4 rounded-3xl" style={{ background: 'var(--bg-surface)', border: `1px solid ${SK.borderMid}` }}>
-          <p className="text-[11px] font-black tracking-[0.1em] uppercase mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
-            One-Time Product (today only)
+        <div className="mb-5 p-4 rounded-3xl" style={{ background: 'var(--bg-surface)', border: `1px solid ${N.hairline}` }}>
+          <p className="text-[11px] font-black tracking-[0.10em] uppercase mb-1" style={{ color: N.secondary }}>
+            One-Time · Today Only
           </p>
-          <p className="text-[12px] mb-3" style={{ color: 'rgba(255,255,255,0.25)' }}>
-            Added to today's routine only, won't repeat.
-          </p>
-          <div className="flex gap-2 mb-2">
-            {state.subcategories.map(sub => (
-              <button
-                key={sub}
-                onClick={() => setOneTimeSub(sub)}
-                className="px-3 py-1 rounded-full text-[12px] font-bold transition-all"
-                style={{
-                  background: oneTimeSub === sub ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
-                  color: oneTimeSub === sub ? 'var(--text-primary)' : 'rgba(255,255,255,0.4)',
-                }}
-              >
-                {sub}
-              </button>
-            ))}
+          <p className="text-[12px] mb-3" style={{ color: N.muted }}>Won't repeat tomorrow.</p>
+          <div className="flex gap-2 mb-2 flex-wrap">
+            {state.subcategories.map(sub => {
+              const c = subcatColor(sub);
+              const sel = oneTimeSub === sub;
+              return (
+                <button
+                  key={sub}
+                  onClick={() => setOneTimeSub(sub)}
+                  className="px-3 py-1 rounded-full text-[12px] font-bold transition-all active:scale-95"
+                  style={{
+                    background: sel ? c.dim  : 'rgba(255,255,255,0.05)',
+                    color:      sel ? c.accent : N.muted,
+                    border:     `1px solid ${sel ? c.border : 'transparent'}`,
+                  }}
+                >
+                  {sub}
+                </button>
+              );
+            })}
           </div>
           <div className="flex gap-2">
             <input
@@ -860,8 +916,8 @@ const EditPage: React.FC<EditPageProps> = ({ state, dispatch, onBack }) => {
             />
             <button
               onClick={addOneTime}
-              className="flex items-center justify-center rounded-2xl font-bold text-[14px] px-4 active:scale-95 transition-transform"
-              style={{ background: 'rgba(255,255,255,0.09)', color: 'var(--text-secondary)', height: 44 }}
+              className="flex items-center justify-center rounded-2xl font-bold text-[13px] px-4 active:scale-95 transition-transform"
+              style={{ background: 'rgba(255,255,255,0.07)', color: N.secondary, height: 44 }}
             >
               Add
             </button>
@@ -869,24 +925,28 @@ const EditPage: React.FC<EditPageProps> = ({ state, dispatch, onBack }) => {
         </div>
 
         {/* Manage sections */}
-        <div className="p-4 rounded-3xl" style={{ background: 'var(--bg-surface)', border: `1px solid ${SK.borderMid}` }}>
-          <p className="text-[11px] font-black tracking-[0.1em] uppercase mb-3" style={{ color: 'rgba(255,255,255,0.4)' }}>
-            Manage Sections
+        <div className="p-4 rounded-3xl" style={{ background: 'var(--bg-surface)', border: `1px solid ${N.hairline}` }}>
+          <p className="text-[11px] font-black tracking-[0.10em] uppercase mb-3" style={{ color: N.muted }}>
+            Sections
           </p>
-          {state.subcategories.map(sub => (
-            <div key={sub} className="flex items-center gap-2 mb-2">
-              <span className="flex-1 text-[14px]" style={{ color: 'var(--text-primary)' }}>{sub}</span>
-              {sub !== 'Morning' && sub !== 'Night' && (
-                <button
-                  onClick={() => { dispatch({ type: 'REMOVE_SUBCAT', name: sub }); if (activeSub === sub) setActiveSub('Morning'); }}
-                  className="p-1.5 rounded-lg active:opacity-60"
-                  style={{ color: '#ef4444' }}
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-          ))}
+          {state.subcategories.map(sub => {
+            const c = subcatColor(sub);
+            return (
+              <div key={sub} className="flex items-center gap-3 mb-2 py-1">
+                <div className="w-[3px] h-3.5 rounded-full shrink-0" style={{ background: c.accent, opacity: 0.7 }} />
+                <span className="flex-1 text-[14px]" style={{ color: 'var(--text-primary)' }}>{sub}</span>
+                {sub !== 'Morning' && sub !== 'Night' && (
+                  <button
+                    onClick={() => { dispatch({ type: 'REMOVE_SUBCAT', name: sub }); if (activeSub === sub) setActiveSub('Morning'); }}
+                    className="p-1.5 rounded-lg active:opacity-60 transition-opacity"
+                    style={{ color: '#e05555' }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
           <div className="flex gap-2 mt-3">
             <input
               style={{ ...inputStyle, flex: 1 }}
@@ -897,8 +957,8 @@ const EditPage: React.FC<EditPageProps> = ({ state, dispatch, onBack }) => {
             />
             <button
               onClick={addSubcat}
-              className="flex items-center justify-center rounded-2xl font-bold text-[14px] px-4 active:scale-95 transition-transform"
-              style={{ background: 'rgba(255,255,255,0.09)', color: 'var(--text-secondary)', height: 44 }}
+              className="flex items-center justify-center rounded-2xl font-bold text-[13px] px-4 active:scale-95 transition-transform"
+              style={{ background: 'rgba(255,255,255,0.07)', color: N.secondary, height: 44 }}
             >
               Add
             </button>
@@ -912,70 +972,75 @@ const EditPage: React.FC<EditPageProps> = ({ state, dispatch, onBack }) => {
 // ── Main Page ─────────────────────────────────────────────
 export const SkincareRoutinePage: React.FC = () => {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
-  const [view, setView] = useState<'main' | 'edit'>('main');
-  const weekIds      = generateWeekIds(2, 2);
-  const currentWeek  = todayWeekId();
-  const currentDay   = todayDayName();
+  const [view, setView]   = useState<'main' | 'edit'>('main');
+  const weekIds     = generateWeekIds(2, 2);
+  const currentWeek = todayWeekId();
+  const currentDay  = todayDayName();
 
-  // Persist to localStorage
   useEffect(() => {
-    try { localStorage.setItem('athlix_skincare_v1', JSON.stringify(state)); }
-    catch {}
+    try { localStorage.setItem('athlix_skincare_v1', JSON.stringify(state)); } catch {}
   }, [state]);
 
-  // Ensure week data exists
-  useEffect(() => {
-    dispatch({ type: 'ENSURE_WEEKS' });
-  }, []);
+  useEffect(() => { dispatch({ type: 'ENSURE_WEEKS' }); }, []);
 
   if (view === 'edit') {
     return <EditPage state={state} dispatch={dispatch} onBack={() => setView('main')} />;
   }
 
   return (
-    <div
-      className="h-full flex flex-col overflow-hidden"
-      style={{ background: 'var(--bg-base)' }}
-    >
-      {/* Header */}
+    <div className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--bg-base)' }}>
+      {/* Header — fully neutral, serif title, colour only in the small morning/night pills */}
       <div
-        className="shrink-0 flex items-center justify-between px-5 pb-4"
-        style={{
-          paddingTop: 'calc(env(safe-area-inset-top) + 16px)',
-          borderBottom: `1px solid ${SK.borderMid}`,
-          background: 'var(--bg-base)',
-        }}
+        className="shrink-0 px-5 pt-4 pb-4"
+        style={{ borderBottom: `1px solid ${N.hairline}`, background: 'var(--bg-base)' }}
       >
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <Sparkles size={18} color={SK.accent} strokeWidth={1.8} />
-            <h1
-              className="text-[22px] font-bold"
-              style={{ fontFamily: "'Playfair Display', serif", color: SK.accent }}
-            >
-              Skincare
-            </h1>
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles size={16} color={N.secondary} strokeWidth={1.8} />
+              <h1
+                className="text-[21px] font-bold leading-none"
+                style={{ fontFamily: "'Playfair Display', serif", color: N.heading }}
+              >
+                Skincare
+              </h1>
+            </div>
+            {/* Colour legend pills — replaces generic subtitle */}
+            <div className="flex items-center gap-2 mt-1.5 ml-0.5">
+              <span
+                className="text-[10px] font-black tracking-[0.10em] uppercase px-2 py-0.5 rounded-full"
+                style={{ background: MORNING.dim, color: MORNING.accent, border: `1px solid ${MORNING.border}` }}
+              >
+                Morning
+              </span>
+              <span
+                className="text-[10px] font-black tracking-[0.10em] uppercase px-2 py-0.5 rounded-full"
+                style={{ background: NIGHT.dim, color: NIGHT.accent, border: `1px solid ${NIGHT.border}` }}
+              >
+                Night
+              </span>
+              <span
+                className="text-[10px] font-black tracking-[0.10em] uppercase px-2 py-0.5 rounded-full"
+                style={{ background: DONE.dim, color: DONE.accent, border: `1px solid ${DONE.border}` }}
+              >
+                Done
+              </span>
+            </div>
           </div>
-          <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.32)' }}>
-            Your daily ritual
-          </p>
+
+          <button
+            onClick={() => setView('edit')}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl active:scale-95 transition-transform mt-0.5"
+            style={{ background: 'rgba(255,255,255,0.07)', border: `1px solid ${N.hairline}`, color: N.secondary }}
+          >
+            <Edit3 size={13} strokeWidth={2} />
+            <span className="text-[13px] font-semibold">Edit</span>
+          </button>
         </div>
-        <button
-          onClick={() => setView('edit')}
-          className="flex items-center gap-2 px-4 py-2 rounded-2xl active:scale-95 transition-transform"
-          style={{
-            background: SK.accentDim,
-            border: `1px solid ${SK.border}`,
-            color: SK.accent,
-          }}
-        >
-          <Edit3 size={14} strokeWidth={2} />
-          <span className="text-[13px] font-bold">Edit</span>
-        </button>
       </div>
 
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto px-4 pt-5 pb-8">
+      {/* Week list */}
+      <div className="flex-1 overflow-y-auto px-4 pt-5 pb-6">
         {weekIds.map(weekId => (
           <WeekCard
             key={weekId}
