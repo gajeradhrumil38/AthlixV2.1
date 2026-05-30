@@ -11,15 +11,16 @@ const navItems: { path: string; icon: IconName; label: string }[] = [
   { path: '/timeline',  icon: 'History',   label: 'Timeline'  },
   { path: '/progress',  icon: 'Trending',  label: 'Progress'  },
   { path: '/run',       icon: 'Run',       label: 'Run'       },
+  { path: '/skincare',  icon: 'Skincare',  label: 'Skincare'  },
   { path: '/settings',  icon: 'Settings',  label: 'Settings'  },
 ];
 
 const mobileNavItems: { path: string; icon: IconName; label: string }[] = [
-  { path: '/',         icon: 'Home',     label: 'Home'     },
-  { path: '/progress', icon: 'Activity', label: 'Progress' },
-  { path: '/calendar', icon: 'Calendar', label: 'Calendar' },
-  { path: '/run',      icon: 'Run',      label: 'Run'      },
-  { path: '/settings', icon: 'More',     label: 'More'     },
+  { path: '/',          icon: 'Home',     label: 'Home'     },
+  { path: '/progress',  icon: 'Activity', label: 'Progress' },
+  { path: '/calendar',  icon: 'Calendar', label: 'Calendar' },
+  { path: '/run',       icon: 'Run',      label: 'Run'      },
+  { path: '/skincare',  icon: 'Skincare', label: 'Skin'     },
 ];
 
 export const Layout: React.FC = () => {
@@ -36,7 +37,8 @@ export const Layout: React.FC = () => {
     isHomeRoute ||
     location.pathname.startsWith('/calendar') ||
     location.pathname.startsWith('/progress') ||
-    location.pathname.startsWith('/timeline');
+    location.pathname.startsWith('/timeline') ||
+    location.pathname.startsWith('/skincare');
   const swipeStartRef = useRef<{ x: number; y: number; ts: number } | null>(null);
   const tapTimerRef = useRef<number | null>(null);
 

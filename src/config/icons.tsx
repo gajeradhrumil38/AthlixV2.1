@@ -3,7 +3,7 @@ import {
   Home, Calendar, FileText, Activity, Plus,
   Search, Check, X, ChevronLeft, ChevronRight,
   TrendingUp, Settings, MoreHorizontal, History,
-  ClipboardList, Footprints, Utensils,
+  ClipboardList, Footprints, Utensils, Sparkles,
 } from 'lucide-react'
 
 // Central registry of all UI icons used in the app
@@ -25,6 +25,7 @@ export const ICONS = {
   Clipboard: ClipboardList,
   Run: Footprints,
   Food: Utensils,
+  Skincare: Sparkles,
 }
 
 export type IconName = keyof typeof ICONS

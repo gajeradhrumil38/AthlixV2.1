@@ -24,6 +24,7 @@ import { FoodScannerPage } from './features/food/pages/FoodScannerPage';
 import { FoodHistoryPage } from './features/food/pages/FoodHistoryPage';
 import { WhoopCallback } from './pages/WhoopCallback';
 import { ResetPassword } from './pages/ResetPassword';
+import { SkincareRoutinePage } from './features/skincare/SkincareRoutinePage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading, isPasswordRecovery } = useAuth();
@@ -62,6 +63,7 @@ const AppRoutes = () => {
         <Route path="run/history" element={<RunHistory />} />
         <Route path="food/scan" element={<FoodScannerPage />} />
         <Route path="food/history" element={<FoodHistoryPage />} />
+        <Route path="skincare" element={<SkincareRoutinePage />} />
       </Route>
     </Routes>
   );
